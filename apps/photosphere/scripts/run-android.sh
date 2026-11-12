@@ -96,8 +96,8 @@ if [ -n "$fixture_dir" ]; then
     config_dir="$(mktemp -d)"
     existing_config="$(mktemp)"
     existing_state="$(mktemp)"
-    trap 'rm -f "$existing_config" "$existing_state" "$config_dir/databases.toml" "$config_dir/state.yaml"; rmdir "$config_dir"' EXIT
-    for config_file in databases.toml state.yaml; do
+    trap 'rm -f "$existing_config" "$existing_state" "$config_dir/databases.toml" "$config_dir/state.json"; rmdir "$config_dir"' EXIT
+    for config_file in databases.toml state.json; do
         if [ "$config_file" = "databases.toml" ]; then
             existing_copy="$existing_config"
         else
@@ -110,8 +110,8 @@ if [ -n "$fixture_dir" ]; then
             fi
         fi
     done
-    (cd "$PHOTOSPHERE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "/data/data/$PHOTOSPHERE_ANDROID_APP_ID/files/$fixture_dir" "$existing_config" "$config_dir/databases.toml" "$existing_state" "$config_dir/state.yaml")
-    tar -C "$config_dir" -cf - databases.toml state.yaml | "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" tar -C files -xf -
+    (cd "$PHOTOSPHERE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "/data/data/$PHOTOSPHERE_ANDROID_APP_ID/files/$fixture_dir" "$existing_config" "$config_dir/databases.toml" "$existing_state" "$config_dir/state.json")
+    tar -C "$config_dir" -cf - databases.toml state.json | "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" tar -C files -xf -
     echo "Registered test-$fixture_dir in the app's database list. The app opens it on launch."
 fi
 

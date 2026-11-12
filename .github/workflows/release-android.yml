@@ -55,6 +55,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Resolve release tag
         id: resolve
         run: |
@@ -103,6 +110,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Set up the Android C library
         uses: ./.github/actions/android-libc
 
@@ -130,6 +144,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Set up the Android C library
         uses: ./.github/actions/android-libc
 
@@ -157,6 +178,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Set up the Android C library
         uses: ./.github/actions/android-libc
 
@@ -184,6 +212,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Set up the Android C library
         uses: ./.github/actions/android-libc
 
@@ -221,6 +256,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -347,6 +389,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -493,6 +542,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -527,6 +583,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -561,6 +624,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:

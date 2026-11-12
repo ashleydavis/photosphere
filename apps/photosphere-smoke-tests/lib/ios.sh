@@ -205,6 +205,7 @@ photosphere_platform_start() {
     local launched
     launched="$(SIMCTL_CHILD_PHOTOSPHERE_TEST_MODE=1 \
         SIMCTL_CHILD_PHOTOSPHERE_CONFIG_DIR="$test_dir/config" \
+        SIMCTL_CHILD_PHOTOSPHERE_STATE_DIR="$test_dir/config" \
         SIMCTL_CHILD_PHOTOSPHERE_DATA_DIR="$data_dir" \
         SIMCTL_CHILD_PHOTOSPHERE_VAULT_DIR="$test_dir/vault" \
         SIMCTL_CHILD_PHOTOSPHERE_VAULT_TYPE=plaintext \
@@ -462,11 +463,11 @@ ios_fetch_database() {
 }
 
 #
-# Writes the app's databases.toml and the databases section of its state.yaml into its settings directory, registering the given
+# Writes the app's databases.toml and the databases section of its state.json into its settings directory, registering the given
 # databases and recent-database names, from outside the app, as a desktop scenario pre-writes the files. The first two arguments are
 # JSON: the databases as an array of {name, path} (description, origin, s3Key, encryptionKey and geocodingKey optional), written to
 # databases.toml, and the recents as an array of names, empty when omitted. The third is the path of the database the app reopens on
-# launch; omitted, it is left out of state.yaml and the app starts on the welcome screen. Paths are written as given.
+# launch; omitted, it is left out of state.json and the app starts on the welcome screen. Paths are written as given.
 # Usage: ios_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
 #
 ios_seed_databases_config() {
@@ -511,7 +512,7 @@ ios_read_databases_config() {
 }
 
 #
-# Writes the syncing settings into the sync section of the app's config.yaml in its settings directory, keeping every other section
+# Writes the syncing settings into the sync section of the app's config.toml in its settings directory, keeping every other section
 # the file already has. A database path says which database the background sync pushes, which the app otherwise records itself when
 # one is opened. The pause is left out, so the app's default applies, when none is given.
 # Usage: ios_seed_sync_config <enabled true|false> <only_on_wifi true|false> [pause_ms] [database_path]
@@ -535,31 +536,33 @@ ios_seed_sync_config() {
     local config_dir
     config_dir="$(photosphere_ios_config_dir)"
     mkdir -p "$config_dir" || return 1
-    local file="$config_dir/config.yaml"
-    local rendered="$config_dir/config.yaml.seeding"
-
-    # The file as it stands, minus its sync section, which runs from the line "sync:" to the next line that is not indented.
-    : > "$rendered"
-    if [ -f "$file" ]; then
-        tr -d '\r' < "$file" | sed -e '/^sync:/,/^[^[:space:]]/{' -e '/^sync:/d' -e '/^[[:space:]]/d' -e '}' > "$rendered" || return 1
-    fi
+    local file="$config_dir/config.toml"
+    local replacement="$config_dir/config.toml.replacement"
+    local rendered="$config_dir/config.toml.seeding"
     {
-        echo "sync:"
-        echo "  enabled: $enabled"
-        echo "  only_on_wifi: $only_on_wifi"
+        echo "[sync]"
+        echo "enabled = $enabled"
+        echo "only_on_wifi = $only_on_wifi"
         if [ -n "$pause_ms" ]; then
-            echo "  pause_between_runs_ms: $pause_ms"
+            echo "pause_between_runs_ms = $pause_ms"
         fi
         if [ -n "$database_path" ]; then
-            echo "  database_path: $(jq -n --arg path "$database_path" '$path')"
+            echo "database_path = $(jq -n --arg path "$database_path" '$path')"
         fi
-    } >> "$rendered"
+    } > "$replacement"
+    : > "$rendered"
+    if [ -f "$file" ]; then
+        tr -d '\r' < "$file" | replace_config_table sync "$replacement" > "$rendered" || return 1
+    else
+        cat "$replacement" > "$rendered"
+    fi
+    rm -f "$replacement"
     mv "$rendered" "$file" || return 1
     echo "Wrote the app's syncing settings to $file (enabled=$enabled, onlyOnWifi=$only_on_wifi)" >&2
 }
 
 #
-# Writes the automatic import settings into the auto_import section of the app's config.yaml in its settings directory, keeping every
+# Writes the automatic import settings into the auto_import section of the app's config.toml in its settings directory, keeping every
 # other section the file already has. An album id restricts the import to that one album of the photo library. The default database path
 # must be a path the app can open, so a scenario passes ios_app_path of the database; left out, the app makes its own default database.
 # The pause between passes is left out, so the app's default applies, when none is given.
@@ -581,29 +584,31 @@ ios_seed_auto_import_config() {
     local config_dir
     config_dir="$(photosphere_ios_config_dir)"
     mkdir -p "$config_dir" || return 1
-    local file="$config_dir/config.yaml"
-    local rendered="$config_dir/config.yaml.seeding"
-
-    # The file as it stands, minus its auto_import section, which runs from the line "auto_import:" to the next line that is not indented.
-    : > "$rendered"
-    if [ -f "$file" ]; then
-        tr -d '\r' < "$file" | sed -e '/^auto_import:/,/^[^[:space:]]/{/^auto_import:/d;/^[[:space:]]/d}' > "$rendered" || return 1
-    fi
+    local file="$config_dir/config.toml"
+    local replacement="$config_dir/config.toml.replacement"
+    local rendered="$config_dir/config.toml.seeding"
     {
-        echo "auto_import:"
-        echo "  enabled: $enabled"
+        echo "[auto_import]"
+        echo "enabled = $enabled"
         if [ -n "$pause_ms" ]; then
-            echo "  pause_between_runs_ms: $pause_ms"
-        fi
-        if [ -n "$album_id" ]; then
-            echo "  sources:"
-            echo "    - type: device-album"
-            echo "      album_id: $(jq -n --arg album "$album_id" '$album')"
+            echo "pause_between_runs_ms = $pause_ms"
         fi
         if [ -n "$default_database_path" ]; then
-            echo "  default_database_path: $(jq -n --arg path "$default_database_path" '$path')"
+            echo "default_database_path = $(jq -n --arg path "$default_database_path" '$path')"
         fi
-    } >> "$rendered"
+        if [ -n "$album_id" ]; then
+            echo "[[auto_import.sources]]"
+            echo "type = \"device-album\""
+            echo "album_id = $(jq -n --arg album "$album_id" '$album')"
+        fi
+    } > "$replacement"
+    : > "$rendered"
+    if [ -f "$file" ]; then
+        tr -d '\r' < "$file" | replace_config_table auto_import "$replacement" > "$rendered" || return 1
+    else
+        cat "$replacement" > "$rendered"
+    fi
+    rm -f "$replacement"
     mv "$rendered" "$file" || return 1
     echo "Wrote the app's automatic import settings to $file (enabled=$enabled)" >&2
 }

@@ -16,6 +16,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-encryption-replicate-encrypted
 mkdir -p /tmp/psi-cli-encryption-replicate-encrypted/config /tmp/psi-cli-encryption-replicate-encrypted/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-encryption-replicate-encrypted/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-encryption-replicate-encrypted/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-encryption-replicate-encrypted/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 psi init --db /tmp/psi-cli-encryption-replicate-encrypted/source --key rep-enc-key --generate-key --yes

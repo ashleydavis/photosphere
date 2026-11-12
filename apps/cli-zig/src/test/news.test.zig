@@ -33,6 +33,7 @@ fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !void
     const map = try allocator.create(std.process.Environ.Map);
     map.* = std.process.Environ.Map.init(allocator);
     try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fs.path.join(allocator, &.{ root, "config" }));
+    try map.put("PHOTOSPHERE_STATE_DIR", try std.fs.path.join(allocator, &.{ root, "config" }));
     const feedPath = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feedPath, .data = feed });
     try map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, feedPath));
@@ -43,7 +44,20 @@ fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !void
 // Reads the state file of the config dir.
 //
 fn readState(allocator: std.mem.Allocator, root: []const u8) ![]const u8 {
-    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" }), allocator, .unlimited);
+    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.json" }), allocator, .unlimited);
+}
+
+//
+// Fails unless the state file's news.shown_news_ids holds exactly the ids, in order.
+//
+fn expectShownNewsIds(allocator: std.mem.Allocator, root: []const u8, expected: []const []const u8) !void {
+    const text = try readState(allocator, root);
+    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
+    const ids = parsed.object.get("news").?.object.get("shown_news_ids").?.array.items;
+    try std.testing.expectEqual(expected.len, ids.len);
+    for (expected, ids) |expected_id, id| {
+        try std.testing.expectEqualStrings(expected_id, id.string);
+    }
 }
 
 test "newsCommand prints the whole feed newest first, marks the new items and records them as shown" {
@@ -79,7 +93,7 @@ test "newsCommand prints the whole feed newest first, marks the new items and re
         \\     Docs: https://example.com/docs
         \\
     , memory.stdout());
-    try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n    - third\n", try readState(allocator, root));
+    try expectShownNewsIds(allocator, root, &.{ "first", "second", "third" });
 
     try cli.news.newsCommand(allocator, std.testing.io, memory.log);
     try std.testing.expect(std.mem.endsWith(u8, memory.stdout(), "\n• Third\n• Second item\n     Go: https://example.com/go\n• Hello there\n     Docs: https://example.com/docs\n"));
@@ -144,10 +158,10 @@ test "markNewsAsShown records the ids, and nothing for no ids" {
     defer node_utils.process_env.setEnvironMap(null);
 
     cli.check_for_news.markNewsAsShown(allocator, std.testing.io, &.{});
-    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" })));
+    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.json" })));
     cli.check_for_news.markNewsAsShown(allocator, std.testing.io, &.{"first"});
     cli.check_for_news.markNewsAsShown(allocator, std.testing.io, &.{ "second", "third" });
-    try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n    - third\n", try readState(allocator, root));
+    try expectShownNewsIds(allocator, root, &.{ "first", "second", "third" });
 }
 
 test "getLatestVersion looks nothing up for the dev version" {
@@ -192,7 +206,7 @@ test "newsCommand omits the latest release line when latest version is unknown" 
     try cli.news.newsCommand(allocator, std.testing.io, log);
 
     try std.testing.expect(!mock.wasCalledContaining(.info, "Latest release"));
-    try std.testing.expect(try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log) == null);
+    try std.testing.expect(try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log, try std.fs.path.join(allocator, &.{ root, "config", "state.json" })) == null);
 }
 
 test "newsCommand prints \"No news items available\" when the feed is empty" {
@@ -209,7 +223,7 @@ test "newsCommand prints \"No news items available\" when the feed is empty" {
     try cli.news.newsCommand(allocator, std.testing.io, log);
 
     try std.testing.expect(mock.wasCalledContaining(.info, "No news items available"));
-    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" })));
+    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.json" })));
 }
 
 test "newsCommand renders both seen and unseen items and marks unseen ones as shown" {
@@ -241,7 +255,7 @@ test "newsCommand renders both seen and unseen items and marks unseen ones as sh
         }
     }
     try std.testing.expect(newMarked);
-    try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - a\n    - b\n", try readState(allocator, root));
+    try expectShownNewsIds(allocator, root, &.{ "a", "b" });
 }
 
 test "newsCommand renders items newest-first (reverse of feed order)" {

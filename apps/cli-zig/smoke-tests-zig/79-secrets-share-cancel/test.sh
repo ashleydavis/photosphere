@@ -118,6 +118,7 @@ test_secrets_share_cancel() {
 
     local saved_vault="$PHOTOSPHERE_VAULT_DIR"
     local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local saved_state="$PHOTOSPHERE_STATE_DIR"
     local test_dir="$TEST_TMP_DIR/secrets-share-cancel"
     local sender_vault="$test_dir/sender-vault"
     local sender_config="$test_dir/sender-config"
@@ -130,13 +131,13 @@ test_secrets_share_cancel() {
     local sender_log="$test_dir/sender.log"
     local receiver_log="$test_dir/receiver.log"
 
-    PHOTOSPHERE_VAULT_DIR="$sender_vault" PHOTOSPHERE_CONFIG_DIR="$sender_config" \
+    PHOTOSPHERE_VAULT_DIR="$sender_vault" PHOTOSPHERE_CONFIG_DIR="$sender_config" PHOTOSPHERE_STATE_DIR="$sender_config" \
         $cli_command secrets add --yes --name "$SHARED_SECRET_NAME" --type api-key --value SHAREDVALUE123 > /dev/null 2>&1
 
     # --- 1. Cancel a sender that is waiting for a receiver. ---
 
     start_share_command "$sender_log" "Pairing code" \
-        env PHOTOSPHERE_VAULT_DIR="$sender_vault" PHOTOSPHERE_CONFIG_DIR="$sender_config" \
+        env PHOTOSPHERE_VAULT_DIR="$sender_vault" PHOTOSPHERE_CONFIG_DIR="$sender_config" PHOTOSPHERE_STATE_DIR="$sender_config" \
         $cli_command secrets send --yes --name "$SHARED_SECRET_NAME" --code "$PAIRING_CODE" || return 1
     log_success "Sender is waiting for a receiver"
 
@@ -146,7 +147,7 @@ test_secrets_share_cancel() {
     # --- 2. Cancel a receiver that is waiting for a sender. ---
 
     start_share_command "$receiver_log" "Waiting for sender" \
-        env PHOTOSPHERE_VAULT_DIR="$receiver_vault" PHOTOSPHERE_CONFIG_DIR="$receiver_config" \
+        env PHOTOSPHERE_VAULT_DIR="$receiver_vault" PHOTOSPHERE_CONFIG_DIR="$receiver_config" PHOTOSPHERE_STATE_DIR="$receiver_config" \
         $cli_command secrets receive --yes --code "$PAIRING_CODE" || return 1
     log_success "Receiver is waiting for a sender"
 
@@ -156,13 +157,13 @@ test_secrets_share_cancel() {
     # --- 3. Both commands must still work after being cancelled. ---
 
     start_share_command "$receiver_log" "Waiting for sender" \
-        env PHOTOSPHERE_VAULT_DIR="$receiver_vault" PHOTOSPHERE_CONFIG_DIR="$receiver_config" \
+        env PHOTOSPHERE_VAULT_DIR="$receiver_vault" PHOTOSPHERE_CONFIG_DIR="$receiver_config" PHOTOSPHERE_STATE_DIR="$receiver_config" \
         $cli_command secrets receive --yes --code "$PAIRING_CODE" || return 1
 
     # The receiver's UDP broadcast and HTTPS listener come up just after it says it is waiting.
     sleep 1
 
-    PHOTOSPHERE_VAULT_DIR="$sender_vault" PHOTOSPHERE_CONFIG_DIR="$sender_config" \
+    PHOTOSPHERE_VAULT_DIR="$sender_vault" PHOTOSPHERE_CONFIG_DIR="$sender_config" PHOTOSPHERE_STATE_DIR="$sender_config" \
         $cli_command secrets send --yes --name "$SHARED_SECRET_NAME" --code "$PAIRING_CODE" > "$sender_log" 2>&1
 
     if ! grep -q "sent successfully" "$sender_log"; then
@@ -198,11 +199,12 @@ test_secrets_share_cancel() {
     log_success "A send and a receive started after cancelled ones completed a real transfer"
 
     local received_value
-    invoke_command "Read the received secret" "PHOTOSPHERE_VAULT_DIR=\"$receiver_vault\" PHOTOSPHERE_CONFIG_DIR=\"$receiver_config\" $(get_zig_cli_command) secrets view --yes --raw --name \"$SHARED_SECRET_NAME\"" 0 "received_value"
+    invoke_command "Read the received secret" "PHOTOSPHERE_VAULT_DIR=\"$receiver_vault\" PHOTOSPHERE_CONFIG_DIR=\"$receiver_config\" PHOTOSPHERE_STATE_DIR=\"$receiver_config\" $(get_zig_cli_command) secrets view --yes --raw --name \"$SHARED_SECRET_NAME\"" 0 "received_value"
     expect_value "$received_value" "SHAREDVALUE123" "The received secret has the value that was sent"
 
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+    export PHOTOSPHERE_STATE_DIR="$saved_state"
 
     test_passed
 }

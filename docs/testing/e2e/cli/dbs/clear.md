@@ -14,6 +14,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-clear
 mkdir -p /tmp/psi-cli-dbs-clear/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-clear/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-clear/config
 cat > /tmp/psi-cli-dbs-clear/config/databases.toml <<'TOML'
 [[databases]]
 name = "db-one"

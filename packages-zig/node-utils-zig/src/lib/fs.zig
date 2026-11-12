@@ -920,7 +920,7 @@ pub fn osHomedir() []const u8 {
 }
 
 //
-// Returns the directory Photosphere keeps its settings in: config.yaml and the databases list.
+// Returns the directory Photosphere keeps its settings in: config.toml and the databases list.
 //
 // The same Unix-style path on every desktop platform, Windows included, so one support answer covers
 // every machine. PHOTOSPHERE_CONFIG_DIR overrides it, which is how a test run stays off the

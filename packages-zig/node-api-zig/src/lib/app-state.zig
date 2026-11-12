@@ -5,12 +5,13 @@ const state_file = @import("state-file.zig");
 const app_state_format = @import("app-state-format.zig");
 const fs = node_utils.fs;
 const errors = utils.errors;
-const getStatePath = state_file.getStatePath;
-pub const yamlToAppState = app_state_format.yamlToAppState;
-pub const appStateToYaml = app_state_format.appStateToYaml;
+
+const ziggy = @import("ziggy");
+const config_state = ziggy.config_state;
+const ILog = @import("utils-zig").log.ILog;
 
 //
-// The state store the shared UI reads and writes through, backed by state.yaml.
+// The state store the shared UI reads and writes through, backed by state.json.
 //
 // The sibling of app-config.zig. That one holds what the user chose; this one holds what the app
 // remembered so the interface comes back the way it was left: the folder a dialog last opened at, the
@@ -25,56 +26,21 @@ pub const appStateToYaml = app_state_format.appStateToYaml;
 pub const IAppState = app_state_format.IAppState;
 pub const IAppStateValue = app_state_format.IAppStateValue;
 pub const MAX_RECENT_SEARCHES = app_state_format.MAX_RECENT_SEARCHES;
-pub const DECLARED_APP_STATE_KEYS = app_state_format.DECLARED_APP_STATE_KEYS;
-pub const getAppStateValue = app_state_format.getAppStateValue;
-pub const setAppStateValue = app_state_format.setAppStateValue;
-pub const appStateSettings = app_state_format.appStateSettings;
 
 //
-// Loads the whole state from disk.
-// Returns an empty state when the file does not exist, so every key falls to its own default.
+// Loads the whole state from disk. Every leaf is read on its own, so a missing or partial file gives every key its default and one
+// wrong value gives only its own key its default.
 //
-pub fn loadAppState(allocator: std.mem.Allocator, io: std.Io) !IAppState {
-    const document = try fs.readYaml(allocator, io, try getStatePath(allocator));
-    return yamlToAppState(allocator, document);
-}
-
-//
-// The mutator updateAppState hands to updateYaml: it turns the document into the
-// state, lets the caller change it and merges it back into the document.
-//
-fn AppStateMutator(comptime MutatorT: type) type {
-    return struct {
-        // The caller's mutator.
-        mutator: MutatorT,
-
-        //
-        // Applies the caller's mutator to the state the document holds.
-        //
-        pub fn run(self: *const @This(), allocator: std.mem.Allocator, document: std.json.Value) !std.json.Value {
-            var state = try yamlToAppState(allocator, document);
-            try self.mutator.run(allocator, &state);
-            return appStateToYaml(allocator, state, document);
-        }
+pub fn loadAppState(allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8) !IAppState {
+    const row_height = try state_file.readStateSetting(?f64, allocator, io, log, .{ .statePath = state_path, .keyPath = "gallery.row_height" });
+    return .{
+        .lastFolder = try state_file.readStateSetting(?[]const u8, allocator, io, log, .{ .statePath = state_path, .keyPath = "desktop.last_folder" }),
+        .lastDownloadFolder = try state_file.readStateSetting(?[]const u8, allocator, io, log, .{ .statePath = state_path, .keyPath = "desktop.last_download_folder" }),
+        .devToolsOpen = try state_file.readStateSetting(?bool, allocator, io, log, .{ .statePath = state_path, .keyPath = "desktop.dev_tools_open" }),
+        .recentSearches = try state_file.readStateSetting(?[]const []const u8, allocator, io, log, .{ .statePath = state_path, .keyPath = "searches.recent" }),
+        .gallerySort = try state_file.readStateSetting(?[]const u8, allocator, io, log, .{ .statePath = state_path, .keyPath = "gallery.sort" }),
+        .galleryRowHeight = if (row_height) |height| .{ .float = height } else null,
     };
-}
-
-//
-// Changes the state on disk. Every edit goes through here.
-//
-// The mutator is handed the file's CURRENT contents and changes them in place, under the update lock
-// beside the file, so two edits arriving together both survive rather than the second discarding the
-// first.
-//
-// In Zig the mutator is a value with a method `run(self, allocator, state: *IAppState) !void`.
-//
-pub fn updateAppState(allocator: std.mem.Allocator, io: std.Io, mutator: anytype) !void {
-    const appStateMutator: AppStateMutator(@TypeOf(mutator)) = .{
-        .mutator = mutator,
-    };
-    try fs.updateYaml(allocator, io, try getStatePath(allocator), .{
-        .object = .empty,
-    }, &appStateMutator, 3);
 }
 
 //
@@ -123,14 +89,14 @@ pub fn asFolderStateKey(folderKey: []const u8) !FolderStateKey {
 // Gets the folder remembered under a folder picker's key, used as the dialog's starting directory.
 // Returns undefined when no folder has been remembered under that key yet.
 //
-pub fn getFolderPath(allocator: std.mem.Allocator, io: std.Io, folderKey: []const u8) !?[]const u8 {
-    // Checked before the file is opened, so an unrecognised key is refused without a read.
+pub fn getFolderPath(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, folderKey: []const u8) !?[]const u8 {
+    // Checked before the file is read, so an unrecognised key is refused without a read.
     const key = try asFolderStateKey(folderKey);
-    const state = try loadAppState(allocator, io);
-    return switch (key) {
-        .lastFolder => state.lastFolder,
-        .lastDownloadFolder => state.lastDownloadFolder,
+    const path = switch (key) {
+        .lastFolder => "desktop.last_folder",
+        .lastDownloadFolder => "desktop.last_download_folder",
     };
+    return config_state.state.get(?[]const u8, allocator, io, state_path, path);
 }
 
 //
@@ -163,13 +129,13 @@ const UpdateFolderPathMutator = struct {
 // is stale by the time it closes, and writing that whole state back would undo anything changed in
 // the meantime.
 //
-pub fn updateFolderPath(allocator: std.mem.Allocator, io: std.Io, folderKey: []const u8, folderPath: []const u8) !void {
+pub fn updateFolderPath(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, folderKey: []const u8, folderPath: []const u8) !void {
     const key = try asFolderStateKey(folderKey);
-    const mutator: UpdateFolderPathMutator = .{
-        .key = key,
-        .folderPath = folderPath,
+    const path = switch (key) {
+        .lastFolder => "desktop.last_folder",
+        .lastDownloadFolder => "desktop.last_download_folder",
     };
-    try updateAppState(allocator, io, &mutator);
+    try config_state.state.set(allocator, io, state_path, path, folderPath);
 }
 
 //
@@ -191,11 +157,8 @@ const UpdateLastFolderMutator = struct {
 //
 // Updates the last folder that was opened in the file dialog.
 //
-pub fn updateLastFolder(allocator: std.mem.Allocator, io: std.Io, folderPath: []const u8) !void {
-    const mutator: UpdateLastFolderMutator = .{
-        .folderPath = folderPath,
-    };
-    try updateAppState(allocator, io, &mutator);
+pub fn updateLastFolder(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, folderPath: []const u8) !void {
+    try config_state.state.set(allocator, io, state_path, "desktop.last_folder", folderPath);
 }
 
 //
@@ -217,19 +180,15 @@ const UpdateLastDownloadFolderMutator = struct {
 //
 // Updates the last folder used when downloading assets.
 //
-pub fn updateLastDownloadFolder(allocator: std.mem.Allocator, io: std.Io, folderPath: []const u8) !void {
-    const mutator: UpdateLastDownloadFolderMutator = .{
-        .folderPath = folderPath,
-    };
-    try updateAppState(allocator, io, &mutator);
+pub fn updateLastDownloadFolder(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, folderPath: []const u8) !void {
+    try config_state.state.set(allocator, io, state_path, "desktop.last_download_folder", folderPath);
 }
 
 //
 // Gets the recent searches list.
 //
-pub fn getRecentSearches(allocator: std.mem.Allocator, io: std.Io) ![]const []const u8 {
-    const state = try loadAppState(allocator, io);
-    return state.recentSearches orelse &.{};
+pub fn getRecentSearches(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8) ![]const []const u8 {
+    return (try config_state.state.get(?[]const []const u8, allocator, io, state_path, "searches.recent")) orelse &.{};
 }
 
 //
@@ -257,12 +216,33 @@ const AddRecentSearchMutator = struct {
 //
 // Adds a search to the recent searches list, deduplicating and capping at MAX_RECENT_SEARCHES.
 //
-pub fn addRecentSearch(allocator: std.mem.Allocator, io: std.Io, searchText: []const u8) !void {
-    const mutator: AddRecentSearchMutator = .{
-        .searchText = searchText,
-    };
-    try updateAppState(allocator, io, &mutator);
+pub fn addRecentSearch(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, searchText: []const u8) !void {
+    try config_state.state.update(allocator, io, state_path, AddRecentSearchChange{ .searchText = searchText });
 }
+
+//
+// The change addRecentSearch runs, reading the list and writing it back under one lock.
+//
+const AddRecentSearchChange = struct {
+    // The search to add.
+    searchText: []const u8,
+
+    //
+    // Puts the search first, dropping an earlier copy of it and anything past MAX_RECENT_SEARCHES.
+    //
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: config_state.state.Values) !void {
+        var searches: std.ArrayList([]const u8) = .empty;
+        try searches.append(arena, self.searchText);
+        if (try values.get(?[]const []const u8, "searches.recent")) |existing| {
+            for (existing) |item| {
+                if (!std.mem.eql(u8, item, self.searchText)) {
+                    try searches.append(arena, item);
+                }
+            }
+        }
+        try values.set("searches.recent", searches.items[0..@min(searches.items.len, app_state_format.MAX_RECENT_SEARCHES)]);
+    }
+};
 
 //
 // The mutator of removeRecentSearch.
@@ -288,9 +268,29 @@ const RemoveRecentSearchMutator = struct {
 //
 // Removes a search from the recent searches list.
 //
-pub fn removeRecentSearch(allocator: std.mem.Allocator, io: std.Io, searchText: []const u8) !void {
-    const mutator: RemoveRecentSearchMutator = .{
-        .searchText = searchText,
-    };
-    try updateAppState(allocator, io, &mutator);
+pub fn removeRecentSearch(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, searchText: []const u8) !void {
+    try config_state.state.update(allocator, io, state_path, RemoveRecentSearchChange{ .searchText = searchText });
 }
+
+//
+// The change removeRecentSearch runs, reading the list and writing it back under one lock.
+//
+const RemoveRecentSearchChange = struct {
+    // The search to remove.
+    searchText: []const u8,
+
+    //
+    // Keeps every search but that one.
+    //
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: config_state.state.Values) !void {
+        var searches: std.ArrayList([]const u8) = .empty;
+        if (try values.get(?[]const []const u8, "searches.recent")) |existing| {
+            for (existing) |item| {
+                if (!std.mem.eql(u8, item, self.searchText)) {
+                    try searches.append(arena, item);
+                }
+            }
+        }
+        try values.set("searches.recent", searches.items);
+    }
+};

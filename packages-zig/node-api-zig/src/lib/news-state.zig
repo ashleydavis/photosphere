@@ -4,13 +4,11 @@ const utils = @import("utils-zig");
 const state_file = @import("state-file.zig");
 const state_format = @import("state-format.zig");
 const errors = utils.errors;
-const loadStateFile = state_file.loadStateFile;
-const updateStateFile = state_file.updateStateFile;
-const IStateFile = state_format.IStateFile;
+const config_state = @import("ziggy").config_state;
 
 //
-// Per-install state for the notification system, held in the `news` section of state.yaml
-// ($PHOTOSPHERE_CONFIG_DIR/state.yaml, defaulting to ~/.config/photosphere/state.yaml) and shared
+// Per-install state for the notification system, held in the `news` section of state.json
+// ($PHOTOSPHERE_CONFIG_DIR/state.json, defaulting to ~/.config/photosphere/state.json) and shared
 // between the desktop app and the CLI on the same machine, so a news item or update version surfaced
 // on one surface is suppressed on the other.
 //
@@ -26,16 +24,12 @@ pub const INewsState = state_format.INewsState;
 // The body of loadNewsState inside its try block. (Zig: a function of its own, because a Zig catch handles the error of
 // one expression and the try block holds several statements.)
 //
-fn loadNewsStateUnsafe(allocator: std.mem.Allocator, io: std.Io) !INewsState {
-    const news = (try loadStateFile(allocator, io)).news;
-    var state: INewsState = .{
-        .shownNewsIds = try allocator.dupe([]const u8, news.shownNewsIds),
-        .feed = try allocator.dupe(state_format.INewsFeedItem, news.feed),
+fn loadNewsStateUnsafe(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8) !INewsState {
+    return .{
+        .shownNewsIds = (try config_state.state.get(?[]const []const u8, allocator, io, state_path, "news.shown_news_ids")) orelse &.{},
+        .lastShownUpdateVersion = try config_state.state.get(?[]const u8, allocator, io, state_path, "news.last_shown_update_version"),
+        .feed = try state_format.newsFeedFromStored(allocator, try config_state.state.get(?[]const state_format.IStoredNewsFeedItem, allocator, io, state_path, "news.feed")),
     };
-    if (news.lastShownUpdateVersion) |version| {
-        state.lastShownUpdateVersion = version;
-    }
-    return state;
 }
 
 //
@@ -45,8 +39,8 @@ fn loadNewsStateUnsafe(allocator: std.mem.Allocator, io: std.Io) !INewsState {
 // A file that cannot be read is reported rather than swallowed: it means something else has written a
 // broken file, and the notifications going quiet is the only symptom anyone would otherwise see.
 //
-pub fn loadNewsState(allocator: std.mem.Allocator, io: std.Io, log: ILog) !INewsState {
-    return loadNewsStateUnsafe(allocator, io) catch |err| {
+pub fn loadNewsState(allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8) !INewsState {
+    return loadNewsStateUnsafe(allocator, io, state_path) catch |err| {
         log.@"error"(try std.fmt.allocPrint(allocator, "The news state could not be read, carrying on with an empty one: {s}: {s}", .{
             if (err == error.Thrown or err == error.FatalError) errors.lastErrorName() else "Error",
             errors.errorMessage(err),
@@ -59,72 +53,62 @@ pub fn loadNewsState(allocator: std.mem.Allocator, io: std.Io, log: ILog) !INews
 }
 
 //
-// The mutator of saveNewsState.
+// The change saveNewsState runs: replaces the news keys, leaving every other key as it is.
 //
-const SaveNewsStateMutator = struct {
+const SaveNewsStateChange = struct {
     // The state to save.
     state: INewsState,
 
     //
-    // Replaces the `news` section with the state.
+    // Writes the three news keys.
     //
-    pub fn run(self: *const SaveNewsStateMutator, allocator: std.mem.Allocator, stateFile: *IStateFile) !void {
-        _ = allocator;
-        stateFile.news = .{
-            .shownNewsIds = self.state.shownNewsIds,
-            .feed = self.state.feed,
-        };
-        if (self.state.lastShownUpdateVersion) |version| {
-            stateFile.news.lastShownUpdateVersion = version;
-        }
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: config_state.state.Values) !void {
+        try values.set("news.shown_news_ids", self.state.shownNewsIds);
+        try values.set("news.last_shown_update_version", self.state.lastShownUpdateVersion);
+        try values.set("news.feed", try state_format.newsFeedToStored(arena, self.state.feed));
     }
 };
 
 //
-// Saves the news state into the `news` section of the state file, leaving every other section exactly
-// as it is. It goes through updateStateFile rather than a load-then-save so anything changed between
-// this read and this write is not discarded.
+// Saves the news state into the `news` keys of the state file, leaving every other key exactly as it is.
 //
-pub fn saveNewsState(allocator: std.mem.Allocator, io: std.Io, state: INewsState) !void {
-    const mutator: SaveNewsStateMutator = .{
-        .state = state,
-    };
-    try updateStateFile(allocator, io, &mutator);
+pub fn saveNewsState(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, state: INewsState) !void {
+    try config_state.state.update(allocator, io, state_path, SaveNewsStateChange{ .state = state });
 }
 
 //
 // Returns the list of news item ids that have already been shown on this install.
 //
-pub fn getShownNewsIds(allocator: std.mem.Allocator, io: std.Io, log: ILog) ![]const []const u8 {
-    const state = try loadNewsState(allocator, io, log);
+pub fn getShownNewsIds(allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8) ![]const []const u8 {
+    const state = try loadNewsState(allocator, io, log, state_path);
     return state.shownNewsIds;
 }
 
 //
-// The mutator of addShownNewsIds.
+// The change addShownNewsIds runs: reads the list and writes it back under one lock.
 //
-const AddShownNewsIdsMutator = struct {
+const AddShownNewsIdsChange = struct {
     // The ids to add.
     ids: []const []const u8,
 
     //
     // Appends the ids that are not already in the list.
     //
-    pub fn run(self: *const AddShownNewsIdsMutator, allocator: std.mem.Allocator, stateFile: *IStateFile) !void {
-        const existing = stateFile.news.shownNewsIds;
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: config_state.state.Values) !void {
+        const existing = (try values.get(?[]const []const u8, "news.shown_news_ids")) orelse &.{};
         var seen: std.StringHashMapUnmanaged(void) = .empty;
         for (existing) |id| {
-            try seen.put(allocator, id, {});
+            try seen.put(arena, id, {});
         }
         var merged: std.ArrayList([]const u8) = .empty;
-        try merged.appendSlice(allocator, existing);
+        try merged.appendSlice(arena, existing);
         for (self.ids) |id| {
             if (!seen.contains(id)) {
-                try seen.put(allocator, id, {});
-                try merged.append(allocator, id);
+                try seen.put(arena, id, {});
+                try merged.append(arena, id);
             }
         }
-        stateFile.news.shownNewsIds = merged.items;
+        try values.set("news.shown_news_ids", merged.items);
     }
 };
 
@@ -132,41 +116,21 @@ const AddShownNewsIdsMutator = struct {
 // Appends the given news item ids to the persisted set, deduping the union of
 // existing + new ids while preserving the order in which ids were first seen.
 //
-pub fn addShownNewsIds(allocator: std.mem.Allocator, io: std.Io, ids: []const []const u8) !void {
+pub fn addShownNewsIds(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, ids: []const []const u8) !void {
     if (ids.len == 0) {
         return;
     }
-
-    const mutator: AddShownNewsIdsMutator = .{
-        .ids = ids,
-    };
-    try updateStateFile(allocator, io, &mutator);
+    try config_state.state.update(allocator, io, state_path, AddShownNewsIdsChange{ .ids = ids });
 }
 
 //
 // Returns the latest update version the user has already been notified about,
-// or undefined when no update has been shown yet.
+// or null when no update has been shown yet.
 //
-pub fn getLastShownUpdateVersion(allocator: std.mem.Allocator, io: std.Io, log: ILog) !?[]const u8 {
-    const state = try loadNewsState(allocator, io, log);
+pub fn getLastShownUpdateVersion(allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8) !?[]const u8 {
+    const state = try loadNewsState(allocator, io, log, state_path);
     return state.lastShownUpdateVersion;
 }
-
-//
-// The mutator of setLastShownUpdateVersion.
-//
-const SetLastShownUpdateVersionMutator = struct {
-    // The version to record.
-    version: []const u8,
-
-    //
-    // Records the version.
-    //
-    pub fn run(self: *const SetLastShownUpdateVersionMutator, allocator: std.mem.Allocator, stateFile: *IStateFile) !void {
-        _ = allocator;
-        stateFile.news.lastShownUpdateVersion = self.version;
-    }
-};
 
 //
 // Records the given update version as having been shown to the user. Subsequent
@@ -174,9 +138,6 @@ const SetLastShownUpdateVersionMutator = struct {
 // notification; a newer GitHub release will re-trigger the notification and
 // overwrite this field.
 //
-pub fn setLastShownUpdateVersion(allocator: std.mem.Allocator, io: std.Io, version: []const u8) !void {
-    const mutator: SetLastShownUpdateVersionMutator = .{
-        .version = version,
-    };
-    try updateStateFile(allocator, io, &mutator);
+pub fn setLastShownUpdateVersion(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, version: []const u8) !void {
+    try config_state.state.set(allocator, io, state_path, "news.last_shown_update_version", version);
 }

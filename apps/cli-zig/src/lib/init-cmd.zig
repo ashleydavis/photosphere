@@ -3,6 +3,7 @@ const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const ziggy = @import("ziggy");
 const process_env = node_utils.process_env;
 const storage_zig = @import("storage-zig");
 const lan_share_network = @import("lan-share-network-zig");
@@ -1055,10 +1056,14 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, log: ILog, mediaToo
     // machine with one CPU) the only worker waits on tasks nothing is left to run and the import never ends.
     const workers: f64 = if (options.workers) |workersText| jsNumber(workersText) else @floatFromInt(try cpuCount(allocator, io));
     const timeout: f64 = if (options.timeout) |timeoutText| jsNumber(timeoutText) else 2400000;
+    const config_file_path = try ziggy.config_path.desktopAppConfigPath(allocator);
+    const state_file_path = try ziggy.state_path.desktopAppStatePath(allocator);
     const workerPool = try WorkerPoolBun.init(allocator, mediaTools, workers, timeout, .{
         .verbose = options.verbose,
         .tools = options.tools,
         .sessionId = sessionId,
+        .configPath = config_file_path,
+        .statePath = state_file_path,
     });
     setQueueBackend(workerPool.queueBackend());
 

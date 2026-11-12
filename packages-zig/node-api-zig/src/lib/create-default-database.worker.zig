@@ -14,7 +14,7 @@ const DEFAULT_DATABASE_DISPLAY_NAME = api.auto_import_mobile.DEFAULT_DATABASE_DI
 const autoImportSettingsToJson = api.auto_import_settings.autoImportSettingsToJson;
 const checkDatabaseExists = media_file_database.checkDatabaseExists;
 const createDatabaseHandler = create_database_worker.createDatabaseHandler;
-const readConfigFromStorage = config_worker.readConfigFromStorage;
+const readConfig = config_worker.readConfig;
 const writeConfigHandler = config_worker.writeConfigHandler;
 const IDatabasesConfig = databases_config.IDatabasesConfig;
 
@@ -23,7 +23,7 @@ const IDatabasesConfig = databases_config.IDatabasesConfig;
 //
 // This is what switching automatic import on does before it imports anything: the user has asked for
 // somewhere to put their photos and has not chosen it, so the app makes it. It creates the database,
-// writes its path into the automatic import section of config.yaml, and adds it to databases.toml,
+// writes its path into the automatic import section of config.toml, and adds it to databases.toml,
 // which is what makes it appear in the app's database list.
 //
 // All three in one task because they have to happen together: a database recorded as the default but
@@ -35,7 +35,7 @@ const IDatabasesConfig = databases_config.IDatabasesConfig;
 // reachable from the WebView or from native code; on the desktop the main process queues it on the
 // worker pool.
 //
-// The task data gives the path of config.yaml. databases.toml is found in the Photosphere data
+// The task data gives the path of config.toml. databases.toml is found in the Photosphere data
 // directory on every platform and is changed under the same lock as every other edit of it.
 //
 // create-database is left alone and still creates a database on its own: that is the one the user
@@ -51,7 +51,7 @@ pub const ICreateDefaultDatabaseData = struct {
     // The path to create the database at.
     databasePath: []const u8 = "",
 
-    // The path of config.yaml, which is told which database automatic import writes to.
+    // The path of config.toml, which is told which database automatic import writes to.
     configPath: []const u8 = "",
 
     // Whether the app should open this database once it exists.
@@ -163,7 +163,7 @@ pub fn createDefaultDatabaseHandler(
         }, context);
     }
 
-    const configRead = try readConfigFromStorage(allocator, io, log, data.configPath);
+    const configRead = try readConfig(allocator, io, log, data.configPath);
     const autoImportFile = configRead.config.autoImport;
     // Only the automatic import section is sent, so the syncing settings in the same file are left
     // exactly as they were.

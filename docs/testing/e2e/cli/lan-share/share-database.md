@@ -17,6 +17,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-sender
 mkdir -p /tmp/psi-sender/config /tmp/psi-sender/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-sender/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-sender/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-sender/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 cat > /tmp/psi-sender/vault/vault.json <<'EOF'
@@ -39,6 +40,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-receiver
 mkdir -p /tmp/psi-receiver/config /tmp/psi-receiver/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-receiver/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-receiver/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-receiver/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```

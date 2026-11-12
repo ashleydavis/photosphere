@@ -43,7 +43,7 @@ with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_ENDPOINT` on the comm
 
 ### How the phone was set up
 
-Its own settings and keychain were saved first, the way `50-background-sync` does, so a real phone is never wiped. It turned out to have none: no `config.yaml`, no `databases.toml` and no secure store, so there was nothing to borrow and nothing to hand back.
+Its own settings and keychain were saved first, the way `50-background-sync` does, so a real phone is never wiped. It turned out to have none: no `config.toml`, no `databases.toml` and no secure store, so there was nothing to borrow and nothing to hand back.
 
 Two secrets went on:
 
@@ -335,7 +335,7 @@ On this machine:
 On the phone:
 
 - Two test databases in the app's sandbox, `files/measure-replica` and `files/measure-replica-2`, the second holding 441 imported photos.
-- `files/databases.toml` naming those two and the test bucket, and `files/config.yaml` with both features switched off.
+- `files/databases.toml` naming those two and the test bucket, and `files/config.toml` with both features switched off.
 - Two secrets in the app's keychain: `minio-measure` and `<encryption-key>`.
 - The device had none of those files before this work, so there was nothing of its own to put back.
 - The instrumented build is still installed. Reinstalling from a clean build replaces it.

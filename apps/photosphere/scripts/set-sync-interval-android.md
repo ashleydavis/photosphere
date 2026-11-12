@@ -1,6 +1,6 @@
 # set-sync-interval-android.sh
 
-Switches syncing on in the Photosphere App on an Android device or emulator and sets how long it waits between sync passes, so a manual test that waits on a sync does not wait the default 5 minutes. It writes the `sync` section of the app's `config.yaml`, keeping every other section, and checks the file afterwards. It stops the app first, because the app writes its settings when it closes and would put the old ones back.
+Switches syncing on in the Photosphere App on an Android device or emulator and sets how long it waits between sync passes, so a manual test that waits on a sync does not wait the default 5 minutes. It writes the `sync` section of the app's `config.toml`, keeping every other section, and checks the file afterwards. It stops the app first, because the app writes its settings when it closes and would put the old ones back.
 
 Invoke: `bun run android:set-sync-interval -- [--target <adb serial>] <seconds>` from the repository root.
 

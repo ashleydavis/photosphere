@@ -30,6 +30,7 @@ fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !void
     const map = try allocator.create(std.process.Environ.Map);
     map.* = std.process.Environ.Map.init(allocator);
     try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fs.path.join(allocator, &.{ root, "config" }));
+    try map.put("PHOTOSPHERE_STATE_DIR", try std.fs.path.join(allocator, &.{ root, "config" }));
     const feedPath = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feedPath, .data = feed });
     try map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, feedPath));
@@ -40,7 +41,7 @@ fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !void
 // The path of the state file in the config dir.
 //
 fn statePath(allocator: std.mem.Allocator, root: []const u8) ![]const u8 {
-    return std.fs.path.join(allocator, &.{ root, "config", "state.yaml" });
+    return std.fs.path.join(allocator, &.{ root, "config", "state.json" });
 }
 
 test "checkForNews returns oldest unseen item and marks it shown" {
@@ -58,7 +59,7 @@ test "checkForNews returns oldest unseen item and marks it shown" {
 
     try std.testing.expectEqualStrings("a", result.id);
     try std.testing.expectEqualStrings("first", result.message);
-    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log);
+    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log, try statePath(allocator, root));
     try std.testing.expectEqual(@as(usize, 1), shownIds.len);
     try std.testing.expectEqualStrings("a", shownIds[0]);
 }
@@ -79,7 +80,7 @@ test "checkForNews skips items already in the shown set" {
 
     try std.testing.expectEqualStrings("b", result.id);
     try std.testing.expectEqualStrings("second", result.message);
-    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log);
+    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log, try statePath(allocator, root));
     try std.testing.expectEqual(@as(usize, 2), shownIds.len);
     try std.testing.expectEqualStrings("a", shownIds[0]);
     try std.testing.expectEqualStrings("b", shownIds[1]);
@@ -218,7 +219,7 @@ test "markNewsAsShown records the supplied ids" {
 
     markNewsAsShown(allocator, std.testing.io, &.{ "a", "b" });
 
-    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log);
+    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log, try statePath(allocator, root));
     try std.testing.expectEqual(@as(usize, 2), shownIds.len);
     try std.testing.expectEqualStrings("a", shownIds[0]);
     try std.testing.expectEqualStrings("b", shownIds[1]);

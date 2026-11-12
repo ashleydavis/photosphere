@@ -14,6 +14,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-vault-plaintext-list-empty
 mkdir -p /tmp/psi-cli-vault-plaintext-list-empty/config /tmp/psi-cli-vault-plaintext-list-empty/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-list-empty/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-vault-plaintext-list-empty/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-list-empty/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```

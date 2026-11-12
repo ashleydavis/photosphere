@@ -13,6 +13,13 @@ print_test_header 17 "news-notifications"
 
 trap 'cleanup_apps "$TMP_DIR"' EXIT
 
+#
+# True when the state file's news.shown_news_ids holds the id. Usage: state_has_news_id <id>
+#
+state_has_news_id() {
+    read_config_file state.json | jq -e --arg id "$1" '.news.shown_news_ids // [] | index($id)' > /dev/null
+}
+
 case "$PLATFORM" in
     android|ios)
         # Start from nothing on the device, so no news recorded as shown by an earlier scenario hides an item.
@@ -55,9 +62,9 @@ fi
 
 # Before dismissal the news state file should not record smoke-test-001: the toast is sticky and persistence is deferred until the user
 # clicks close.
-if read_config_file state.yaml | grep -q 'smoke-test-001'; then
+if state_has_news_id 'smoke-test-001'; then
     log_error "the state file unexpectedly persisted smoke-test-001 before user dismissed the toast"
-    read_config_file state.yaml
+    read_config_file state.json
     exit 1
 fi
 
@@ -65,14 +72,14 @@ log_info "Dismissing the news toast..."
 send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}' || exit 1
 wait_for_log "$TMP_DIR" "Marked news notification as shown: smoke-test-001"
 
-if ! read_config_file state.yaml | grep -q 'smoke-test-001'; then
+if ! state_has_news_id 'smoke-test-001'; then
     log_error "the state file does not contain smoke-test-001 after dismissal"
-    read_config_file state.yaml
+    read_config_file state.json
     exit 1
 fi
-if read_config_file state.yaml | grep -q 'smoke-test-002'; then
+if state_has_news_id 'smoke-test-002'; then
     log_error "the state file unexpectedly contains smoke-test-002 after first startup"
-    read_config_file state.yaml
+    read_config_file state.json
     exit 1
 fi
 
@@ -94,14 +101,14 @@ if grep -q "Showed news notification: smoke-test-001" "$TMP_DIR/app.log"; then
     exit 1
 fi
 
-if ! read_config_file state.yaml | grep -q 'smoke-test-001'; then
+if ! state_has_news_id 'smoke-test-001'; then
     log_error "the state file lost smoke-test-001 after second startup"
-    read_config_file state.yaml
+    read_config_file state.json
     exit 1
 fi
-if read_config_file state.yaml | grep -q 'smoke-test-002'; then
+if state_has_news_id 'smoke-test-002'; then
     log_error "the state file unexpectedly persisted smoke-test-002 before user dismissed the toast"
-    read_config_file state.yaml
+    read_config_file state.json
     exit 1
 fi
 
@@ -109,9 +116,9 @@ log_info "Dismissing the news toast..."
 send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}' || exit 1
 wait_for_log "$TMP_DIR" "Marked news notification as shown: smoke-test-002"
 
-if ! read_config_file state.yaml | grep -q 'smoke-test-002'; then
+if ! state_has_news_id 'smoke-test-002'; then
     log_error "the state file does not contain smoke-test-002 after dismissal"
-    read_config_file state.yaml
+    read_config_file state.json
     exit 1
 fi
 

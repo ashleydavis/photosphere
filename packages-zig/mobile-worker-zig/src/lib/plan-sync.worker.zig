@@ -10,7 +10,7 @@ const IJobTag = task_queue_zig.types.IJobTag;
 const ISyncSettings = api.sync_settings.ISyncSettings;
 const computeSyncAllowed = api.sync_gate.computeSyncAllowed;
 const loadDatabaseConfig = api.database_config.loadDatabaseConfig;
-const readConfigFromStorage = node_api.config_worker.readConfigFromStorage;
+const readConfig = node_api.config_worker.readConfig;
 const openStorage = node_api.open_storage.openStorage;
 const INetworkStatusHost = network_status.INetworkStatusHost;
 const readNetworkConnectionType = network_status.readNetworkConnectionType;
@@ -201,7 +201,7 @@ pub fn planSyncHandler(
 ) anyerror!std.json.Value {
     // One read for both sections. They used to be two files, so resolving which database to push
     // meant opening sync.toml and then auto-import.toml; the merged file costs one read per pass.
-    const read = try readConfigFromStorage(allocator, io, log, try node_api.config_file.getConfigPath(allocator));
+    const read = try readConfig(allocator, io, log, context.configPath);
     const config = read.config;
     const syncConfig = config.sync;
     const settings = syncConfig.settings;

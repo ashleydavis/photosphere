@@ -17,6 +17,7 @@ import { interpretMenuAction, logDirectoryOf, type MenuEffect } from "./menu-act
 import { buildExportFileRequest, buildExportFilesRequest, saveDownloadsViaShareSheet, type ExportTestOutcome, type IExportFileReply, type IExportFilesReply, type IExportFolderReply, type ISaveAssetTaskData, type ISaveAssetsBatchTaskData } from "./mobile-export";
 import { firstSeededNewsNotification } from "./seeded-news";
 import { signalTestPageReady } from "./ziggy-test-transport";
+import { stateKeyPath } from "./state-key-path";
 import { isTestMode } from "./test-mode";
 import { toJsonValue } from "./to-json-value";
 
@@ -165,7 +166,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     const autoImportChangedRef = useRef<(() => void) | undefined>(undefined);
 
     // Writes the syncing settings a fresh installation starts from, if nobody has written them yet. The background sync loop reads
-    // config.yaml, and a section it cannot read means syncing off, which is the safe answer for a loop that would otherwise push photos
+    // config.toml, and a section it cannot read means syncing off, which is the safe answer for a loop that would otherwise push photos
     // over a metered connection on a guess. That leaves a new phone with the two toggles showing syncing on and a file saying nothing,
     // so the app writes what the toggles say the first time it runs. A section that is already there is left alone.
     useEffect(() => {
@@ -999,10 +1000,9 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     const state = createConfig(
         async (key) => {
-            const value = await ziggy.invoke('get-state', key);
-            return value === null ? undefined : value;
+            return await ziggy.getState(stateKeyPath(key));
         },
-        (key, value) => ziggy.invoke('set-state', { key, value: value as IJsonValue })
+        (key, value) => ziggy.setState(stateKeyPath(key), value as IJsonValue)
     );
 
     return (

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# The database named by last_opened_path in the databases section of state.yaml is reopened on launch, and closing it clears the key so
+# The database named by last_opened_path in the databases section of state.json is reopened on launch, and closing it clears the key so
 # the next launch lands on the welcome screen. On a desktop the config is written beside the app's settings and the close is checked in that file. On a phone
 # the config is written into the sandbox and three launches cover it: a config naming a last database opens it on launch alone, a
 # config without one stays on the welcome screen, and opening a database from the sidebar records it so the next launch reopens it.
@@ -59,7 +59,7 @@ case "$PLATFORM" in
         # The path is written after the gallery has already filled, so the file is read back rather than assumed.
         last_database_recorded=false
         for _attempt in $(seq 1 60); do
-            if read_config_file state.yaml | grep -q "last_opened_path"; then
+            if read_config_file state.json | grep -q "last_opened_path"; then
                 last_database_recorded=true
                 break
             fi
@@ -67,8 +67,8 @@ case "$PLATFORM" in
         done
 
         if [ "$last_database_recorded" != "true" ]; then
-            log_error "Opening a database did not record it in state.yaml:"
-            read_config_file state.yaml
+            log_error "Opening a database did not record it in state.json:"
+            read_config_file state.json
             exit 1
         fi
 
@@ -85,14 +85,14 @@ case "$PLATFORM" in
         ;;
     *)
         CONFIG_FILE="$TMP_DIR/config/databases.toml"
-        STATE_FILE="$TMP_DIR/config/state.yaml"
+        STATE_FILE="$TMP_DIR/config/state.json"
 
         # A database of the user's own sits beside the fixture so the close can be shown to clear last_opened_path and leave the
         # database list and the recents as they were.
         log_info "Pre-creating a second database with the CLI..."
         create_database "$TMP_DIR/other-db"
 
-        log_info "Writing databases.toml and a state.yaml naming the fixture as the last database..."
+        log_info "Writing databases.toml and a state.json naming the fixture as the last database..."
         "${PLATFORM}_seed_databases_config" \
             "$(jq -cn --arg fixture "$FIXTURE_DB" --arg other "$TMP_DIR/other-db" '[{name: "50-assets", path: $fixture}, {name: "other-db", path: $other}]')" \
             '["50-assets"]' \

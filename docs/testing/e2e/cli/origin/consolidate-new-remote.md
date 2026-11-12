@@ -14,6 +14,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-origin-consolidate-new-remote
 mkdir -p /tmp/psi-cli-origin-consolidate-new-remote/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-origin-consolidate-new-remote/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-origin-consolidate-new-remote/config
 psi init --db /tmp/psi-cli-origin-consolidate-new-remote/local --yes
 psi add test/test.jpg --db /tmp/psi-cli-origin-consolidate-new-remote/local --yes
 ```

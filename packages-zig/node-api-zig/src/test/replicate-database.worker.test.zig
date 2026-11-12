@@ -62,7 +62,7 @@ fn makeContext(allocator: std.mem.Allocator) !*RecordingContext {
         .messages = .empty,
         .allocator = allocator,
     };
-    recording.context = TaskContext.init(recording.uuidGenerator.uuidGenerator(), recording.timestampProvider.timestampProvider(), "session-1", "replicate-task-id", .{ .context = recording, .function = RecordingContext.sendEvent }, 10);
+    recording.context = TaskContext.init(recording.uuidGenerator.uuidGenerator(), recording.timestampProvider.timestampProvider(), "session-1", "replicate-task-id", .{ .context = recording, .function = RecordingContext.sendEvent }, 10, "", "");
     return recording;
 }
 

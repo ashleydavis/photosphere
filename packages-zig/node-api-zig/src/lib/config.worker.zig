@@ -1,5 +1,5 @@
 //
-// Reads and writes config.yaml as a background task.
+// Reads and writes config.toml as a background task.
 //
 // The mobile WebView holds these settings but cannot open a file, so its reads and writes run in the
 // embedded worker over the storage layer. Putting them in a file rather than in the WebView's own
@@ -29,7 +29,6 @@ const api = @import("api-zig");
 const config_format = @import("config-format.zig");
 const app_config_format = @import("app-config-format.zig");
 const errors = utils.errors;
-const yaml = node_utils.yaml;
 const FileStorage = storage_zig.file_storage.FileStorage;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
@@ -45,21 +44,20 @@ const ISyncFile = api.sync_settings.ISyncFile;
 const IConfigFile = config_format.IConfigFile;
 const IConfigSectionsPresent = config_format.IConfigSectionsPresent;
 const defaultConfigFile = config_format.defaultConfigFile;
-const sectionsPresent = config_format.sectionsPresent;
-const parseConfigYamlChecked = config_format.parseConfigYamlChecked;
-const configFileToYaml = config_format.configFileToYaml;
+const IAppConfig = app_config_format.IAppConfig;
 const IAppConfigValue = app_config_format.IAppConfigValue;
 const appConfigSettings = app_config_format.appConfigSettings;
-const yamlToAppConfig = app_config_format.yamlToAppConfig;
-const appConfigToYaml = app_config_format.appConfigToYaml;
 const setAppConfigValue = app_config_format.setAppConfigValue;
+const config_file = @import("config-file.zig");
+const app_config = @import("app-config.zig");
+const config_state = @import("ziggy").config_state;
 
 //
 // Input for the read-config task.
 // (Zig: the `= ""` default lets std.json parse data that leaves the key out, which the handler then refuses.)
 //
 pub const IReadConfigData = struct {
-    // Sandbox-relative path of config.yaml.
+    // Sandbox-relative path of config.toml.
     configPath: []const u8 = "",
 };
 
@@ -118,7 +116,7 @@ pub const IWriteConfigEntry = struct {
 // settings card writes the one section the user touched.
 //
 pub const IWriteConfigData = struct {
-    // Sandbox-relative path of config.yaml.
+    // Sandbox-relative path of config.toml.
     configPath: []const u8 = "",
 
     // The automatic import settings, when they are what is being changed.
@@ -141,10 +139,6 @@ pub const IConfigRead = struct {
     // Which sections the file carried. A caller needs this to tell a section nobody has
     // written from one that has been switched off, because both read as switched off.
     present: IConfigSectionsPresent,
-
-    // The document as it was on disk, which is what the flat key/value view is built from. Undefined
-    // when there is no file, or when it would not parse.
-    document: ?std.json.Value = null,
 };
 
 //
@@ -156,29 +150,13 @@ pub const IConfigRead = struct {
 // take the settings card that could fix it down with it. The parse failure is logged so it is not
 // silent.
 //
-pub fn readConfigFromStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, configPath: []const u8) !IConfigRead {
-    var storage = FileStorage.init("fs:");
-    const absent: IConfigRead = .{
-        .config = try defaultConfigFile(allocator),
-        .present = sectionsPresent(null),
-    };
-
-    if (!try storage.fileExists(allocator, io, configPath)) {
-        return absent;
-    }
-
-    const contents = try storage.read(allocator, io, log, configPath) orelse {
-        return absent;
-    };
-
-    const parsed = try parseConfigYamlChecked(allocator, contents);
-    if (parsed.malformed) {
-        log.@"error"(try std.fmt.allocPrint(allocator, "The settings at \"{s}\" could not be parsed, using the defaults: {s}", .{ configPath, parsed.parseError orelse "" }));
-    }
+pub fn readConfig(allocator: std.mem.Allocator, io: std.Io, log: ILog, config_path: []const u8) !IConfigRead {
     return .{
-        .config = parsed.config,
-        .present = parsed.present,
-        .document = parsed.document,
+        .config = try config_file.loadConfigFile(allocator, io, log, config_path),
+        .present = .{
+            .autoImport = try config_state.config.has(allocator, io, config_path, "auto_import"),
+            .sync = try config_state.config.has(allocator, io, config_path, "sync"),
+        },
     };
 }
 
@@ -298,7 +276,8 @@ fn syncFileToJson(allocator: std.mem.Allocator, sync: ISyncFile) !std.json.Value
 
 //
 // Handler for the read-config task.
-// (Zig: the context is ignored.)
+// (Zig: the context's config path is used when it has one, because a device's app cannot name its own absolute path; the task
+// data's path is used otherwise, which is what a test does.)
 //
 pub fn readConfigHandler(
     allocator: std.mem.Allocator,
@@ -306,7 +285,7 @@ pub fn readConfigHandler(
     _: Timers,
     log: utils.log.ILog,
     taskData: std.json.Value,
-    _: ITaskContext,
+    context: ITaskContext,
 ) anyerror!std.json.Value {
     // (Zig: reading the task data into the typed struct fails when configPath is not a string.
     // The failure is reported as a sentence, not a bare parser error name.)
@@ -315,14 +294,15 @@ pub fn readConfigHandler(
     }) catch {
         return errors.throwError("The read-config task data is not valid: configPath must be a string", .{});
     };
-    if (data.configPath.len == 0) {
+    const config_path = if (context.configPath.len > 0) context.configPath else data.configPath;
+    if (config_path.len == 0) {
         return errors.throwError("configPath is required", .{});
     }
 
-    const contents = try readConfigFromStorage(allocator, io, log, data.configPath);
+    const contents = try readConfig(allocator, io, log, config_path);
 
     var settingsObject: std.json.ObjectMap = .empty;
-    var settings = try appConfigSettings(allocator, try yamlToAppConfig(allocator, contents.document));
+    var settings = try appConfigSettings(allocator, try app_config.loadAppConfig(allocator, io, log, config_path));
     var settingsIterator = settings.iterator();
     while (settingsIterator.next()) |entry| {
         try settingsObject.put(allocator, entry.key_ptr.*, try configValueToJson(allocator, entry.value_ptr.*));
@@ -351,8 +331,8 @@ pub fn readConfigHandler(
 // A read-modify-write: it reads what is on disk, replaces only the sections the caller sent, and
 // writes the whole document back. Reading first is what keeps the sections nobody touched, including
 // the ones this task has no notion of at all.
-// (Zig: the context is ignored. The task data is a JSON value holding IWriteConfigData, and the
-// handler returns null.)
+// (Zig: the context's config path is used when it has one, as the read-config handler uses it. The
+// task data is a JSON value holding IWriteConfigData, and the handler returns null.)
 //
 pub fn writeConfigHandler(
     allocator: std.mem.Allocator,
@@ -360,7 +340,7 @@ pub fn writeConfigHandler(
     _: Timers,
     log: utils.log.ILog,
     taskData: std.json.Value,
-    _: ITaskContext,
+    context: ITaskContext,
 ) anyerror!std.json.Value {
     // (Zig: reading the task data into the typed struct fails when a field has the wrong type.
     // The failure is reported as a sentence, not a bare parser error name.)
@@ -369,72 +349,118 @@ pub fn writeConfigHandler(
     }) catch {
         return errors.throwError("The write-config task data is not valid: configPath must be a string, and autoImport, sync and entries must hold their parts", .{});
     };
-    if (data.configPath.len == 0) {
+    const config_path = if (context.configPath.len > 0) context.configPath else data.configPath;
+    if (config_path.len == 0) {
         return errors.throwError("configPath is required", .{});
     }
     if (data.autoImport == null and data.sync == null and data.entries == null) {
         return errors.throwError("write-config was given no autoImport section, no sync section and no settings to write, so there is nothing to write.", .{});
     }
 
-    var storage = FileStorage.init("fs:");
-    const contents = try readConfigFromStorage(allocator, io, log, data.configPath);
-    var current = contents.config;
-    const present = contents.present;
-
-    if (data.autoImport) |autoImport| {
-        const settings = autoImport.settings orelse {
+    // The sections the caller gave are normalised as they always were, and each entry is checked against the settings the app knows
+    // before anything is written, so a failure writes none of it.
+    var auto_import: ?IAutoImportFile = null;
+    var auto_import_pause: ?std.json.Value = null;
+    if (data.autoImport) |given| {
+        const settings = given.settings orelse {
             return errors.throwError("autoImport.settings is required", .{});
         };
-        current.autoImport = .{
+        auto_import = .{
             .settings = try normaliseAutoImportSettings(allocator, settings),
-            .defaultDatabasePath = autoImport.defaultDatabasePath,
-            .pauseBetweenRunsMs = resolveAutoImportPauseMs(autoImport.pauseBetweenRunsMs),
+            .defaultDatabasePath = given.defaultDatabasePath,
+            .pauseBetweenRunsMs = resolveAutoImportPauseMs(given.pauseBetweenRunsMs),
         };
+        auto_import_pause = given.pauseBetweenRunsMs;
     }
-
-    if (data.sync) |sync| {
-        const settings = sync.settings orelse {
+    var sync: ?ISyncFile = null;
+    var sync_pause: ?std.json.Value = null;
+    if (data.sync) |given| {
+        const settings = given.settings orelse {
             return errors.throwError("sync.settings is required", .{});
         };
-        current.sync = .{
+        sync = .{
             .settings = normaliseSyncSettings(settings),
-            .databasePath = sync.databasePath,
-            .pauseBetweenRunsMs = resolveSyncPauseMs(sync.pauseBetweenRunsMs),
+            .databasePath = given.databasePath,
+            .pauseBetweenRunsMs = resolveSyncPauseMs(given.pauseBetweenRunsMs),
         };
+        sync_pause = given.pauseBetweenRunsMs;
     }
-
-    // A feature's section goes into the file once it has been set, and stays once it is there. Both
-    // halves matter: writing a section nobody has chosen would tell a fresh install its settings had
-    // already been decided, and dropping one that had been chosen would lose the user's decision.
-    var document = try configFileToYaml(allocator, current, .{
-        .autoImport = present.autoImport or data.autoImport != null,
-        .sync = present.sync or data.sync != null,
-    });
-
-    // The settings the interface names go on last, through the flat view, which is the only thing
-    // that knows which section each of them belongs in. It merges into the document rather than
-    // rebuilding it, so it changes the keys it was given and leaves the rest of the file alone.
     if (data.entries) |entries| {
-        var appConfig = try yamlToAppConfig(allocator, document);
+        var checked = try app_config.loadAppConfig(allocator, io, log, config_path);
         for (entries) |entry| {
             if (entry.key.len == 0) {
                 return errors.throwError("write-config was given a setting with no key.", .{});
             }
             const value: ?IAppConfigValue = if (entry.value) |entryValue| (if (entryValue == .null) null else try configValueFromJson(allocator, entry.key, entryValue)) else null;
-            try setAppConfigValue(&appConfig, entry.key, value);
+            try setAppConfigValue(&checked, entry.key, value);
         }
-        document = try appConfigToYaml(allocator, appConfig, document);
     }
 
-    const text = try yaml.dump(allocator, document);
-    try storage.write(allocator, io, data.configPath, "application/yaml", text);
+    const change = WriteConfigChange{
+        .autoImport = auto_import,
+        .autoImportPause = auto_import_pause,
+        .sync = sync,
+        .syncPause = sync_pause,
+        .entries = data.entries,
+    };
+    try config_state.config.update(allocator, io, config_path, change);
     return .null;
 }
 
 //
-// Renders the whole file as the text of a config.yaml, returning it rather than writing it anywhere.
+// The change writeConfigHandler runs: each section it was given, each pause it was given and each setting entry, in one rename.
+//
+const WriteConfigChange = struct {
+    // The automatic import section to write, or null to leave it as it is.
+    autoImport: ?IAutoImportFile,
+    // The automatic import pause the caller gave, or null to leave it as it is.
+    autoImportPause: ?std.json.Value,
+    // The sync section to write, or null to leave it as it is.
+    sync: ?ISyncFile,
+    // The sync pause the caller gave, or null to leave it as it is.
+    syncPause: ?std.json.Value,
+    // The flat settings to write, or null for none.
+    entries: ?[]const IWriteConfigEntry,
+
+    //
+    // Writes every key, so a reader sees all of the change or none of it.
+    //
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: config_state.config.Values) !void {
+        if (self.autoImport) |auto_import| {
+            try values.set("auto_import.enabled", auto_import.settings.enabled);
+            try values.set("auto_import.sources", try config_format.autoImportSourcesToStored(arena, auto_import.settings.sources));
+            try values.set("auto_import.default_database_path", auto_import.defaultDatabasePath);
+            if (self.autoImportPause) |pause| {
+                try config_format.setPause(values, "auto_import.pause_between_runs_ms", pause);
+            }
+        }
+        if (self.sync) |sync| {
+            try values.set("sync.enabled", sync.settings.enabled);
+            try values.set("sync.only_on_wifi", sync.settings.onlyOnWifi);
+            try values.set("sync.database_path", sync.databasePath);
+            if (self.syncPause) |pause| {
+                try config_format.setPause(values, "sync.pause_between_runs_ms", pause);
+            }
+        }
+        if (self.entries) |entries| {
+            for (entries) |entry| {
+                if (entry.key.len == 0) {
+                    return errors.throwError("write-config was given a setting with no key.", .{});
+                }
+                var one: IAppConfig = .{};
+                const value: ?IAppConfigValue = if (entry.value) |entryValue| (if (entryValue == .null) null else try configValueFromJson(arena, entry.key, entryValue)) else null;
+                try setAppConfigValue(&one, entry.key, value);
+                inline for (std.meta.fields(IAppConfig)) |field| {
+                    if (std.mem.eql(u8, field.name, entry.key)) {
+                        try app_config.setAppConfigIn(field.name, values, @field(one, field.name));
+                    }
+                }
+            }
+        }
+    }
+};
+
 //
 // Re-exported from the format module so a host-side script can produce a file the read handler reads
 // back exactly, which is how a mobile smoke test establishes settings from outside the app.
 //
-pub const buildConfigYaml = config_format.buildConfigYaml;

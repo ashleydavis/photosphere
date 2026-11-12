@@ -52,6 +52,26 @@ pub const IResetAppStorageResult = struct {
     // How many entries (files and directory trees) were removed across those directories.
     //
     entriesRemoved: u64,
+
+    //
+    // Whether the config file was deleted. It can live outside the config directory, on Windows under APPDATA.
+    //
+    configFileDeleted: bool,
+
+    //
+    // Whether the state file was deleted. It can live outside the config directory, on Linux and Windows.
+    //
+    stateFileDeleted: bool,
+};
+
+//
+// The two files a reset deletes, each beside the directories it empties.
+//
+pub const IAppFilePaths = struct {
+    // The path of the app's config file.
+    configPath: []const u8,
+    // The path of the app's state file.
+    statePath: []const u8,
 };
 
 //
@@ -77,7 +97,7 @@ fn clearDirectory(allocator: std.mem.Allocator, io: std.Io, directoryPath: []con
 // null everywhere else: on desktop the data directory holds the default database, which is the
 // user's photos and must survive a reset.
 //
-pub fn resetAppStorage(allocator: std.mem.Allocator, io: std.Io, deviceDataDir: ?[]const u8) !IResetAppStorageResult {
+pub fn resetAppStorage(allocator: std.mem.Allocator, io: std.Io, deviceDataDir: ?[]const u8, files: IAppFilePaths) !IResetAppStorageResult {
     var candidatePaths: std.ArrayList([]const u8) = .empty;
     try candidatePaths.append(allocator, try getConfigDir(allocator));
     try candidatePaths.append(allocator, try getCacheDir(allocator));
@@ -102,6 +122,11 @@ pub fn resetAppStorage(allocator: std.mem.Allocator, io: std.Io, deviceDataDir: 
         }
     }
 
+    // The two files can live outside the config directory, so the emptied directories do not always take them. They are deleted first,
+    // so a file inside a directory about to be emptied counts as deleted rather than as gone with the directory.
+    const config_file_deleted = try deleteFileIfPresent(io, files.configPath);
+    const state_file_deleted = try deleteFileIfPresent(io, files.statePath);
+
     var entriesRemoved: u64 = 0;
     for (directoryPaths.items) |directoryPath| {
         entriesRemoved += try clearDirectory(allocator, io, directoryPath);
@@ -110,7 +135,20 @@ pub fn resetAppStorage(allocator: std.mem.Allocator, io: std.Io, deviceDataDir: 
     return .{
         .directoriesCleared = directoryPaths.items,
         .entriesRemoved = entriesRemoved,
+        .configFileDeleted = config_file_deleted,
+        .stateFileDeleted = state_file_deleted,
     };
+}
+
+//
+// Deletes a file when it exists, reporting whether it was there.
+//
+fn deleteFileIfPresent(io: std.Io, path: []const u8) !bool {
+    if (path.len == 0 or !pathExists(io, path)) {
+        return false;
+    }
+    try remove(io, path);
+    return true;
 }
 
 //
@@ -130,9 +168,8 @@ pub fn resetAppStorageHandler(
 ) anyerror!std.json.Value {
     _ = log;
     _ = taskData;
-    _ = context;
 
-    const result = try resetAppStorage(allocator, io, null);
+    const result = try resetAppStorage(allocator, io, null, .{ .configPath = context.configPath, .statePath = context.statePath });
     const text = try std.json.Stringify.valueAlloc(allocator, result, .{});
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }

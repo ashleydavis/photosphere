@@ -80,15 +80,10 @@ test "plan-sync asks the phone for the connection type when syncing is switched 
     defer calls.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const config_path = try node_api.config_file.getConfigPath(arena.allocator());
-    var config = (try node_api.config_worker.readConfigFromStorage(arena.allocator(), std.testing.io, log, config_path)).config;
+    const config_path = try app.configPath(arena.allocator());
+    var config = (try node_api.config_worker.readConfig(arena.allocator(), std.testing.io, log, config_path)).config;
     config.sync.settings.enabled = true;
-    const yaml = try node_api.config_worker.buildConfigYaml(arena.allocator(), config, null);
-    try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(config_path).?);
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = config_path,
-        .data = yaml,
-    });
+    try node_api.config_file.saveConfigFile(arena.allocator(), std.testing.io, config_path, config);
     app.setNativeCallResult(false, "The phone cannot tell.");
 
     try addTask(&app, "plan-sync-2", "plan-sync");
@@ -125,7 +120,7 @@ test "write-config records the database to sync in the config file the core read
             .taskType = "write-config",
             .source = "settings",
             .data = .{
-                .configPath = "config.yaml",
+                .configPath = "config.toml",
                 .sync = .{
                     .settings = .{
                         .enabled = true,
@@ -150,7 +145,7 @@ test "write-config records the database to sync in the config file the core read
             .taskType = "read-config",
             .source = "settings",
             .data = .{
-                .configPath = "config.yaml",
+                .configPath = "config.toml",
             },
             .priority = "interactive",
         },

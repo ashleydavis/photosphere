@@ -14,6 +14,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-vault-plaintext-list-shared
 mkdir -p /tmp/psi-cli-vault-plaintext-list-shared/config /tmp/psi-cli-vault-plaintext-list-shared/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-list-shared/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-vault-plaintext-list-shared/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-list-shared/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 cat > /tmp/psi-cli-vault-plaintext-list-shared/vault/vault.json <<'JSON'

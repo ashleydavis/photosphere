@@ -15,6 +15,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-vault-plaintext-delete-secret
 mkdir -p /tmp/psi-cli-vault-plaintext-delete-secret/config /tmp/psi-cli-vault-plaintext-delete-secret/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-delete-secret/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-vault-plaintext-delete-secret/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-delete-secret/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 cat > /tmp/psi-cli-vault-plaintext-delete-secret/vault/vault.json <<'JSON'

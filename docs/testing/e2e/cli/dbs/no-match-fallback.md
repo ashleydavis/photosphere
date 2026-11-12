@@ -16,6 +16,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-no-match-fallback
 mkdir -p /tmp/psi-cli-dbs-no-match-fallback/config /tmp/psi-cli-dbs-no-match-fallback/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-no-match-fallback/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-no-match-fallback/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-dbs-no-match-fallback/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 psi init --db /tmp/psi-cli-dbs-no-match-fallback/db --yes

@@ -94,7 +94,7 @@ const CleanupTest = struct {
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "cleanup-task", .{
             .context = null,
             .function = ignoreMessage,
-        }, 10);
+        }, 10, "", "");
     }
 
     //

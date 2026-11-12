@@ -99,9 +99,10 @@ test "save-assets with several assets shows a folder dialog and says how many we
     try std.testing.expectEqualStrings("Choose folder to save assets", (try app.lastPick(picks.allocator())).?.title.?);
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"savedBatch\":{\"assets\":[{\"assetId\":\"a1\"");
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"folderPath\":\"/downloads/many\",\"databasePath\":\"/db\"}");
-    const remembered = try app.requestOk("get-state", "\"lastDownloadFolder\"");
-    defer std.testing.allocator.free(remembered);
-    try std.testing.expectEqualStrings("\"/downloads/many\"", remembered);
+    var remembered_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer remembered_arena.deinit();
+    const remembered = try ziggy.config_state.state.get(?[]const u8, remembered_arena.allocator(), std.testing.io, try app.statePath(remembered_arena.allocator()), "desktop.last_download_folder");
+    try std.testing.expectEqualStrings("/downloads/many", remembered.?);
 }
 
 test "save-assets with several assets says it was cancelled when the user cancelled the dialog" {

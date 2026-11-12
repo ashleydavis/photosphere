@@ -37,6 +37,8 @@ pub const ProductionQueueBackend = struct {
         self.pool = try MockWorkerPool.init(allocator, 4, .{
             .sessionId = "test-session",
             .maxConcurrentChildTasks = 2,
+            .configPath = "",
+            .statePath = "",
         }, &task_entries);
         ziggy.task_queue.queue_backend.setQueueBackend(self.pool.queueBackend());
     }

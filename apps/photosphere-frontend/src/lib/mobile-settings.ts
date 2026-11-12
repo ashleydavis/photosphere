@@ -60,7 +60,7 @@ async function runConfigTask(type: string, data: object): Promise<IReadConfigOut
 //
 async function readConfig(): Promise<IReadConfigOutputs> {
     return await runConfigTask("read-config", {
-        configPath: "config.yaml",
+        configPath: "config.toml",
     });
 }
 
@@ -111,7 +111,7 @@ export async function readSyncSettings(): Promise<IMobileSyncSettings> {
 //
 async function writeSyncSection(contents: ISyncFile): Promise<void> {
     await runConfigTask("write-config", {
-        configPath: "config.yaml",
+        configPath: "config.toml",
         sync: {
             settings: contents.settings,
             databasePath: contents.databasePath,

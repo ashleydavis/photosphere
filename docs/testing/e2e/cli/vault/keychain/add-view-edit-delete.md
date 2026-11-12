@@ -27,6 +27,7 @@ this walkthrough.
 rm -rf /tmp/psi-cli-vault-keychain-add-view-edit-delete
 mkdir -p /tmp/psi-cli-vault-keychain-add-view-edit-delete/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-keychain-add-view-edit-delete/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-vault-keychain-add-view-edit-delete/config
 export PHOTOSPHERE_VAULT_TYPE=keychain
 ```
 

@@ -215,6 +215,20 @@ pub const TestApp = struct {
     // plain-text one, in a directory that is the same for every test of one run of the test program, because the vault code keeps
     // the vault it first opened and every test must find the directory it opened.
     //
+    //
+    // The path of the test's state file, under the directory start gave the core.
+    //
+    pub fn statePath(self: *TestApp, arena: std.mem.Allocator) ![]const u8 {
+        return std.fs.path.join(arena, &.{ self.tmp_path, "state", "state.json" });
+    }
+
+    //
+    // The path of the test's config file, under the directory start gave the core.
+    //
+    pub fn configPath(self: *TestApp, arena: std.mem.Allocator) ![]const u8 {
+        return std.fs.path.join(arena, &.{ self.tmp_path, "config", "config.toml" });
+    }
+
     pub fn start(self: *TestApp) !void {
         try self.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{});
     }
@@ -228,7 +242,7 @@ pub const TestApp = struct {
     }
 
     //
-    // Starts the core as startWithTasks does, with config.yaml already on disk holding the text, as it is when the app is started by
+    // Starts the core as startWithTasks does, with config.toml already on disk holding the text, as it is when the app is started by
     // a user who has set it up. The text is written before the core exists, because the core reads the settings when it starts.
     //
     pub fn startWithTasksAndConfigFile(self: *TestApp, extra_tasks: []const ziggy.task_runner.TaskHandlerEntry, config_yaml: ?[]const u8) !void {
@@ -274,7 +288,7 @@ pub const TestApp = struct {
     }
 
     //
-    // Starts the core with the extra task types, config.yaml holding the text when there is one, this many workers, and the native
+    // Starts the core with the extra task types, config.toml holding the text when there is one, this many workers, and the native
     // call callback when has_native_call is set.
     //
     fn startWithEverything(self: *TestApp, extra_tasks: []const ziggy.task_runner.TaskHandlerEntry, config_yaml: ?[]const u8, worker_threads: u32, has_native_call: bool) !void {
@@ -283,7 +297,7 @@ pub const TestApp = struct {
     }
 
     //
-    // Makes the directory the test owns, with config.yaml holding the text when there is one, the console capture and the
+    // Makes the directory the test owns, with config.toml holding the text when there is one, the console capture and the
     // environment.
     //
     pub fn prepareWithConfigFile(self: *TestApp, config_yaml: ?[]const u8) !void {
@@ -303,7 +317,7 @@ pub const TestApp = struct {
         defer allocator.free(config_dir);
         try std.Io.Dir.cwd().createDirPath(io, config_dir);
         if (config_yaml) |text| {
-            const config_path = try std.fs.path.join(allocator, &.{ config_dir, "config.yaml" });
+            const config_path = try std.fs.path.join(allocator, &.{ config_dir, "config.toml" });
             defer allocator.free(config_path);
             try std.Io.Dir.cwd().writeFile(io, .{
                 .sub_path = config_path,
@@ -312,8 +326,12 @@ pub const TestApp = struct {
         }
         const vault_dir = try std.fmt.allocPrint(allocator, "{s}/.zig-cache/tmp/photosphere-core-vault-{x}", .{ current_path, std.testing.random_seed });
         defer allocator.free(vault_dir);
+        const state_dir = try std.fs.path.join(allocator, &.{ self.tmp_path, "state" });
+        defer allocator.free(state_dir);
+        try std.Io.Dir.cwd().createDirPath(io, state_dir);
         self.environ_map = std.process.Environ.Map.init(allocator);
         try self.environ_map.put("PHOTOSPHERE_CONFIG_DIR", config_dir);
+        try self.environ_map.put("PHOTOSPHERE_STATE_DIR", state_dir);
         // The core runs in test mode, as the smoke tests run the app, so the MCP server takes a free port: tests running side by side
         // would fight over its fixed one.
         try self.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
@@ -352,6 +370,10 @@ pub const TestApp = struct {
         var app = photosphere_app.app;
         app.tasks = self.tasks;
         app.messages = self.messages;
+        // A name, so the core works out the test's config and state files from PHOTOSPHERE_CONFIG_DIR and PHOTOSPHERE_STATE_DIR, and
+        // every task's context carries them. Ziggy's own tests are built for no app; this one stands in for Photosphere.
+        app.name = "photosphere";
+        app.title = "Photosphere";
         // The main thread captures its own console from on_create on, so it writes nothing to the real standard output, which is how
         // the build system talks to the test program.
         app.on_create = createWithCapture;

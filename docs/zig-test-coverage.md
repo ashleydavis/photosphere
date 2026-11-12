@@ -17,10 +17,9 @@ and run under kcov, which writes a report of the packages' own sources, not thei
 zig build test -Dcoverage=/tmp/coverage/packages
 ```
 
-`-Dtest-file=<package>/<file>.test.zig` limits the run to one test file. Coverage of the CLI (`apps/cli-zig`) is not measured by
-the root build yet.
+`-Dtest-file=<package>/<file>.test.zig` limits the run to one test file. The same run measures the CLI (`apps/cli-zig`): its unit test program runs under kcov too, with `apps/cli-zig/src/lib` and `apps/cli-zig/src/cmd` included and `apps/cli-zig/src/test` excluded.
 
-Each run leaves `cobertura.xml` in a subdirectory of `<dir>` per program kcov ran (`unit-tests`), with `index.html` beside it for reading in a browser.
+Each run leaves `cobertura.xml` in a subdirectory of `<dir>` per program kcov ran (`unit-tests` and `cli`), with `index.html` beside it for reading in a browser.
 
 The storage package's integration tests run against a real S3 server. To include them, start the local MinIO server
 with `bun run s3-emulator start <state-dir>`, source `<state-dir>/env`, and run both steps with the variables the

@@ -149,20 +149,3 @@ test "getDefaultDatabasePath sits under the application data directory" {
 
 // A stored source cannot be malformed once it is typed, so the malformed entry goes in as the document the config is
 // read from, as it would from the file.
-test "planDesktopAutoImport drops a malformed stored source rather than failing to start" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const document = try std.json.parseFromSliceLeaky(
-        std.json.Value,
-        allocator,
-        "{\"auto_import\":{\"enabled\":true,\"sources\":[{\"type\":\"folder\"},{\"type\":\"folder\",\"path\":\"/mnt/photos\",\"recurse\":true}]}}",
-        .{},
-    );
-    const config = try node_api.app_config_format.yamlToAppConfig(allocator, document);
-
-    const plan = try planDesktopAutoImport(allocator, config, &PHOTO_FOLDERS, APP_DATA_PATH);
-
-    try std.testing.expectEqual(@as(usize, 1), plan.settings.sources.len);
-    try expectFolderSource(plan.settings.sources[0], "/mnt/photos", true);
-}

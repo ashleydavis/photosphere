@@ -10,7 +10,7 @@ const ISyncSettings = api.sync_settings.ISyncSettings;
 const computeSyncAllowed = api.sync_gate.computeSyncAllowed;
 const loadDatabaseConfig = api.database_config.loadDatabaseConfig;
 const IPrefetchDatabaseData = node_api.prefetch_database_worker.IPrefetchDatabaseData;
-const readConfigFromStorage = node_api.config_worker.readConfigFromStorage;
+const readConfig = node_api.config_worker.readConfig;
 const openStorage = node_api.open_storage.openStorage;
 const isDatabasePartial = node_api.media_file_database.isDatabasePartial;
 const INetworkStatusHost = network_status.INetworkStatusHost;
@@ -138,7 +138,7 @@ pub fn planPrefetchHandler(
     context: ITaskContext,
     host: INetworkStatusHost,
 ) anyerror!std.json.Value {
-    const read = try readConfigFromStorage(allocator, io, log, try node_api.config_file.getConfigPath(allocator));
+    const read = try readConfig(allocator, io, log, context.configPath);
     const config = read.config;
     const syncConfig = config.sync;
     const settings = syncConfig.settings;

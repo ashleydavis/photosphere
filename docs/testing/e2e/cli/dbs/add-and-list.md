@@ -14,6 +14,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-add-and-list
 mkdir -p /tmp/psi-cli-dbs-add-and-list/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-add-and-list/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-add-and-list/config
 cat > /tmp/psi-cli-dbs-add-and-list/config/databases.toml <<'TOML'
 [[databases]]
 name = "smoke-db"

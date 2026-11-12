@@ -15,6 +15,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-add-via-flags
 mkdir -p /tmp/psi-cli-dbs-add-via-flags/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-add-via-flags/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-add-via-flags/config
 ```
 
 Expected: no output.

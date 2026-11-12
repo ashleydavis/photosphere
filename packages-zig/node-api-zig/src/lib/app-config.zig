@@ -4,11 +4,10 @@ const config_file = @import("config-file.zig");
 const app_config_format = @import("app-config-format.zig");
 const config_format = @import("config-format.zig");
 const fs = node_utils.fs;
-const getConfigPath = config_file.getConfigPath;
 const IConfigTheme = config_format.IConfigTheme;
 
 //
-// The config store the shared UI reads and writes through, backed by config.yaml.
+// The config store the shared UI reads and writes through, backed by config.toml.
 //
 // `IConfig` in user-interface offers get, set, add, remove and clear over a string key, and this is
 // what backs it: the settings the user chose. What the app remembered is the sibling store in
@@ -27,93 +26,59 @@ const IConfigTheme = config_format.IConfigTheme;
 pub const IAppConfig = app_config_format.IAppConfig;
 pub const IAppConfigValue = app_config_format.IAppConfigValue;
 pub const IAppConfigSettings = app_config_format.IAppConfigSettings;
-pub const yamlToAppConfig = app_config_format.yamlToAppConfig;
-pub const appConfigToYaml = app_config_format.appConfigToYaml;
 pub const getAppConfigValue = app_config_format.getAppConfigValue;
 pub const setAppConfigValue = app_config_format.setAppConfigValue;
 pub const appConfigSettings = app_config_format.appConfigSettings;
+pub const APP_CONFIG_PATHS = app_config_format.APP_CONFIG_PATHS;
+pub const getAppConfig = app_config_format.getAppConfig;
+pub const setAppConfig = app_config_format.setAppConfig;
+
+const config_state = @import("ziggy").config_state;
+const ILog = @import("utils-zig").log.ILog;
 
 //
-// Loads the whole store from disk.
+// Loads the whole store from disk. Every key is read on its own, so one value of the wrong type gives only its own setting its default.
 // Returns an empty config when the file does not exist, so every setting falls to its own default.
 //
-pub fn loadAppConfig(allocator: std.mem.Allocator, io: std.Io) !IAppConfig {
-    const document = try fs.readYaml(allocator, io, try getConfigPath(allocator));
-    return yamlToAppConfig(allocator, document);
-}
-
-//
-// The mutator updateAppConfig hands to updateYaml: it turns the document into the
-// flat config, lets the caller change it and merges it back into the document.
-//
-fn AppConfigMutator(comptime MutatorT: type) type {
-    return struct {
-        // The caller's mutator.
-        mutator: MutatorT,
-
-        //
-        // Applies the caller's mutator to the flat config the document holds.
-        //
-        pub fn run(self: *const @This(), allocator: std.mem.Allocator, document: std.json.Value) !std.json.Value {
-            var config = try yamlToAppConfig(allocator, document);
-            try self.mutator.run(allocator, &config);
-            return appConfigToYaml(allocator, config, document);
+pub fn loadAppConfig(allocator: std.mem.Allocator, io: std.Io, log: ILog, config_path: []const u8) !IAppConfig {
+    var config: IAppConfig = .{};
+    inline for (std.meta.fields(IAppConfig)) |field| {
+        const path = @field(APP_CONFIG_PATHS, field.name);
+        if (comptime std.mem.eql(u8, field.name, "autoImportSources")) {
+            const stored = try config_file.readSetting(?[]const config_format.IStoredAutoImportSource, allocator, io, log, .{ .configPath = config_path, .keyPath = path });
+            @field(config, field.name) = try config_format.autoImportSourcesFromStored(allocator, stored);
         }
-    };
-}
-
-//
-// Changes the store on disk. Every edit goes through here.
-//
-// The mutator is handed the file's CURRENT contents and changes them in place. updateYaml runs it
-// under the update lock beside the file, checks the file has not moved before renaming, and re-runs
-// the mutator against the new contents if it has, so two edits arriving together both survive.
-//
-// This is the only way to write the file. A saveDesktopConfig that took a whole config and wrote it
-// used to sit beside this, and its callers were all load-then-save, so an edit made between their
-// read and their write was silently discarded. Windows made the same overlap visible on the sibling
-// databases.toml, where it refuses to rename over a file another handle still holds.
-//
-// In Zig the mutator is a value with a method `run(self, allocator, config: *IAppConfig) !void`.
-//
-pub fn updateAppConfig(allocator: std.mem.Allocator, io: std.Io, mutator: anytype) !void {
-    const appConfigMutator: AppConfigMutator(@TypeOf(mutator)) = .{
-        .mutator = mutator,
-    };
-    try fs.updateYaml(allocator, io, try getConfigPath(allocator), .{
-        .object = .empty,
-    }, &appConfigMutator, 3);
-}
-
-//
-// Gets the theme preference.
-//
-pub fn getTheme(allocator: std.mem.Allocator, io: std.Io) !IConfigTheme {
-    const config = try loadAppConfig(allocator, io);
-    return config.theme orelse .system;
-}
-
-//
-// The mutator setTheme hands to updateAppConfig.
-//
-const SetThemeMutator = struct {
-    // The theme to store.
-    theme: IConfigTheme,
-
-    //
-    // Stores the theme in the config.
-    //
-    pub fn run(self: SetThemeMutator, allocator: std.mem.Allocator, config: *IAppConfig) !void {
-        _ = allocator;
-        config.theme = self.theme;
+        else {
+            @field(config, field.name) = try config_file.readSetting(field.type, allocator, io, log, .{ .configPath = config_path, .keyPath = path });
+        }
     }
-};
+    return config;
+}
+
+//
+// Writes one field of IAppConfig inside an update another change is making, so several settings land in one rename.
+//
+pub fn setAppConfigIn(comptime field_name: []const u8, values: config_state.config.Values, value: @FieldType(IAppConfig, field_name)) !void {
+    const path = @field(APP_CONFIG_PATHS, field_name);
+    if (comptime std.mem.eql(u8, field_name, "autoImportSources")) {
+        const stored = try config_format.autoImportSourcesToStored(values.arena(), value);
+        try values.set(path, stored);
+        return;
+    }
+    try values.set(path, value);
+}
+
+//
+// Gets the theme preference. A string naming a theme nobody defined is logged and gives the system theme, as a missing setting does.
+//
+pub fn getTheme(allocator: std.mem.Allocator, io: std.Io, log: ILog, config_path: []const u8) !IConfigTheme {
+    const theme = try config_file.readSetting(?IConfigTheme, allocator, io, log, .{ .configPath = config_path, .keyPath = "theme" });
+    return theme orelse .system;
+}
 
 //
 // Sets the theme preference.
 //
-pub fn setTheme(allocator: std.mem.Allocator, io: std.Io, theme: IConfigTheme) !void {
-    try updateAppConfig(allocator, io, SetThemeMutator{
-        .theme = theme,
-    });
+pub fn setTheme(allocator: std.mem.Allocator, io: std.Io, config_path: []const u8, theme: IConfigTheme) !void {
+    try config_state.config.set(allocator, io, config_path, "theme", theme);
 }

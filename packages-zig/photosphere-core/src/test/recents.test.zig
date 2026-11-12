@@ -17,11 +17,11 @@ fn writeDatabasesToml(app: *TestApp, text: []const u8) !void {
 }
 
 //
-// Writes the test's state.yaml, beside databases.toml in the settings directory the app reads.
+// Writes the test's state.json, under the state directory the app reads.
 //
-fn writeStateYaml(app: *TestApp, text: []const u8) !void {
+fn writeStateJson(app: *TestApp, text: []const u8) !void {
     const allocator = std.testing.allocator;
-    const path = try std.fs.path.join(allocator, &.{ app.tmp_path, "config", "state.yaml" });
+    const path = try app.statePath(allocator);
     defer allocator.free(path);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = path,
@@ -42,7 +42,7 @@ test "get-recent-databases replies the entries in recents order and leaves out n
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try writeStateYaml(&app, "databases:\n  recent_names:\n    - beta\n    - gone\n    - alpha\n");
+    try writeStateJson(&app, "{\"databases\":{\"recent_names\":[\"beta\",\"gone\",\"alpha\"]}}");
     try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
     const reply = try app.requestOk("get-recent-databases", "null");
     defer std.testing.allocator.free(reply);
@@ -58,11 +58,11 @@ test "get-last-database replies null when no database is open" {
     try std.testing.expectEqualStrings("null", reply);
 }
 
-test "get-last-database replies the path recorded in state.yaml" {
+test "get-last-database replies the path recorded in the state file" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try writeStateYaml(&app, "databases:\n  last_opened_path: /some/db\n");
+    try writeStateJson(&app, "{\"databases\":{\"last_opened_path\":\"/some/db\"}}");
     const reply = try app.requestOk("get-last-database", "null");
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("\"/some/db\"", reply);
@@ -73,7 +73,7 @@ test "remove-recent-database-name removes only the recent name, and replies null
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    try writeStateYaml(&app, "databases:\n  recent_names:\n    - alpha\n    - beta\n");
+    try writeStateJson(&app, "{\"databases\":{\"recent_names\":[\"alpha\",\"beta\"]}}");
     try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
     const remove_reply = try app.requestOk("remove-recent-database-name", "\"ALPHA\"");
     defer allocator.free(remove_reply);

@@ -28,329 +28,32 @@ fn flatten(allocator: std.mem.Allocator, text: []const u8) !IAppConfig {
     return app_config_format.yamlToAppConfig(allocator, try parseJson(allocator, text));
 }
 
-test "yamlToAppConfig: converts every snake_case key to its camelCase field" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const config = try flatten(allocator,
-        \\{"theme":"dark","developer_mode":true,"show_fps_indicator":true,"saved_searches":["beach"],"sync":{"enabled":false,"only_on_wifi":false},"auto_import":{"default_database_path":"/db"}}
-    );
-
-    try std.testing.expectEqual(node_api.config_format.IConfigTheme.dark, config.theme.?);
-    try std.testing.expect(config.developerMode.?);
-    try std.testing.expect(config.showFpsIndicator.?);
-    try std.testing.expectEqual(@as(usize, 1), config.savedSearches.?.len);
-    try std.testing.expectEqualStrings("beach", config.savedSearches.?[0]);
-    try std.testing.expectEqual(false, config.syncEnabled.?);
-    try std.testing.expectEqual(false, config.syncOnlyOnWifi.?);
-    try std.testing.expectEqualStrings("/db", config.defaultDatabasePath.?);
-    try std.testing.expect(config.autoImportEnabled == null);
-    try std.testing.expect(config.autoImportSources == null);
-    try std.testing.expect(config.autoImportCleanupEnabled == null);
-}
 
 // The UI applies its own defaults, so an unset value has to stay unset rather than becoming false or an empty string
 // here.
-test "yamlToAppConfig: leaves absent keys absent rather than filling in defaults" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
 
-    var settings = try app_config_format.appConfigSettings(allocator, try flatten(allocator, "{}"));
 
-    try std.testing.expectEqual(@as(usize, 0), settings.count());
-    try std.testing.expectEqual(@as(usize, 0), (try app_config_format.appConfigSettings(allocator, try app_config_format.yamlToAppConfig(allocator, null))).count());
-}
 
-test "yamlToAppConfig: a document that is not an object gives an empty config" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
 
-    const config = try app_config_format.yamlToAppConfig(allocator, .{
-        .string = "text",
-    });
 
-    try std.testing.expectEqual(@as(usize, 0), (try app_config_format.appConfigSettings(allocator, config)).count());
-}
 
-test "yamlToAppConfig: a malformed section is ignored without discarding the keys that parsed" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
 
-    const config = try flatten(allocator,
-        \\{"theme":"light","auto_import":"not a section","sync":{"enabled":true}}
-    );
 
-    try std.testing.expectEqual(node_api.config_format.IConfigTheme.light, config.theme.?);
-    try std.testing.expect(config.syncEnabled.?);
-    try std.testing.expect(config.defaultDatabasePath == null);
-}
 
-test "yamlToAppConfig: values of the wrong type are left absent" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const config = try flatten(allocator,
-        \\{"theme":7,"developer_mode":"yes","show_fps_indicator":"yes","saved_searches":"beach","sync":{"enabled":"yes","only_on_wifi":1},"auto_import":{"enabled":"yes","default_database_path":5,"cleanup_enabled":"yes","sources":"nothing"}}
-    );
-
-    try std.testing.expectEqual(@as(usize, 0), (try app_config_format.appConfigSettings(allocator, config)).count());
-}
-
-test "yamlToAppConfig: a theme the file names that nobody defined reads as absent" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const config = try flatten(allocator,
-        \\{"theme":"neon"}
-    );
-
-    try std.testing.expect(config.theme == null);
-}
-
-test "yamlToAppConfig: an entry of the wrong type is dropped from the saved searches and the rest are kept" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const config = try flatten(allocator,
-        \\{"saved_searches":["beach",17,"dogs"]}
-    );
-
-    try std.testing.expectEqual(@as(usize, 2), config.savedSearches.?.len);
-    try std.testing.expectEqualStrings("beach", config.savedSearches.?[0]);
-    try std.testing.expectEqualStrings("dogs", config.savedSearches.?[1]);
-}
-
-test "yamlToAppConfig: a malformed watched place is dropped and the rest are kept" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const config = try flatten(allocator,
-        \\{"auto_import":{"sources":[{"type":"folder","path":"/photos","recurse":false},{"type":"folder"},{"type":"device-album","album_id":"all"},null,"text"]}}
-    );
-
-    const sources = config.autoImportSources.?;
-    try std.testing.expectEqual(@as(usize, 2), sources.len);
-    try std.testing.expectEqualStrings("/photos", sources[0].folder.path);
-    try std.testing.expect(!sources[0].folder.recurse);
-    try std.testing.expectEqualStrings("all", sources[1].@"device-album".albumId);
-}
-
-test "yamlToAppConfig: an empty list of watched places is an empty list and not absent" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const config = try flatten(allocator,
-        \\{"auto_import":{"sources":[]}}
-    );
-
-    try std.testing.expectEqual(@as(usize, 0), config.autoImportSources.?.len);
-}
-
-test "yamlToAppConfig: reads the automatic import settings" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const config = try flatten(allocator,
-        \\{"auto_import":{"enabled":true,"default_database_path":"","cleanup_enabled":false}}
-    );
-
-    try std.testing.expect(config.autoImportEnabled.?);
-    try std.testing.expectEqualStrings("", config.defaultDatabasePath.?);
-    try std.testing.expectEqual(false, config.autoImportCleanupEnabled.?);
-}
-
-test "appConfigToYaml: converts every camelCase field to its snake_case key in the right section" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const document = try app_config_format.appConfigToYaml(allocator, .{
-        .theme = .dark,
-        .developerMode = true,
-        .showFpsIndicator = true,
-        .savedSearches = &.{"beach"},
-        .defaultDatabasePath = "/db",
-        .syncEnabled = false,
-        .syncOnlyOnWifi = false,
-    }, .{
-        .object = .empty,
-    });
-
-    try std.testing.expectEqualStrings(
-        "{\"theme\":\"dark\",\"developer_mode\":true,\"show_fps_indicator\":true,\"saved_searches\":[\"beach\"],\"sync\":{\"enabled\":false,\"only_on_wifi\":false},\"auto_import\":{\"default_database_path\":\"/db\"}}",
-        try toJson(allocator, document),
-    );
-}
 
 // An empty section is not the same as no section: the file uses a `sync` section's presence to say syncing has been
 // decided, so stamping an empty one in would tell a fresh install its syncing settings had already been chosen and
 // leave syncing off with the toggles saying on.
-test "appConfigToYaml: omits absent fields rather than writing them as null, and writes no empty section" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
 
-    const document = try app_config_format.appConfigToYaml(allocator, .{}, .{
-        .object = .empty,
-    });
 
-    try std.testing.expectEqualStrings("{}", try toJson(allocator, document));
-}
 
-test "appConfigToYaml: a section that has been emptied is removed rather than left behind" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const document = try app_config_format.appConfigToYaml(allocator, .{}, try parseJson(allocator,
-        \\{"sync":{"enabled":true}}
-    ));
-
-    try std.testing.expectEqualStrings("{}", try toJson(allocator, document));
-}
-
-test "appConfigToYaml: a field that has been cleared is removed from the document" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const document = try app_config_format.appConfigToYaml(allocator, .{
-        .developerMode = true,
-    }, try parseJson(allocator,
-        \\{"theme":"dark","developer_mode":false,"saved_searches":["beach"],"show_fps_indicator":true}
-    ));
-
-    try std.testing.expectEqualStrings("{\"developer_mode\":true}", try toJson(allocator, document));
-}
-
-test "appConfigToYaml: writes the watched places with only the fields their kind uses" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const sources = [_]IAutoImportSource{
-        .{
-            .folder = .{
-                .path = "/home/someone/Pictures",
-                .recurse = true,
-            },
-        },
-        .{
-            .@"device-album" = .{
-                .albumId = "all",
-            },
-        },
-    };
-
-    const document = try app_config_format.appConfigToYaml(allocator, .{
-        .autoImportEnabled = true,
-        .defaultDatabasePath = "/home/someone/photosphere-default",
-        .autoImportSources = &sources,
-        .autoImportCleanupEnabled = true,
-    }, .{
-        .object = .empty,
-    });
-
-    try std.testing.expectEqualStrings(
-        "{\"auto_import\":{\"enabled\":true,\"default_database_path\":\"/home/someone/photosphere-default\",\"cleanup_enabled\":true,\"sources\":[{\"type\":\"folder\",\"path\":\"/home/someone/Pictures\",\"recurse\":true},{\"type\":\"device-album\",\"album_id\":\"all\"}]}}",
-        try toJson(allocator, document),
-    );
-}
 
 // The flat view owns only some of the file. The mobile loops' pacing and the database the mobile sync pushes are in the
 // same document and appear nowhere in this view, so a desktop write that rebuilt the document from the flat view alone
 // would delete them.
-test "appConfigToYaml: leaves the parts of the document this view does not own exactly as they were" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const document = try parseJson(allocator,
-        \\{"unknown_key":1,"auto_import":{"enabled":true,"pause_between_runs_ms":5000,"sources":[{"type":"device-album","album_id":"all"}]},"sync":{"enabled":true,"database_path":"photosphere-default","pause_between_runs_ms":300000}}
-    );
-    const config = try app_config_format.yamlToAppConfig(allocator, document);
 
-    var changed = config;
-    changed.theme = .dark;
-    const merged = try app_config_format.appConfigToYaml(allocator, changed, document);
 
-    try std.testing.expectEqualStrings(
-        "{\"unknown_key\":1,\"auto_import\":{\"enabled\":true,\"pause_between_runs_ms\":5000,\"sources\":[{\"type\":\"device-album\",\"album_id\":\"all\"}]}," ++
-            "\"sync\":{\"enabled\":true,\"database_path\":\"photosphere-default\",\"pause_between_runs_ms\":300000},\"theme\":\"dark\"}",
-        try toJson(allocator, merged),
-    );
-}
 
-test "appConfigToYaml: does not change the document it was given" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const document = try parseJson(allocator,
-        \\{"theme":"dark","sync":{"enabled":true}}
-    );
-
-    _ = try app_config_format.appConfigToYaml(allocator, .{
-        .developerMode = true,
-    }, document);
-
-    try std.testing.expectEqualStrings("{\"theme\":\"dark\",\"sync\":{\"enabled\":true}}", try toJson(allocator, document));
-}
-
-test "appConfigToYaml: a document that is not an object is replaced by one holding the config" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const document = try app_config_format.appConfigToYaml(allocator, .{
-        .developerMode = true,
-    }, .{
-        .string = "text",
-    });
-
-    try std.testing.expectEqualStrings("{\"developer_mode\":true}", try toJson(allocator, document));
-}
-
-test "a config round trips through the document and back unchanged" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const sources = [_]IAutoImportSource{.{
-        .folder = .{
-            .path = "/photos",
-            .recurse = false,
-        },
-    }};
-    const original: IAppConfig = .{
-        .theme = .light,
-        .savedSearches = &.{"dogs"},
-        .showFpsIndicator = false,
-        .autoImportEnabled = true,
-        .defaultDatabasePath = "/photos",
-        .autoImportSources = &sources,
-        .autoImportCleanupEnabled = false,
-    };
-
-    const roundTripped = try app_config_format.yamlToAppConfig(allocator, try app_config_format.appConfigToYaml(allocator, original, .{
-        .object = .empty,
-    }));
-
-    try std.testing.expectEqual(original.theme, roundTripped.theme);
-    try std.testing.expectEqualStrings("dogs", roundTripped.savedSearches.?[0]);
-    try std.testing.expectEqual(original.showFpsIndicator, roundTripped.showFpsIndicator);
-    try std.testing.expectEqual(original.autoImportEnabled, roundTripped.autoImportEnabled);
-    try std.testing.expectEqualStrings("/photos", roundTripped.defaultDatabasePath.?);
-    try std.testing.expectEqualStrings("/photos", roundTripped.autoImportSources.?[0].folder.path);
-    try std.testing.expect(!roundTripped.autoImportSources.?[0].folder.recurse);
-    try std.testing.expectEqual(original.autoImportCleanupEnabled, roundTripped.autoImportCleanupEnabled);
-}
 
 test "reading and writing one config setting by name: a key is read from and written to its own field" {
     var config: IAppConfig = .{};

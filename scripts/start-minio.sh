@@ -99,6 +99,7 @@ database="s3:$S3_EMULATOR_BUCKET/$name"
 cat > "$envFile" <<ENV
 export PATH="$REPO_ROOT/zig-out/bin:\$PATH"
 export PHOTOSPHERE_CONFIG_DIR="$stateDir/config"
+export PHOTOSPHERE_STATE_DIR="$stateDir/state"
 export PHOTOSPHERE_VAULT_DIR="$stateDir/vault"
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"

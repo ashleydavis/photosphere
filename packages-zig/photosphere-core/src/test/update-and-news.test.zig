@@ -19,7 +19,7 @@ test "mark-update-shown records the version as the last one shown" {
     try std.testing.expectEqualStrings("null", reply);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const shown = (try node_api.news_state.getLastShownUpdateVersion(arena.allocator(), std.testing.io, log)).?;
+    const shown = (try node_api.news_state.getLastShownUpdateVersion(arena.allocator(), std.testing.io, log, try app.statePath(arena.allocator()))).?;
     try std.testing.expectEqualStrings("1.2.3", shown);
     try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Marked update notification as shown: v1.2.3") != null);
 }
@@ -44,7 +44,7 @@ test "mark-news-shown adds the id to the news items shown, once" {
     allocator.free(try app.requestOk("mark-news-shown", "\"news-one\""));
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const shown = try node_api.news_state.getShownNewsIds(arena.allocator(), std.testing.io, log);
+    const shown = try node_api.news_state.getShownNewsIds(arena.allocator(), std.testing.io, log, try app.statePath(arena.allocator()));
     try std.testing.expectEqual(@as(usize, 2), shown.len);
     try std.testing.expectEqualStrings("news-one", shown[0]);
     try std.testing.expectEqualStrings("news-two", shown[1]);
@@ -79,7 +79,7 @@ fn checkNewsOnMain(app: *TestApp) !void {
             const log = services.log;
             var arena = std.heap.ArenaAllocator.init(allocator);
             defer arena.deinit();
-            try update_and_news.checkForNews(services, arena.allocator(), io, log);
+            try update_and_news.checkForNews(services, arena.allocator(), io, log, services.statePath());
         }
     };
     try app.onMainThread(@as(u8, 0), Call.run);
@@ -94,7 +94,7 @@ fn checkUpdateOnMain(app: *TestApp, comptime version: []const u8) !void {
             const log = services.log;
             var arena = std.heap.ArenaAllocator.init(allocator);
             defer arena.deinit();
-            try update_and_news.checkForUpdate(services, arena.allocator(), io, log, version);
+            try update_and_news.checkForUpdate(services, arena.allocator(), io, log, services.statePath(), version);
         }
     };
     try app.onMainThread(@as(u8, 0), Call.run);

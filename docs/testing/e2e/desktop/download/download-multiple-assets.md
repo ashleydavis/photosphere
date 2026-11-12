@@ -21,6 +21,7 @@ Run this in both terminals. It keeps the test's settings, secrets, cache, logs a
 
 ```bash
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-download-multiple-assets/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-desktop-download-multiple-assets/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-download-multiple-assets/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-download-multiple-assets/cache

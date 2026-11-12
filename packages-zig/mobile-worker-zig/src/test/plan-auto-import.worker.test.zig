@@ -30,7 +30,7 @@ const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const planAutoImportHandler = mobile_worker.plan_auto_import_worker.planAutoImportHandler;
 const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import_mobile.DEFAULT_AUTO_IMPORT_PAUSE_MS;
 const DEFAULT_DATABASE_FOLDER_NAME = api.auto_import_mobile.DEFAULT_DATABASE_FOLDER_NAME;
-const readConfigFromStorage = node_api.config_worker.readConfigFromStorage;
+const readConfig = node_api.config_worker.readConfig;
 const buildConfigYaml = node_api.config_worker.buildConfigYaml;
 const at = @import("sandbox.zig").at;
 const stepData = @import("sandbox.zig").stepData;
@@ -48,13 +48,13 @@ const IStoredAutoImportSettings = struct {
 };
 
 //
-// Writes the automatic import settings into the temporary sandbox's config.yaml, exactly as the app would, leaving every
+// Writes the automatic import settings into the temporary sandbox's config.toml, exactly as the app would, leaving every
 // other section of the file as it is.
 // (Zig: the sources are the JSON text of the list, which the settings are read from.)
 //
 fn writeSettingsFile(sandbox: *Sandbox, log: ILog, enabled: bool, defaultDatabasePath: ?[]const u8, sourcesJson: []const u8, pauseBetweenRunsMs: i64) !void {
     const allocator = sandbox.arenaAllocator();
-    var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
+    var config = (try readConfig(allocator, sandbox.io, log, "config.toml")).config;
     const settings: IStoredAutoImportSettings = .{
         .enabled = enabled,
         .sources = .{
@@ -69,7 +69,7 @@ fn writeSettingsFile(sandbox: *Sandbox, log: ILog, enabled: bool, defaultDatabas
             .integer = pauseBetweenRunsMs,
         },
     };
-    try sandbox.writeFile("config.yaml", try buildConfigYaml(allocator, config, null));
+    try node_api.config_file.saveConfigFile(allocator, sandbox.io, "config.toml", config);
 }
 
 //
@@ -124,7 +124,7 @@ test "plan-auto-import creates and records the default database when there is no
     const created = stepData(at(result, "steps").?, "create-default-database").?;
     try std.testing.expectEqual(@as(usize, 3), created.object.count());
     try expectString(DEFAULT_DATABASE_FOLDER_NAME, created, "databasePath");
-    try expectString(try node_api.config_file.getConfigPath(sandbox.arenaAllocator()), created, "configPath");
+    try expectString(sandbox.taskContext.configPath, created, "configPath");
 
     // Asked for on screen as well as on disk: photos are about to start arriving in it, and a gallery showing nothing while they
     // do is the thing this asks for.
@@ -249,7 +249,7 @@ test "plan-auto-import: a gap of zero in the file falls back to the default rath
     const log = MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit(log);
-    try sandbox.writeFile("config.yaml", "auto_import:\n  enabled: true\n  default_database_path: my-photos\n  pause_between_runs_ms: 0\n");
+    try sandbox.writeFile("config.toml", "[auto_import]\nenabled = true\ndefault_database_path = \"my-photos\"\npause_between_runs_ms = 0\n");
 
     const result = try plan(&sandbox, log);
 

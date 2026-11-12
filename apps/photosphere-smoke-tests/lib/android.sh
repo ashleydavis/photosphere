@@ -45,7 +45,7 @@ ANDROID_DATA_PREPARED=""
 
 # Where the app keeps its settings, relative to the app's private data directory. The activity's Intent extra PHOTOSPHERE_CONFIG_DIR
 # (see photosphere_platform_start) points the core's settings directory here, and the core names its files databases.toml and
-# config.yaml inside it.
+# config.toml inside it.
 ANDROID_CONFIG_DIR_RELATIVE="files/config"
 
 # Where the app keeps the databases it names by a short name, relative to the app's private data directory: the dbs directory of the
@@ -386,6 +386,7 @@ photosphere_platform_start() {
     local extras="--es ziggy.remoteControl '127.0.0.1:$device_port'"
     extras="$extras --es PHOTOSPHERE_TEST_MODE '1'"
     extras="$extras --es PHOTOSPHERE_CONFIG_DIR '/data/data/$ANDROID_APP_ID/files/config'"
+    extras="$extras --es PHOTOSPHERE_STATE_DIR '/data/data/$ANDROID_APP_ID/files/config'"
     extras="$extras --es PHOTOSPHERE_DATA_DIR '/data/data/$ANDROID_APP_ID/files'"
     extras="$extras --es PHOTOSPHERE_LOG_DIR '/data/data/$ANDROID_APP_ID/$log_dir'"
     if [ -n "${PHOTOSPHERE_NEWS_URL:-}" ]; then
@@ -620,11 +621,11 @@ android_seed_database() {
 }
 
 #
-# Writes the app's databases.toml and the databases section of its state.yaml into its settings directory, registering the given
+# Writes the app's databases.toml and the databases section of its state.json into its settings directory, registering the given
 # databases and recent-database names, from outside the app and before it starts, as a desktop scenario pre-writes the files. The first
 # two arguments are JSON: the databases as an array of {name, path} (description, origin, s3Key, encryptionKey and geocodingKey
 # optional), written to databases.toml, and the recents as an array of names, empty when omitted. The third is the path of the database
-# the app reopens on launch; omitted, it is left out of state.yaml and the app starts on the welcome screen. Paths are written as given.
+# the app reopens on launch; omitted, it is left out of state.json and the app starts on the welcome screen. Paths are written as given.
 # Usage: android_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
 #
 android_seed_databases_config() {
@@ -668,7 +669,7 @@ android_read_databases_config() {
 }
 
 #
-# Writes the syncing settings into the sync section of the app's config.yaml in its settings directory, keeping every other section
+# Writes the syncing settings into the sync section of the app's config.toml in its settings directory, keeping every other section
 # the file already has. A database path says which database the background sync pushes, which the app otherwise records itself when
 # one is opened. The pause is left out, so the app's default applies, when none is given.
 # Usage: android_seed_sync_config <enabled true|false> <only_on_wifi true|false> [pause_ms] [database_path]
@@ -691,30 +692,32 @@ android_seed_sync_config() {
     fi
     photosphere_android_prepare_for_seeding || return 1
 
-    # The file as it stands, minus its sync section, which runs from the line "sync:" to the next line that is not indented.
-    local rendered
-    rendered="$(mktemp)"
-    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$ANDROID_CONFIG_DIR_RELATIVE/config.yaml" 2>/dev/null \
-        | tr -d '\r' \
-        | sed -e '/^sync:/,/^[^[:space:]]/{/^sync:/d;/^[[:space:]]/d}' \
-        | grep -v ': No such file or directory$' > "$rendered" || true
+    local replacement
+    replacement="$(mktemp)"
     {
-        echo "sync:"
-        echo "  enabled: $enabled"
-        echo "  only_on_wifi: $only_on_wifi"
+        echo "[sync]"
+        echo "enabled = $enabled"
+        echo "only_on_wifi = $only_on_wifi"
         if [ -n "$pause_ms" ]; then
-            echo "  pause_between_runs_ms: $pause_ms"
+            echo "pause_between_runs_ms = $pause_ms"
         fi
         if [ -n "$database_path" ]; then
-            echo "  database_path: $(jq -n --arg path "$database_path" '$path')"
+            echo "database_path = $(jq -n --arg path "$database_path" '$path')"
         fi
-    } >> "$rendered"
-    photosphere_android_put_file "$rendered" "$ANDROID_CONFIG_DIR_RELATIVE/config.yaml" || {
+    } > "$replacement"
+    local rendered
+    rendered="$(mktemp)"
+    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$ANDROID_CONFIG_DIR_RELATIVE/config.toml" 2>/dev/null \
+        | tr -d '\r' \
+        | grep -v ': No such file or directory$' \
+        | replace_config_table sync "$replacement" > "$rendered" || true
+    rm -f "$replacement"
+    photosphere_android_put_file "$rendered" "$ANDROID_CONFIG_DIR_RELATIVE/config.toml" || {
         rm -f "$rendered"
         return 1
     }
     rm -f "$rendered"
-    echo "Wrote the app's syncing settings to $ANDROID_CONFIG_DIR_RELATIVE/config.yaml (enabled=$enabled, onlyOnWifi=$only_on_wifi)" >&2
+    echo "Wrote the app's syncing settings to $ANDROID_CONFIG_DIR_RELATIVE/config.toml (enabled=$enabled, onlyOnWifi=$only_on_wifi)" >&2
 }
 
 #
@@ -1008,7 +1011,7 @@ android_grant_partial_media_permission() {
 }
 
 #
-# Writes the automatic import settings into the auto_import section of the app's config.yaml in its settings directory, keeping every
+# Writes the automatic import settings into the auto_import section of the app's config.toml in its settings directory, keeping every
 # other section the file already has. This is how a scenario starts with automatic import already on, writing into a database it
 # seeded itself, or off with the album it should watch already chosen. An album id restricts the import to that one album, which is
 # what makes a scenario runnable against a phone with a real photo library. The default database path must be a path the app can
@@ -1031,34 +1034,36 @@ android_seed_auto_import_config() {
     fi
     photosphere_android_prepare_for_seeding || return 1
 
-    # The file as it stands, minus its auto_import section, which runs from the line "auto_import:" to the next line that is not indented.
-    local rendered
-    rendered="$(mktemp)"
-    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$ANDROID_CONFIG_DIR_RELATIVE/config.yaml" 2>/dev/null \
-        | tr -d '\r' \
-        | sed -e '/^auto_import:/,/^[^[:space:]]/{/^auto_import:/d;/^[[:space:]]/d}' \
-        | grep -v ': No such file or directory$' > "$rendered" || true
+    local replacement
+    replacement="$(mktemp)"
     {
-        echo "auto_import:"
-        echo "  enabled: $enabled"
+        echo "[auto_import]"
+        echo "enabled = $enabled"
         if [ -n "$pause_ms" ]; then
-            echo "  pause_between_runs_ms: $pause_ms"
-        fi
-        if [ -n "$album_id" ]; then
-            echo "  sources:"
-            echo "    - type: device-album"
-            echo "      album_id: $(jq -n --arg album "$album_id" '$album')"
+            echo "pause_between_runs_ms = $pause_ms"
         fi
         if [ -n "$default_database_path" ]; then
-            echo "  default_database_path: $(jq -n --arg path "$default_database_path" '$path')"
+            echo "default_database_path = $(jq -n --arg path "$default_database_path" '$path')"
         fi
-    } >> "$rendered"
-    photosphere_android_put_file "$rendered" "$ANDROID_CONFIG_DIR_RELATIVE/config.yaml" || {
+        if [ -n "$album_id" ]; then
+            echo "[[auto_import.sources]]"
+            echo "type = \"device-album\""
+            echo "album_id = $(jq -n --arg album "$album_id" '$album')"
+        fi
+    } > "$replacement"
+    local rendered
+    rendered="$(mktemp)"
+    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$ANDROID_CONFIG_DIR_RELATIVE/config.toml" 2>/dev/null \
+        | tr -d '\r' \
+        | grep -v ': No such file or directory$' \
+        | replace_config_table auto_import "$replacement" > "$rendered" || true
+    rm -f "$replacement"
+    photosphere_android_put_file "$rendered" "$ANDROID_CONFIG_DIR_RELATIVE/config.toml" || {
         rm -f "$rendered"
         return 1
     }
     rm -f "$rendered"
-    echo "Wrote the app's automatic import settings to $ANDROID_CONFIG_DIR_RELATIVE/config.yaml (enabled=$enabled)" >&2
+    echo "Wrote the app's automatic import settings to $ANDROID_CONFIG_DIR_RELATIVE/config.toml (enabled=$enabled)" >&2
 }
 
 #
@@ -1528,7 +1533,8 @@ android_sync_stopped_log() {
 android_borrow_app_settings() {
     local saved_dir="$1"
     mkdir -p "$saved_dir" || return 1
-    android_save_app_data_file "files/config/config.yaml" "$saved_dir/config.yaml" || return 1
+    android_save_app_data_file "files/config/config.toml" "$saved_dir/config.toml" || return 1
+    android_save_app_data_file "files/config/state.json" "$saved_dir/state.json" || return 1
     android_save_app_data_file "files/config/databases.toml" "$saved_dir/databases.toml" || return 1
     android_save_app_data_file "shared_prefs/photosphere_secure_store.xml" "$saved_dir/secure-store.xml" || return 1
     photosphere_adb shell am force-stop "$ANDROID_APP_ID" >/dev/null 2>&1 || true
@@ -1541,7 +1547,8 @@ android_borrow_app_settings() {
 #
 android_return_app_settings() {
     local saved_dir="$1"
-    android_restore_app_data_file "files/config/config.yaml" "$saved_dir/config.yaml"
+    android_restore_app_data_file "files/config/config.toml" "$saved_dir/config.toml"
+    android_restore_app_data_file "files/config/state.json" "$saved_dir/state.json"
     android_restore_app_data_file "files/config/databases.toml" "$saved_dir/databases.toml"
     android_restore_app_data_file "shared_prefs/photosphere_secure_store.xml" "$saved_dir/secure-store.xml"
 }

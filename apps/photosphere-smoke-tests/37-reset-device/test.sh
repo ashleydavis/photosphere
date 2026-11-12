@@ -189,10 +189,10 @@ case "$PLATFORM" in
         fi
         log_success "The database's files are gone from the device"
 
-        # The settings the user chose are in config.yaml beside the databases list, so a reset that left them behind would hand the
-        # next person the previous owner's settings. state.yaml holds what the app remembered: the folders it last opened at, how the
+        # The settings the user chose are in config.toml beside the databases list, so a reset that left them behind would hand the
+        # next person the previous owner's settings. state.json holds what the app remembered: the folders it last opened at, how the
         # gallery was sorted, and the news it had already shown.
-        for config_file in databases.toml config.yaml state.yaml; do
+        for config_file in databases.toml config.toml state.json; do
             if [ -n "$(read_config_file "$config_file")" ]; then
                 log_error "The app reported the reset but $config_file is still in the app's storage"
                 exit 1

@@ -11,9 +11,11 @@ test_secrets_add_duplicate() {
 
     local saved_vault="$PHOTOSPHERE_VAULT_DIR"
     local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local saved_state="$PHOTOSPHERE_STATE_DIR"
     local test_dir="$TEST_TMP_DIR/secrets-add-duplicate"
     export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
     export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    export PHOTOSPHERE_STATE_DIR="$test_dir/config"
     mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
 
     invoke_command "Add secret first time" "$(get_zig_cli_command) secrets add --yes --name dup-secret --type plain --value first" 0
@@ -25,6 +27,7 @@ test_secrets_add_duplicate() {
 
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+    export PHOTOSPHERE_STATE_DIR="$saved_state"
 
     test_passed
 }

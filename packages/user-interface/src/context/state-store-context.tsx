@@ -15,8 +15,8 @@ import type { IConfig } from "./config-store-context";
 // Nothing has to decide at run time, and nothing has to keep a list of which key is which.
 //
 // The operations are the same as the config store's, so the interface is the same one. What differs is
-// the file underneath: each platform backs this context with state.yaml and the config store context
-// with config.yaml.
+// the file underneath: each platform backs this context with state.json and the config store context
+// with config.toml.
 //
 const StateStoreContext = createContext<IConfig | undefined>(undefined);
 

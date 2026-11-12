@@ -56,6 +56,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Resolve release tag
         id: resolve
         run: |
@@ -103,6 +110,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Build the AWS SDK for C
         uses: ./.github/actions/build-aws-sdk
         with:
@@ -115,6 +129,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Build zlib-ng
         uses: ./.github/actions/build-zlib-ng
         with:
@@ -127,6 +148,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Build ImageMagick
         uses: ./.github/actions/build-imagemagick
         with:
@@ -139,6 +167,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Build FFmpeg
         uses: ./.github/actions/build-ffmpeg
         with:
@@ -158,6 +193,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -278,6 +320,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
         with:
@@ -387,6 +436,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -490,6 +546,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -595,6 +658,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -629,6 +699,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -662,6 +739,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -755,6 +839,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -843,6 +934,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
+      - name: Check out Ziggy
+        uses: actions/checkout@v4
+        with:
+          repository: ashleydavis/ziggy
+          ref: main
+          path: ../ziggy
       - name: Restore the Photosphere App package
         uses: actions/cache/restore@v4
         with:

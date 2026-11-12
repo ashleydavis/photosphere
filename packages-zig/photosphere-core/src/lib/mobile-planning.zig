@@ -92,6 +92,8 @@ fn bridgedContext(services: *const TaskServices, context: TaskContext, native_ca
         .sessionId = context.source,
         .taskId = context.task_id,
         .maxConcurrentChildTasks = context.max_concurrent_child_tasks,
+        .configPath = context.config_path,
+        .statePath = context.state_path,
         .nativeCaller = services.nativeCaller(native_caller_storage),
         .ptr = @constCast(services),
         .vtable = &context_bridge_vtable,
@@ -149,10 +151,10 @@ pub fn planPrefetchTask(services: TaskServices, timers: Timers, io: std.Io, allo
 // Gives the config tasks the path of the config file the core reads and writes, whatever path the request names. The page does not
 // know where the settings directory is, and the planning tasks above read the same file.
 //
-fn withConfigPath(allocator: std.mem.Allocator, data: std.json.Value) !std.json.Value {
+fn withConfigPath(allocator: std.mem.Allocator, config_path: []const u8, data: std.json.Value) !std.json.Value {
     var object: std.json.ObjectMap = if (data == .object) try data.object.clone(allocator) else .empty;
     try object.put(allocator, "configPath", .{
-        .string = try node_api.config_file.getConfigPath(allocator),
+        .string = config_path,
     });
     return .{
         .object = object,
@@ -168,7 +170,7 @@ pub fn readConfigTask(services: TaskServices, timers: Timers, io: std.Io, alloca
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
-    const result = try node_api.config_worker.readConfigHandler(allocator, io, timers, services.log, try withConfigPath(allocator, data), task_context);
+    const result = try node_api.config_worker.readConfigHandler(allocator, io, timers, services.log, try withConfigPath(allocator, context.config_path, data), task_context);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
@@ -181,6 +183,6 @@ pub fn writeConfigTask(services: TaskServices, timers: Timers, io: std.Io, alloc
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
-    const result = try node_api.config_worker.writeConfigHandler(allocator, io, timers, services.log, try withConfigPath(allocator, data), task_context);
+    const result = try node_api.config_worker.writeConfigHandler(allocator, io, timers, services.log, try withConfigPath(allocator, context.config_path, data), task_context);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }

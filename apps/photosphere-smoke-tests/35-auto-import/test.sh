@@ -226,13 +226,13 @@ case "$PLATFORM" in
         check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
         ;;
     *)
-        CONFIG_YAML="$TMP_DIR/config/config.yaml"
+        CONFIG_TOML="$TMP_DIR/config/config.toml"
         WATCH_DIR="$TMP_DIR/watched-photos"
 
         trap 'cleanup_apps "$TMP_DIR"' EXIT
 
         #
-        # Prints the indented body of one top-level section of a YAML config file.
+        # Prints one top-level table of a TOML config file, without its header.
         #
         # The settings are grouped by feature now, and `enabled` appears under both `auto_import` and `sync`, so a match against the
         # whole file cannot say which feature it found.
@@ -244,7 +244,21 @@ case "$PLATFORM" in
         config_section() {
             local file="$1"
             local section="$2"
-            sed -n "/^${section}:/,/^[^[:space:]]/{ /^${section}:/d; /^[^[:space:]]/d; p; }" "$file"
+            local in_section="false"
+            local line
+            while IFS= read -r line; do
+                if [ "$line" = "[$section]" ]; then
+                    in_section="true"
+                    continue
+                fi
+                if [[ "$line" == \[* ]]; then
+                    in_section="false"
+                    continue
+                fi
+                if [ "$in_section" = "true" ]; then
+                    printf '%s\n' "$line"
+                fi
+            done < "$file"
         }
 
         #
@@ -294,13 +308,14 @@ case "$PLATFORM" in
         # The folder to watch is written before the app starts, so switching automatic import on has somewhere to look that this
         # scenario controls rather than the machine's own photo folders.
         mkdir -p "$TMP_DIR/config"
-        cat > "$CONFIG_YAML" <<YAMLEOF
-auto_import:
-  sources:
-    - type: folder
-      path: "$WATCH_DIR"
-      recurse: true
-YAMLEOF
+        cat > "$CONFIG_TOML" <<TOMLEOF
+[auto_import]
+
+[[auto_import.sources]]
+type = "folder"
+path = "$WATCH_DIR"
+recurse = true
+TOMLEOF
 
         start_app "$TMP_DIR"
         wait_for_ready "$APP_PORT"
@@ -319,8 +334,8 @@ YAMLEOF
         wait_for_log "$TMP_DIR" "Starting automatic import into"
         wait_for_log "$TMP_DIR" "Automatic import enabled"
 
-        wait_for_config "$CONFIG_YAML" "auto_import" "^[[:space:]]+enabled:[[:space:]]*true"
-        wait_for_config "$CONFIG_YAML" "auto_import" "default_database_path"
+        wait_for_config "$CONFIG_TOML" "auto_import" "^enabled[[:space:]]*=[[:space:]]*true"
+        wait_for_config "$CONFIG_TOML" "auto_import" "default_database_path"
 
         # The default database lives under the application data directory, which is inside this scenario's own directory on every
         # desktop platform, so it is found there. The config file names it, but as a folded scalar that can run over two lines, which
@@ -328,7 +343,7 @@ YAMLEOF
         DEFAULT_DB_DIR="$(find "$TMP_DIR" -type d -name "photosphere-default" -print -quit)"
         if [ -z "$DEFAULT_DB_DIR" ]; then
             log_error "No default database folder was made under $TMP_DIR"
-            cat "$CONFIG_YAML"
+            cat "$CONFIG_TOML"
             exit 1
         fi
 

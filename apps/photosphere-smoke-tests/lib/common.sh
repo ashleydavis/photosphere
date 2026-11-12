@@ -999,6 +999,7 @@ run_zig_cli() {
     PHOTOSPHERE_VAULT_TYPE="plaintext" \
     PHOTOSPHERE_VAULT_DIR="$tmp_dir/cli-vault" \
     PHOTOSPHERE_CONFIG_DIR="$tmp_dir/cli-config" \
+    PHOTOSPHERE_STATE_DIR="$tmp_dir/cli-state" \
     run_with_timeout 90 "$PHOTOSPHERE_ZIG_CLI" "$@" </dev/null
 }
 
@@ -1129,10 +1130,69 @@ read_config_file() {
 }
 
 #
-# Writes the databases section of the app's state.yaml from outside the app and before it starts, keeping every other section the file
-# already has: the recently opened database names, most recent first, as a JSON array, and the path of the database the app reopens on
-# launch, left out when it is empty. With no names and no path the section is removed. The recents are written as one JSON line, which
-# YAML reads as a sequence, so open_database_on_launch can carry them through.
+# Reads a TOML file on standard input and writes it on standard output with every line of one table removed, then the lines of the
+# replacement table appended: a header line "[<table>]", "[<table>.<sub>]", "[[<table>]]" or "[[<table>.<sub>]]" starts the table and
+# the next line starting with "[" ends it. Every other line is kept as it was.
+# Usage: replace_config_table <table> <replacement_file>
+#
+replace_config_table() {
+    local table="$1"
+    local replacement_file="$2"
+    local in_table="false"
+    local line
+    while IFS= read -r line; do
+        if [ "$in_table" = "false" ] && { [ "$line" = "[$table]" ] || [ "$line" = "[[$table]]" ] || [[ "$line" == "[$table."* ]] || [[ "$line" == "[[$table."* ]]; }; then
+            in_table="true"
+            continue
+        fi
+        if [ "$in_table" = "true" ]; then
+            if [[ "$line" == \[* ]]; then
+                in_table="false"
+            else
+                continue
+            fi
+        fi
+        printf '%s\n' "$line"
+    done
+    cat "$replacement_file"
+}
+
+#
+# Prints the value of one string key of one table of a config file, read as the app writes it: the header line "[<table>]", then, before
+# the next line starting with "[", the line "<key> = "<value>"". The escapes TOML writes, \\ and \", are read back. Prints nothing when
+# there is none. The file is read through read_config_file, so it works on every platform. Usage: read_toml_string <file> <table> <key>
+#
+read_toml_string() {
+    local file="$1"
+    local table="$2"
+    local key="$3"
+    local in_table="false"
+    local line
+    local value
+    while IFS= read -r line; do
+        if [ "$in_table" = "false" ] && [ "$line" = "[$table]" ]; then
+            in_table="true"
+            continue
+        fi
+        if [ "$in_table" = "true" ]; then
+            if [[ "$line" == \[* ]]; then
+                break
+            fi
+            if [[ "$line" =~ ^\ *$key\ =\ \"(.*)\"$ ]]; then
+                value="${BASH_REMATCH[1]}"
+                value="${value//\\\\/\\}"
+                value="${value//\\\"/\"}"
+                printf '%s' "$value"
+                return 0
+            fi
+        fi
+    done < <(read_config_file "$file")
+}
+
+#
+# Writes the databases table of the app's state.json from outside the app and before it starts, keeping every other key the file already
+# has: the recently opened database names, most recent first, as a JSON array, and the path of the database the app reopens on launch,
+# left out when it is empty. With no names and no path the table is removed.
 # Usage: seed_databases_state '<recent names json>' '<last database path>'
 #
 seed_databases_state() {
@@ -1140,27 +1200,23 @@ seed_databases_state() {
     local last_database="$2"
     local rendered
     rendered="$(mktemp)"
-    # The ; before the closing brace is required by BSD sed on macOS and iOS. Without it the Release iOS smoke tests printed "extra
-    # characters at the end of d command", wrote nothing and so dropped every other section of state.yaml without failing.
-    if ! read_config_file state.yaml | sed -e '/^databases:/,/^[^[:space:]]/{/^databases:/d;/^[[:space:]]/d;}' > "$rendered"; then
-        echo "Could not remove the databases section from the app's state." >&2
+    local current
+    current="$(read_config_file state.json)"
+    if [ -z "$current" ]; then
+        current="{}"
+    fi
+    if ! printf '%s' "$current" | jq --argjson recent "$recent_json" --arg last "$last_database" '
+        .databases = (
+            (if ($recent | length) > 0 then {recent_names: $recent} else {} end)
+            + (if $last != "" then {last_opened_path: $last} else {} end)
+        )
+        | if (.databases | length) == 0 then del(.databases) else . end
+    ' > "$rendered"; then
+        echo "Could not write the databases table of the app's state from: $recent_json" >&2
         rm -f "$rendered"
         return 1
     fi
-    if ! jq -rn --argjson recent "$recent_json" --arg last "$last_database" '
-        if ($recent | length) > 0 or $last != "" then
-            "databases:",
-            (if ($recent | length) > 0 then "  recent_names: \($recent | tojson)" else empty end),
-            (if $last != "" then "  last_opened_path: \($last | tojson)" else empty end)
-        else
-            empty
-        end
-    ' >> "$rendered"; then
-        echo "Could not render the databases section of the app's state from: $recent_json" >&2
-        rm -f "$rendered"
-        return 1
-    fi
-    put_config_file "$rendered" state.yaml || {
+    put_config_file "$rendered" state.json || {
         rm -f "$rendered"
         return 1
     }
@@ -1168,12 +1224,12 @@ seed_databases_state() {
 }
 
 #
-# Prints the recently opened database names that seed_databases_state wrote into the app's state.yaml, as a JSON array, or [] when the
-# file holds no recents line. Usage: seeded_recent_database_names
+# Prints the recently opened database names that seed_databases_state wrote into the app's state.json, as a JSON array, or [] when there
+# are none. Usage: seeded_recent_database_names
 #
 seeded_recent_database_names() {
     local recent_json
-    recent_json="$(read_config_file state.yaml | sed -n 's/^  recent_names: //p')"
+    recent_json="$(read_config_file state.json | jq -c '.databases.recent_names // []')"
     echo "${recent_json:-[]}"
 }
 
@@ -1357,61 +1413,8 @@ damaged_vault_errors_pattern() {
 # Prints the path of the database automatic import writes to, as the app recorded it in its settings, or nothing when none is recorded.
 # The settings file holds one such path, so it can name only one database. Usage: read_default_database_path
 #
-# The app's YAML dump wraps a string longer than its line width into a folded block scalar (`>-`), breaking it at a space, so a path
-# with a space in it (an iOS container's "Application Support") arrives over several lines. Reading the value back means joining the
-# folded lines with a single space, as a YAML loader does. A plain value and a single-quoted one are read too; any other form fails
-# loudly rather than returning part of a path.
-#
 read_default_database_path() {
-    local quote="'"
-    local line
-    local stripped
-    local indent
-    local key_indent=""
-    local value=""
-    local folding="false"
-    while IFS= read -r line; do
-        if [ "$folding" = "true" ]; then
-            stripped="${line#"${line%%[! ]*}"}"
-            indent=$(( ${#line} - ${#stripped} ))
-            if [ -z "$stripped" ]; then
-                echo "read_default_database_path: a blank line inside the folded default_database_path is not supported" >&2
-                return 1
-            fi
-            if [ "$indent" -le "$key_indent" ]; then
-                break
-            fi
-            if [ -z "$value" ]; then
-                value="$stripped"
-            else
-                value="$value $stripped"
-            fi
-            continue
-        fi
-        if [[ "$line" =~ ^(\ *)default_database_path:\ *(.*)$ ]]; then
-            key_indent="${#BASH_REMATCH[1]}"
-            value="${BASH_REMATCH[2]}"
-            case "$value" in
-                ">-"|">")
-                    folding="true"
-                    value=""
-                    ;;
-                "$quote"*"$quote")
-                    value="${value:1:${#value}-2}"
-                    value="${value//$quote$quote/$quote}"
-                    break
-                    ;;
-                ""|"|"*|"\""*|"$quote"*)
-                    echo "read_default_database_path: unsupported form of default_database_path: '$value'" >&2
-                    return 1
-                    ;;
-                *)
-                    break
-                    ;;
-            esac
-        fi
-    done < <(read_config_file config.yaml)
-    printf '%s' "$value"
+    read_toml_string config.toml auto_import default_database_path
 }
 
 #

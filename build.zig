@@ -225,12 +225,15 @@ pub fn build(b: *std.Build) !void {
     }
 
     const test_step = b.step("test", "Run every Zig test: the unit tests of the packages and the tests of the CLI");
+    // The directory to write kcov line-coverage reports of the unit tests and the CLI's tests to (see docs/zig-test-coverage.md).
+    // The tests are then compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
+    const coverage_dir = b.option([]const u8, "coverage", "Write kcov line-coverage reports of the unit tests and the CLI's tests to this directory");
     const test_packages_step = internalStep(b, "unit tests of the packages");
     const test_cli_step = internalStep(b, "tests of the CLI");
     test_step.dependOn(test_packages_step);
     test_step.dependOn(test_cli_step);
     const stand_ins = addStandIns(b, target, optimize);
-    try addUnitTests(b, test_packages_step, modules, target, optimize, stand_ins);
+    try addUnitTests(b, test_packages_step, modules, target, optimize, stand_ins, coverage_dir);
     // The tests inside the build helper files (they are compiled by the build itself, so they are not under a package's src/test).
     const apple_sdk_tests = b.addTest(.{
         .name = "apple-sdk",
@@ -252,7 +255,7 @@ pub fn build(b: *std.Build) !void {
     test_packages_step.dependOn(&b.addRunArtifact(translate_target_tests).step);
     try addOwnProcessTests(b, test_packages_step, modules, target, optimize, stand_ins);
     try addStorageIntegrationTests(b, modules, target, optimize);
-    try addCli(b, test_cli_step, modules, target, optimize);
+    try addCli(b, test_cli_step, modules, target, optimize, coverage_dir);
     try addPhotosphere(b, target, optimize, compile_only, strip, ziggy, modules);
 
     // Prints the time the build took after the tests: Zig's summary gives the time of each step and no total.
@@ -598,6 +601,7 @@ fn addUnitTests(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     stand_ins: IStandIns,
+    coverage_dir: ?[]const u8,
 ) !void {
     // The src directory of each package is copied next to the generated root, under the package's name, so that the imports and
     // embedded files of its tests resolve as they do in src/test.
@@ -674,9 +678,7 @@ fn addUnitTests(
     const storage = modules.get("storage-zig").?;
     tests.addImport("aws-c", storage.import_table.get("aws-c").?);
 
-    // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md). The tests are then
-    // compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
-    const coverage_dir = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests of the packages to this directory");
+    // The tests are compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
     const unit_test = b.addTest(.{
         .name = "unit-tests",
         .root_module = tests,
@@ -968,6 +970,7 @@ fn addCli(
     modules: std.StringHashMap(*std.Build.Module),
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    coverage_dir: ?[]const u8,
 ) !void {
     const cli = b.addModule("cli-zig", .{
         .root_source_file = b.path("apps/cli-zig/index.zig"),
@@ -1023,8 +1026,19 @@ fn addCli(
     const unit_test = b.addTest(.{
         .name = "cli-tests",
         .root_module = tests,
+        .use_llvm = if (coverage_dir != null) true else null,
     });
-    const run_test = b.addRunArtifact(unit_test);
+    const run_test = if (coverage_dir) |directory| blk: {
+        const run = b.addSystemCommand(&.{
+            "kcov",
+            b.fmt("--include-path={s}", .{b.pathFromRoot("apps/cli-zig/src/lib")}),
+            b.fmt("--include-path={s}", .{b.pathFromRoot("apps/cli-zig/src/cmd")}),
+            b.fmt("--exclude-path={s}", .{b.pathFromRoot("apps/cli-zig/src/test")}),
+            b.pathFromRoot(b.fmt("{s}/cli", .{directory})),
+        });
+        run.addArtifactArg(unit_test);
+        break :blk run;
+    } else b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("apps/cli-zig"));
 
     // The program the Windows `psi bug` tests put where `psi bug` looks for PowerShell, so that no browser is opened. It is not

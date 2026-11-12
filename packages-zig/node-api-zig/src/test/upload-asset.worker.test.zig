@@ -132,7 +132,7 @@ const UploadTest = struct {
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "task-1", .{
             .context = &self.messages,
             .function = MessageRecorder.send,
-        }, 10);
+        }, 10, "", "");
         self.mediaTools = try MediaTools.init();
         self.toolRunner = self.mediaTools.runner();
     }
@@ -567,7 +567,7 @@ test "the upload date is read once the files are uploaded" {
     }, "session-1", "task-1", .{
         .context = &context.messages,
         .function = MessageRecorder.send,
-    }, 10);
+    }, 10, "", "");
 
     _ = try context.run(log, context.makeUploadAssetData());
 

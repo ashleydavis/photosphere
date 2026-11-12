@@ -247,6 +247,7 @@ start_cli_receiver() {
         cd "$CLI_DIR"
         PHOTOSPHERE_VAULT_DIR="$vault_dir" \
         PHOTOSPHERE_CONFIG_DIR="$config_dir" \
+        PHOTOSPHERE_STATE_DIR="$config_dir" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \
             bun run start -- "$subcommand" receive --yes --code "$code"
     ) > "$log_file" 2>&1 &
@@ -292,6 +293,7 @@ run_cli_sender() {
         cd "$CLI_DIR"
         PHOTOSPHERE_VAULT_DIR="$vault_dir" \
         PHOTOSPHERE_CONFIG_DIR="$config_dir" \
+        PHOTOSPHERE_STATE_DIR="$config_dir" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \
             bun run start -- "$subcommand" send --name "$name" --yes --code "$code"
     ) > "$log_file" 2>&1

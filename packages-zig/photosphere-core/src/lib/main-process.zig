@@ -60,9 +60,9 @@ fn notifyDatabaseOpened(services: TaskServices, timers: Timers, io: std.Io, allo
         if (!optionalStringsEqual(existing.origin, origin)) {
             var updated_entry = existing;
             updated_entry.origin = origin;
-            try databases_config.updateDatabaseEntry(arena, io, existing.name, updated_entry);
+            try databases_config.updateDatabaseEntry(arena, io, context.state_path, existing.name, updated_entry);
         }
-        try databases_config.markDatabaseOpened(arena, io, existing.name);
+        try databases_config.markDatabaseOpened(arena, io, context.state_path, existing.name);
     }
     else {
         const new_entry: databases_config.IDatabaseEntry = .{
@@ -72,12 +72,12 @@ fn notifyDatabaseOpened(services: TaskServices, timers: Timers, io: std.Io, allo
             .origin = origin,
         };
         try databases_config.addDatabaseEntry(arena, io, new_entry);
-        try databases_config.markDatabaseOpened(arena, io, new_entry.name);
+        try databases_config.markDatabaseOpened(arena, io, context.state_path, new_entry.name);
     }
 
     // Recorded beside the recents update above, because it is the same fact written twice: this is the database the user is in, so it
     // is the one to reopen next time the app starts.
-    try databases_config.setLastDatabase(arena, io, database_path);
+    try databases_config.setLastDatabase(arena, io, context.state_path, database_path);
     log.event(try std.fmt.allocPrint(arena, "Database opened: {s}", .{node_utils.path.basename(database_path)}));
     return try arena.dupe(u8, "null");
 }
@@ -96,9 +96,8 @@ pub const notifyDatabaseOpenedHandler = logExceptions(notifyDatabaseOpened, "Err
 fn notifyDatabaseClosed(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = services;
     _ = timers;
-    _ = context;
     _ = data;
-    try databases_config.setLastDatabase(allocator, io, null);
+    try databases_config.setLastDatabase(allocator, io, context.state_path, null);
     return try allocator.dupe(u8, "null");
 }
 
@@ -300,12 +299,12 @@ fn enqueueEvictOriginals(state: *MainState, services: HandlerServices, io: std.I
 //
 // The task is a child of the one running ensureAutoImport, so it takes that task's source.
 //
-fn createDefaultDatabase(services: TaskServices, timers: Timers, io: std.Io, arena: std.mem.Allocator, database_path: []const u8) !void {
+fn createDefaultDatabase(services: TaskServices, timers: Timers, io: std.Io, arena: std.mem.Allocator, config_path: []const u8, database_path: []const u8) !void {
     const log = services.log;
     log.info(try std.fmt.allocPrint(arena, "Creating the default photo database at \"{s}\".", .{database_path}));
     const task_id = try services.queueChild(io, arena, timers, "create-default-database", .{
         .databasePath = database_path,
-        .configPath = try node_api.config_file.getConfigPath(arena),
+        .configPath = config_path,
 
         // The user switched automatic import on and photos are about to start arriving in this database, so it is requested on screen
         // as well as on disk. The same thing a phone's pass requests, put the same way: in the request that makes the database.
@@ -352,7 +351,7 @@ pub fn ensureAutoImport(services: TaskServices, timers: Timers, io: std.Io, aren
         };
     }
 
-    const config = try node_api.app_config.loadAppConfig(arena, io);
+    const config = try node_api.app_config.loadAppConfig(arena, io, log, context.config_path);
     const plan = try node_api.auto_import_desktop.planDesktopAutoImport(arena, config, try node_utils.photo_folders.getDefaultPhotoFolders(arena, io), try node_api.database_base_dir.databaseBaseDir(arena, context.data_dir));
 
     const planned_settings_json = try json.stringify(arena, try api_zig.auto_import_settings.autoImportSettingsToJson(arena, plan.settings));
@@ -372,7 +371,7 @@ pub fn ensureAutoImport(services: TaskServices, timers: Timers, io: std.Io, aren
 
     var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     if (plan.isNewDefault or !(try node_api.media_file_database.checkDatabaseExists(arena, io, log, try node_api.database_base_dir.databaseBaseDir(arena, context.data_dir), plan.databasePath, services.nativeCaller(&requester_storage)))) {
-        try createDefaultDatabase(services, timers, io, arena, plan.databasePath);
+        try createDefaultDatabase(services, timers, io, arena, context.config_path, plan.databasePath);
     }
     return .{
         .action = "start",

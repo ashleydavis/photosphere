@@ -267,6 +267,7 @@ photosphere_platform_start() {
         "$udid" "$IOS_DEVICE_BUNDLE_ID" "$test_dir/launch.json" \
         PHOTOSPHERE_TEST_MODE=1 \
         "PHOTOSPHERE_CONFIG_DIR=$scenario_dir/config" \
+        "PHOTOSPHERE_STATE_DIR=$scenario_dir/config" \
         "PHOTOSPHERE_DATA_DIR=$scenario_dir/files" \
         "PHOTOSPHERE_VAULT_DIR=$scenario_dir/vault" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \

@@ -103,6 +103,12 @@ pub const IWorkerPoolOptions = struct {
     // The task types the workers run, or null for every task handler of the application. It stands for the worker script TypeScript
     // starts each worker from, and must outlive the pool.
     tasks: ?[]const ziggy.task_runner.TaskHandlerEntry = null,
+
+    // The path of the app's config file.
+    configPath: []const u8 = "",
+
+    // The path of the app's state file.
+    statePath: []const u8 = "",
 };
 
 //
@@ -567,6 +573,8 @@ pub const WorkerPoolBun = struct {
             .tools = writesFile or (self.workerOptions.tools orelse false),
             .sessionId = self.workerOptions.sessionId orelse "",
             .maxConcurrentChildTasks = MAX_CONCURRENT_CHILD_TASKS,
+            .configPath = self.workerOptions.configPath,
+            .statePath = self.workerOptions.statePath,
             .environment = environment,
         };
         const worker = try Worker.start(allocator, io, senderId, self.mainQueue, .{

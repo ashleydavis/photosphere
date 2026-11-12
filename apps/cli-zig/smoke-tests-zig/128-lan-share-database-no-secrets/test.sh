@@ -27,6 +27,7 @@ sender_log="${TEST_TMP_DIR}/sender-no-secrets.log"
 run_cli_tracked "$sender_log" env \
     PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
+    PHOTOSPHERE_STATE_DIR="$SENDER_CONFIG_DIR" \
     $SENDER_CLI_CMD dbs send --name plain-db --yes --code "$test_code" || true
 
 if grep -q "sent successfully" "$sender_log" 2>/dev/null; then

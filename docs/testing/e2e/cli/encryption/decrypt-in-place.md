@@ -16,6 +16,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-encryption-decrypt-in-place
 mkdir -p /tmp/psi-cli-encryption-decrypt-in-place/config /tmp/psi-cli-encryption-decrypt-in-place/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-encryption-decrypt-in-place/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-encryption-decrypt-in-place/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-encryption-decrypt-in-place/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 psi init --db /tmp/psi-cli-encryption-decrypt-in-place/db --key dec-test-key --generate-key --yes

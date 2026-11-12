@@ -108,7 +108,7 @@ pub const Sandbox = struct {
         self.taskContext = TaskContext.init(self.fixedUuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "test-session", "test-task", .{
             .context = null,
             .function = ignoreMessage,
-        }, 10);
+        }, 10, try std.fs.path.join(allocator, &.{ self.tempDir, "config.toml" }), try std.fs.path.join(allocator, &.{ self.tempDir, "state.json" }));
     }
 
     //

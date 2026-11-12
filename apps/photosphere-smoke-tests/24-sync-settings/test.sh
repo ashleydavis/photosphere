@@ -2,7 +2,7 @@
 
 # Exercises the sync settings on the Configuration dialog: the master "Enable syncing" toggle and the "Only sync over Wi-Fi" toggle.
 # Verifies each toggle recomputes the decision whether syncing is allowed and pushes it to the host (observed via the log line the host writes when it is told,
-# which names the new value) and that both values persist to the sync section of config.yaml. On desktop the connection type is
+# which names the new value) and that both values persist to the sync section of config.toml. On desktop the connection type is
 # "unknown" (treated as allowed), so the Wi-Fi-only toggle does not block syncing; this test asserts the decision and persistence
 # path, which is the coverage the SyncContext and dialog otherwise lack.
 
@@ -14,7 +14,7 @@ print_test_header 24 "sync-settings"
 trap 'cleanup_apps "$TMP_DIR"' EXIT
 
 #
-# Prints the indented body of one top-level section of the config.yaml the app wrote.
+# Prints the indented body of one top-level section of the config.toml the app wrote.
 #
 # The settings are grouped by feature now, and `enabled` appears under both `sync` and `auto_import`, so a match against the whole file
 # cannot say which feature it found. Asserting "syncing is off" against the whole file would pass on an app that had written nothing at
@@ -26,11 +26,25 @@ trap 'cleanup_apps "$TMP_DIR"' EXIT
 #
 config_section() {
     local section="$1"
-    read_config_file config.yaml | sed -n "/^${section}:/,/^[^[:space:]]/{ /^${section}:/d; /^[^[:space:]]/d; p; }"
+    local in_section="false"
+    local line
+    while IFS= read -r line; do
+        if [ "$line" = "[$section]" ]; then
+            in_section="true"
+            continue
+        fi
+        if [[ "$line" == \[* ]]; then
+            in_section="false"
+            continue
+        fi
+        if [ "$in_section" = "true" ]; then
+            printf '%s\n' "$line"
+        fi
+    done < <(read_config_file config.toml)
 }
 
 #
-# Polls one section of config.yaml until it contains a line matching the given extended-regex pattern. The only wait here that is not
+# Polls one section of config.toml until it contains a line matching the given extended-regex pattern. The only wait here that is not
 # one of the shared ones, because it watches a file the app writes rather than the app itself.
 # Usage: wait_for_config <section-name> <ere-pattern>
 #
@@ -44,8 +58,8 @@ wait_for_config() {
         fi
         sleep "$WAIT_POLL_INTERVAL"
     done
-    log_error "Timed out waiting for pattern '$pattern' in the $section section of config.yaml"
-    read_config_file config.yaml
+    log_error "Timed out waiting for pattern '$pattern' in the $section section of config.toml"
+    read_config_file config.toml
     exit 1
 }
 
@@ -63,23 +77,23 @@ wait_for_value "$APP_PORT" "configuration-dialog" "Syncing"
 # Turning on "Enable syncing" allows syncing and persists syncEnabled=true.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
-wait_for_config "sync" "^[[:space:]]+enabled:[[:space:]]*true"
+wait_for_config "sync" "^enabled[[:space:]]*=[[:space:]]*true"
 
 # Turning it off disallows syncing and persists syncEnabled=false.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to false"
-wait_for_config "sync" "^[[:space:]]+enabled:[[:space:]]*false"
+wait_for_config "sync" "^enabled[[:space:]]*=[[:space:]]*false"
 
 # Turning it back on allows syncing again and persists syncEnabled=true, so the Wi-Fi-only check below runs with syncing on.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
-wait_for_config "sync" "^[[:space:]]+enabled:[[:space:]]*true"
+wait_for_config "sync" "^enabled[[:space:]]*=[[:space:]]*true"
 
 # Turning off "Only sync over Wi-Fi" persists the flag. On desktop the connection type is "unknown", so syncing stays allowed (the
 # toggle only restricts cellular on mobile).
 send_command "$APP_PORT" click '{"dataId":"sync-wifi-only-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
-wait_for_config "sync" "^[[:space:]]+only_on_wifi:[[:space:]]*false"
+wait_for_config "sync" "^only_on_wifi[[:space:]]*=[[:space:]]*false"
 
 check_no_errors "$TMP_DIR"
 

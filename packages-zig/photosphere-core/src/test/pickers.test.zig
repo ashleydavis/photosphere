@@ -1,13 +1,49 @@
 const std = @import("std");
+const ziggy = @import("ziggy");
 const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
 
+//
+// The state file key path of one of the state store's keys, as the frontend maps them.
+//
+fn stateKeyPath(key: []const u8) []const u8 {
+    if (std.mem.eql(u8, key, "lastFolder")) {
+        return "desktop.last_folder";
+    }
+    if (std.mem.eql(u8, key, "lastDownloadFolder")) {
+        return "desktop.last_download_folder";
+    }
+    return key;
+}
+
+//
+// The value the state file holds under a key of the state store, or null when it holds none.
+//
+fn stateValue(app: *TestApp, allocator: std.mem.Allocator, key: []const u8) !std.json.Value {
+    const state_path = try app.statePath(allocator);
+    const text = std.Io.Dir.cwd().readFileAlloc(std.testing.io, state_path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+        error.FileNotFound => return .null,
+        else => return err,
+    };
+    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
+    var current = parsed;
+    var steps = std.mem.splitScalar(u8, stateKeyPath(key), '.');
+    while (steps.next()) |step| {
+        if (current != .object) {
+            return .null;
+        }
+        current = current.object.get(step) orelse return .null;
+    }
+    return current;
+}
+
 fn expectState(app: *TestApp, key: []const u8, expected_json: []const u8) !void {
     const allocator = std.testing.allocator;
-    const key_json = try std.json.Stringify.valueAlloc(allocator, key, .{});
-    defer allocator.free(key_json);
-    const reply = try app.requestOk("get-state", key_json);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const value = try stateValue(app, arena.allocator(), key);
+    const reply = try std.json.Stringify.valueAlloc(allocator, value, .{});
     defer allocator.free(reply);
     try std.testing.expectEqualStrings(expected_json, reply);
 }
@@ -115,7 +151,7 @@ test "pick-files replies every path chosen, in a dialog that starts in the last 
     var picks = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer picks.deinit();
     const allocator = std.testing.allocator;
-    allocator.free(try app.requestOk("set-state", "{\"key\":\"lastFolder\",\"value\":\"/photos\"}"));
+    try ziggy.config_state.state.set(picks.allocator(), std.testing.io, try app.statePath(picks.allocator()), "desktop.last_folder", "/photos");
     app.setPickResult("[\"/photos/a.jpg\",\"/photos/b.jpg\"]");
     const reply = try app.requestOk("pick-files", "\"Choose photos\"");
     defer allocator.free(reply);

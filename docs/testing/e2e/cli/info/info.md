@@ -14,6 +14,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-info-info
 mkdir -p /tmp/psi-cli-info-info/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-info-info/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-info-info/config
 psi init --db /tmp/psi-cli-info-info/source --yes
 psi add test/test.jpg --db /tmp/psi-cli-info-info/source --yes
 ls /tmp/psi-cli-info-info/source/asset

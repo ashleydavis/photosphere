@@ -30,6 +30,7 @@ fn setConfigDir(allocator: std.mem.Allocator, configDir: []const u8) !void {
     const map = try allocator.create(std.process.Environ.Map);
     map.* = std.process.Environ.Map.init(allocator);
     try map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
+    try map.put("PHOTOSPHERE_STATE_DIR", configDir);
     node_utils.process_env.setEnvironMap(map);
 }
 
@@ -46,7 +47,7 @@ test "markUpdateAsShown persists the supplied version" {
 
     check_for_updates.markUpdateAsShown(allocator, std.testing.io, "1.3.0");
 
-    const lastShown = try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log);
+    const lastShown = try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log, try std.fs.path.join(allocator, &.{ root, "config", "state.json" }));
     try std.testing.expectEqualStrings("1.3.0", lastShown.?);
 }
 
@@ -64,5 +65,5 @@ test "markUpdateAsShown swallows persistence errors" {
     // A file where the config dir should be, so the state file cannot be written (as when the disk is full).
     check_for_updates.markUpdateAsShown(allocator, std.testing.io, "1.3.0");
 
-    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ blocker, "state.yaml" })));
+    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ blocker, "state.json" })));
 }

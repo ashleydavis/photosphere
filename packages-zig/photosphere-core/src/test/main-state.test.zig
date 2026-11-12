@@ -81,6 +81,8 @@ const CountedServices = struct {
         .menuAction = menuAction,
         .runAction = runAction,
         .dataDir = dataDir,
+        .configPath = configPath,
+        .statePath = statePath,
         .isPhone = isPhone,
         .nativeCallbacks = nativeCallbacks,
         .configureLog = configureLog,
@@ -132,6 +134,14 @@ const CountedServices = struct {
 
     fn dataDir(_: *anyopaque) []const u8 {
         unexpected("dataDir");
+    }
+
+    fn configPath(_: *anyopaque) []const u8 {
+        unexpected("configPath");
+    }
+
+    fn statePath(_: *anyopaque) []const u8 {
+        unexpected("statePath");
     }
 
     fn isPhone(_: *anyopaque) bool {

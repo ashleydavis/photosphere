@@ -75,7 +75,6 @@ pub const state_file = @import("lib/state-file.zig");
 pub const config_format = @import("lib/config-format.zig");
 pub const config_file = @import("lib/config-file.zig");
 pub const config_worker = @import("lib/config.worker.zig");
-pub const state_worker = @import("lib/state.worker.zig");
 pub const app_config_format = @import("lib/app-config-format.zig");
 pub const app_config = @import("lib/app-config.zig");
 pub const app_state_format = @import("lib/app-state-format.zig");

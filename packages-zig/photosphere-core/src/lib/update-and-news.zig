@@ -41,7 +41,7 @@ const DEFAULT_NEWS_URL = "https://raw.githubusercontent.com/ashleydavis/photosph
 // The body of checkForUpdate inside its try block: fetches the latest release and tells the page about it when it is newer than the
 // running version and the user has not been told about it.
 //
-fn announceUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: ILog, running_version: []const u8) !void {
+fn announceUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8, running_version: []const u8) !void {
     const response = try node_api.fetch.fetch(allocator, io, LATEST_RELEASE_URL);
     if (!response.ok) {
         return;
@@ -62,7 +62,7 @@ fn announceUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: 
     if (std.mem.eql(u8, latest_version, running_version)) {
         return;
     }
-    const last_shown = try node_api.news_state.getLastShownUpdateVersion(allocator, io, log);
+    const last_shown = try node_api.news_state.getLastShownUpdateVersion(allocator, io, log, state_path);
     if (last_shown) |shown_version| {
         if (std.mem.eql(u8, shown_version, latest_version)) {
             return;
@@ -85,14 +85,14 @@ fn announceUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: 
 // The core has no window to be missing, and an event sent while the page is not there is the native app's to hold or drop. The message
 // of a reply that is not JSON is a sentence plus the parser's error name, and the message of a network failure is the Zig error name.
 //
-pub fn checkForUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: ILog, running_version: []const u8) !void {
+pub fn checkForUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8, running_version: []const u8) !void {
     if (std.mem.eql(u8, running_version, "dev") or std.mem.indexOf(u8, running_version, "nightly") != null) {
         return;
     }
     if (test_mode.isTestMode() and test_mode.envValue("PHOTOSPHERE_FORCE_UPDATE_CHECK") == null) {
         return;
     }
-    announceUpdate(sink, allocator, io, log, running_version) catch |err| {
+    announceUpdate(sink, allocator, io, log, state_path, running_version) catch |err| {
         log.info(try std.fmt.allocPrint(allocator, "Update check skipped: {s}", .{utils.errors.errorMessage(err)}));
     };
 }
@@ -100,9 +100,9 @@ pub fn checkForUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, l
 //
 // The body of checkForNews inside its try block: fetches the feed and tells the page about the first item it has not shown.
 //
-fn announceNews(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: ILog, news_url: []const u8) !void {
+fn announceNews(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8, news_url: []const u8) !void {
     const items = try node_api.news_fetcher.fetchNews(allocator, io, news_url);
-    const shown_ids = try node_api.news_state.getShownNewsIds(allocator, io, log);
+    const shown_ids = try node_api.news_state.getShownNewsIds(allocator, io, log, state_path);
     var next_item: ?node_api.news_fetcher.INewsItem = null;
     for (items) |item| {
         var already_shown = false;
@@ -147,12 +147,12 @@ fn announceNews(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: IL
 //
 // The core has no window to be missing. The message of a network failure is the Zig error name.
 //
-pub fn checkForNews(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
+pub fn checkForNews(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8) !void {
     if (test_mode.isTestMode() and test_mode.envValue("PHOTOSPHERE_NEWS_URL") == null) {
         return;
     }
     const news_url = test_mode.envValue("PHOTOSPHERE_NEWS_URL") orelse DEFAULT_NEWS_URL;
-    announceNews(sink, allocator, io, log, news_url) catch |err| {
+    announceNews(sink, allocator, io, log, state_path, news_url) catch |err| {
         log.info(try std.fmt.allocPrint(allocator, "News check skipped: {s}", .{utils.errors.errorMessage(err)}));
     };
 }
@@ -162,10 +162,10 @@ pub fn checkForNews(sink: anytype, allocator: std.mem.Allocator, io: std.Io, log
 //
 pub fn checkForUpdateTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const log = services.log;
-    _ = context;
+
     _ = timers;
     _ = data;
-    try checkForUpdate(services, allocator, io, log, config.version);
+    try checkForUpdate(services, allocator, io, log, context.state_path, config.version);
     return try allocator.dupe(u8, "null");
 }
 
@@ -174,10 +174,10 @@ pub fn checkForUpdateTask(services: TaskServices, timers: Timers, io: std.Io, al
 //
 pub fn checkForNewsTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const log = services.log;
-    _ = context;
+
     _ = timers;
     _ = data;
-    try checkForNews(services, allocator, io, log);
+    try checkForNews(services, allocator, io, log, context.state_path);
     return try allocator.dupe(u8, "null");
 }
 
@@ -187,11 +187,10 @@ pub fn checkForNewsTask(services: TaskServices, timers: Timers, io: std.Io, allo
 fn markUpdateShown(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const log = services.log;
     _ = timers;
-    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The request needs the version of the update that was shown.", .{});
     }
-    try node_api.news_state.setLastShownUpdateVersion(allocator, io, data.string);
+    try node_api.news_state.setLastShownUpdateVersion(allocator, io, context.state_path, data.string);
     log.info(try std.fmt.allocPrint(allocator, "Marked update notification as shown: v{s}", .{data.string}));
     return try allocator.dupe(u8, "null");
 }
@@ -202,11 +201,10 @@ fn markUpdateShown(services: TaskServices, timers: Timers, io: std.Io, allocator
 fn markNewsShown(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const log = services.log;
     _ = timers;
-    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The request needs the id of the news item that was shown.", .{});
     }
-    try node_api.news_state.addShownNewsIds(allocator, io, &[_][]const u8{data.string});
+    try node_api.news_state.addShownNewsIds(allocator, io, context.state_path, &[_][]const u8{data.string});
     log.info(try std.fmt.allocPrint(allocator, "Marked news notification as shown: {s}", .{data.string}));
     return try allocator.dupe(u8, "null");
 }

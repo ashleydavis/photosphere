@@ -1483,6 +1483,8 @@ fn expectVersionReport(log: ILog, allocator: std.mem.Allocator, environment: *co
         \\
         \\Directories:
         \\  Config: {s}
+        \\  Config file: {s}
+        \\  State file: {s}
         \\  Temp: {s}
         \\  Log files: {s}
         \\  Cache: {s}
@@ -1492,6 +1494,8 @@ fn expectVersionReport(log: ILog, allocator: std.mem.Allocator, environment: *co
         toolVersions.ffmpeg,
         toolVersions.ffprobe,
         try std.fs.path.join(allocator, &.{ root, "config" }),
+        try std.fs.path.join(allocator, &.{ root, "config", "config.toml" }),
+        try std.fs.path.join(allocator, &.{ root, "config", "state.json" }),
         tempDir,
         try std.fs.path.join(allocator, &.{ tempDir, "logs" }),
         try expectedCacheDir(allocator, environment),
@@ -3868,8 +3872,13 @@ test "news prints the whole feed, newest first, marking the new items" {
         \\     Docs: https://example.com/docs
         \\
     , "", 0);
-    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" }), allocator, .unlimited);
-    try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n    - third\n", state);
+    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.json" }), allocator, .unlimited);
+    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, state, .{});
+    const shown_ids = parsed.object.get("news").?.object.get("shown_news_ids").?.array.items;
+    try std.testing.expectEqual(@as(usize, 3), shown_ids.len);
+    try std.testing.expectEqualStrings("first", shown_ids[0].string);
+    try std.testing.expectEqualStrings("second", shown_ids[1].string);
+    try std.testing.expectEqualStrings("third", shown_ids[2].string);
 
     // A feed that cannot be read shows no items.
     try writeNewsFeed(allocator, root, "items: [unclosed");

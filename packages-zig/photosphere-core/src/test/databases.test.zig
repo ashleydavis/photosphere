@@ -38,11 +38,11 @@ fn writeDatabasesToml(app: *TestApp, text: []const u8) !void {
 }
 
 //
-// Writes the test's state.yaml, beside databases.toml in the settings directory the app reads.
+// Writes the test's state.json, under the state directory the app reads.
 //
-fn writeStateYaml(app: *TestApp, text: []const u8) !void {
+fn writeStateJson(app: *TestApp, text: []const u8) !void {
     const allocator = std.testing.allocator;
-    const path = try std.fs.path.join(allocator, &.{ app.tmp_path, "config", "state.yaml" });
+    const path = try app.statePath(allocator);
     defer allocator.free(path);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = path,
@@ -136,7 +136,7 @@ test "update-database replaces the entry, renames it, and keeps the recents poin
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    try writeStateYaml(&app, "databases:\n  recent_names:\n    - alpha\n");
+    try writeStateJson(&app, "{\"databases\":{\"recent_names\":[\"alpha\"]}}");
     try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
     const update_reply = try app.requestOk("update-database", "{\"originalName\":\"alpha\",\"entry\":{\"name\":\"renamed\",\"description\":\"new\",\"path\":\"/b\"}}");
     defer allocator.free(update_reply);
@@ -172,7 +172,7 @@ test "remove-database-entry removes the entry and its recent name, and replies n
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    try writeStateYaml(&app, "databases:\n  recent_names:\n    - alpha\n    - beta\n");
+    try writeStateJson(&app, "{\"databases\":{\"recent_names\":[\"alpha\",\"beta\"]}}");
     try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
     const remove_reply = try app.requestOk("remove-database-entry", "\"ALPHA\"");
     defer allocator.free(remove_reply);

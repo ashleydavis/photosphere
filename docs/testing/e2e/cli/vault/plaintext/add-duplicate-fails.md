@@ -15,6 +15,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-vault-plaintext-add-duplicate-fails
 mkdir -p /tmp/psi-cli-vault-plaintext-add-duplicate-fails/config /tmp/psi-cli-vault-plaintext-add-duplicate-fails/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-add-duplicate-fails/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-vault-plaintext-add-duplicate-fails/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-add-duplicate-fails/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 psi secrets add --yes --name dup-secret --type plain --value first

@@ -606,6 +606,8 @@ test "initContext creates the session, the worker pool and the cleanup callback"
     // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows (getProcessTmpDir uses it when PHOTOSPHERE_TMP_DIR is not set).
     try environment.environ_map.put("TMPDIR", tmpDir);
     try environment.environ_map.put("TEMP", tmpDir);
+    try environment.environ_map.put("PHOTOSPHERE_CONFIG_DIR", tmpDir);
+    try environment.environ_map.put("PHOTOSPHERE_STATE_DIR", tmpDir);
     try environment.environ_map.put("TEST_TMP_DIR", tmpDir);
     try environment.environ_map.put("NODE_ENV", "testing");
     // The verbose lines the command's log shows for --verbose, which run configures before initContext.
@@ -649,6 +651,8 @@ test "initContext uses the given session ID and keeps the temporary files on fai
     // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows (getProcessTmpDir uses it when PHOTOSPHERE_TMP_DIR is not set).
     try environment.environ_map.put("TMPDIR", tmpDir);
     try environment.environ_map.put("TEMP", tmpDir);
+    try environment.environ_map.put("PHOTOSPHERE_CONFIG_DIR", tmpDir);
+    try environment.environ_map.put("PHOTOSPHERE_STATE_DIR", tmpDir);
     const memory = try utils.memory_log.MemoryLog.init(allocator, .{
         .verbose = false,
         .debug = false,
@@ -681,6 +685,8 @@ test "initContext joins the session temporary directory as path.join does" {
     defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
     try environment.environ_map.put("TMPDIR", tmpDir);
     try environment.environ_map.put("TEMP", tmpDir);
+    try environment.environ_map.put("PHOTOSPHERE_CONFIG_DIR", tmpDir);
+    try environment.environ_map.put("PHOTOSPHERE_STATE_DIR", tmpDir);
     const log = utils.mute_log.MuteLog.init();
     defer node_utils.termination.clearTerminationCallbacks();
     defer task_queue.queue_backend.setQueueBackend(null);
@@ -701,6 +707,7 @@ fn registerDatabases(environment: *TestEnvironment, entries: []const @import("no
     const allocator = environment.arena.allocator();
     const configDir = try helpers.makeTempDir(allocator, "init-cmd-config");
     try environment.environ_map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
+    try environment.environ_map.put("PHOTOSPHERE_STATE_DIR", configDir);
     // The databases.toml that updateDatabasesConfig writes for these entries.
     var databases = std.json.Array.init(allocator);
     for (entries) |entry| {

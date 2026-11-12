@@ -41,6 +41,7 @@ case "$PLATFORM" in
         # entry's vault secret over the AWS_* variables below, so a same-named entry on the machine silently points these commands at a
         # different server.
         export PHOTOSPHERE_CONFIG_DIR="$TMP_DIR/host-config"
+        export PHOTOSPHERE_STATE_DIR="$TMP_DIR/host-config"
         export PHOTOSPHERE_VAULT_DIR="$TMP_DIR/host-vault"
         export PHOTOSPHERE_VAULT_TYPE="plaintext"
 

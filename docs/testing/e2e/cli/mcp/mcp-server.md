@@ -16,6 +16,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-mcp-mcp-server
 mkdir -p /tmp/psi-cli-mcp-mcp-server/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-mcp-mcp-server/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-mcp-mcp-server/config
 psi init --db /tmp/psi-cli-mcp-mcp-server/db --yes
 psi add test/test.jpg --db /tmp/psi-cli-mcp-mcp-server/db --yes
 ```

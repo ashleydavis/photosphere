@@ -87,7 +87,7 @@ Expected:
 2. Tap the replica's row to open it.
 
 Expected:
-- **Set as default** is what makes automatic import write into this database. Without it, switching automatic import on in step 6 makes a database of its own called **My Photos** and imports into that instead, because automatic import reads the default recorded in `config.yaml` and opening a database does not set it.
+- **Set as default** is what makes automatic import write into this database. Without it, switching automatic import on in step 6 makes a database of its own called **My Photos** and imports into that instead, because automatic import reads the default recorded in `config.toml` and opening a database does not set it.
 - **⋮** then **View details** on it shows **Origin** set to the remote's path, `s3:photosphere-smoke-test/existing-remote-test`. The replication sets it when it registers the replica. Origin is what background syncing looks for, and a database without it imports happily and never syncs.
 
 ### 5. The library appears on the phone

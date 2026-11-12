@@ -1,10 +1,10 @@
 //
 // Writes the app's databases.toml with one test database registered, merged into the file the device already had, and the
-// databases section of its state.yaml with that database made the most recent and the one reopened on launch, merged into the
-// state.yaml the device already had. run-android.sh reads the existing files off the device, runs this and pushes the results back;
+// databases section of its state.json with that database made the most recent and the one reopened on launch, merged into the
+// state.json the device already had. run-android.sh reads the existing files off the device, runs this and pushes the results back;
 // run-ios.sh copies them out of the simulator's container and has this write straight back into it. The fixture is named
 // test-<name>, so the app starts in it. Every other test- entry and test- recent is removed first, so fixtures do not pile up, and
-// the user's own entries, their recents and every other section of state.yaml are kept as they were. The entry's path is the
+// the user's own entries, their recents and every other section of state.json are kept as they were. The entry's path is the
 // database's full path on the device, because the app opens no relative path against its storage.
 //
 // Usage: bun scripts/write-fixture-databases-config.ts <name> <path> <existing-databases> <databases-output> <existing-state> <state-output>
@@ -12,13 +12,12 @@
 //   <path>                the full path of the database on the device
 //   <existing-databases>  the databases.toml the device had, which is empty when it had none
 //   <databases-output>    where the merged databases.toml is written
-//   <existing-state>      the state.yaml the device had, which is empty when it had none
-//   <state-output>        where the merged state.yaml is written
+//   <existing-state>      the state.json the device had, which is empty when it had none
+//   <state-output>        where the merged state.json is written
 //
 
 import { readFileSync, writeFileSync } from "fs";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
-import yaml from "js-yaml";
 import { databaseEntryToToml, tomlEntryToDatabaseEntry, type ITomlDatabasesConfig } from "node-api/src/lib/databases-config-format";
 
 //
@@ -27,9 +26,9 @@ import { databaseEntryToToml, tomlEntryToDatabaseEntry, type ITomlDatabasesConfi
 const TEST_PREFIX = "test-";
 
 //
-// The databases section of state.yaml, as it is written on disk.
+// The databases section of state.json, as it is written on disk.
 //
-interface IYamlDatabasesState {
+interface IStateDatabases {
     // Names of the databases opened most recently, most recent first.
     recent_names?: string[];
 
@@ -76,9 +75,9 @@ function main(): void {
         databases: databases.map(databaseEntryToToml),
     }) + "\n");
 
-    const state = parseOrEmpty(existingStateFile, text => yaml.load(text));
-    const existingSection = (state.databases ?? {}) as IYamlDatabasesState;
-    const databasesState: IYamlDatabasesState = {
+    const state = parseOrEmpty(existingStateFile, text => JSON.parse(text));
+    const existingSection = (state.databases ?? {}) as IStateDatabases;
+    const databasesState: IStateDatabases = {
         recent_names: [
             fixtureName,
             ...(existingSection.recent_names ?? []).filter(recentName => !recentName.toLowerCase().startsWith(TEST_PREFIX)),
@@ -86,7 +85,7 @@ function main(): void {
         last_opened_path: databasePath,
     };
     state.databases = databasesState;
-    writeFileSync(stateOutputFile, yaml.dump(state));
+    writeFileSync(stateOutputFile, JSON.stringify(state, null, 2) + "\n");
 }
 
 main();

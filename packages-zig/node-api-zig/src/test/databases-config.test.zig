@@ -32,28 +32,80 @@ fn readToml(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]
 }
 
 //
-// Writes state.yaml in the config dir.
+// Writes the state file in the config dir. A fixture is written as YAML, because a test reads better as the document it names; the file
+// itself is JSON, which is what the app reads.
 //
 fn writeState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, text: []const u8) !void {
-    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "state.yaml" }), text);
+    const document = try node_utils.yaml.load(allocator, text);
+    const json = try std.json.Stringify.valueAlloc(allocator, document, .{});
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "state.json" }), json);
 }
 
 //
-// Reads state.yaml from the config dir.
+// Reads the state file from the config dir.
 //
 fn readState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]const u8 {
-    return test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ configDir, "state.yaml" }));
+    return test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ configDir, "state.json" }));
 }
 
 //
-// The recents state.yaml holds, read straight from the state file without checking them against
-// the database records.
+// The path of the state file in the config dir, which is where the tests' environment puts it.
+//
+fn statePath(allocator: std.mem.Allocator) ![]const u8 {
+    const config_dir = node_utils.process_env.getEnv("PHOTOSPHERE_CONFIG_DIR") orelse return error.ConfigDirMissing;
+    return std.fs.path.join(allocator, &.{ config_dir, "state.json" });
+}
+
+//
+// Fails unless the state file holds the document the YAML text describes.
+//
+fn expectStateMatchesYaml(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, yamlText: []const u8) !void {
+    const expected = try node_utils.yaml.load(allocator, yamlText);
+    const actualText = try readState(allocator, io, configDir);
+    const actual = try std.json.parseFromSliceLeaky(std.json.Value, allocator, actualText, .{});
+    try std.testing.expect(jsonEqual(expected, actual));
+}
+
+//
+// Deep equality of two JSON values, with objects compared by key whatever their order.
+//
+fn jsonEqual(a: std.json.Value, b: std.json.Value) bool {
+    if (std.meta.activeTag(a) != std.meta.activeTag(b)) return false;
+    return switch (a) {
+        .null => true,
+        .bool => a.bool == b.bool,
+        .integer => a.integer == b.integer,
+        .float => a.float == b.float,
+        .number_string => std.mem.eql(u8, a.number_string, b.number_string),
+        .string => std.mem.eql(u8, a.string, b.string),
+        .array => blk: {
+            if (a.array.items.len != b.array.items.len) break :blk false;
+            for (a.array.items, b.array.items) |a_item, b_item| {
+                if (!jsonEqual(a_item, b_item)) break :blk false;
+            }
+            break :blk true;
+        },
+        .object => blk: {
+            if (a.object.count() != b.object.count()) break :blk false;
+            var iterator = a.object.iterator();
+            while (iterator.next()) |entry| {
+                const b_value = b.object.get(entry.key_ptr.*) orelse break :blk false;
+                if (!jsonEqual(entry.value_ptr.*, b_value)) break :blk false;
+            }
+            break :blk true;
+        },
+    };
+}
+
+//
+// The recents the state file holds, read straight from it without checking them against the database records.
 //
 fn recentNamesInState(allocator: std.mem.Allocator, io: std.Io) ![]const []const u8 {
-    return (try node_api.state_file.loadStateFile(allocator, io)).databases.recentNames;
+    const log = utils.mute_log.MuteLog.init();
+    return (try node_api.state_file.loadStateFile(allocator, io, log, try statePath(allocator))).databases.recentNames;
 }
 
-test "the paths of databases.toml and state.yaml are joined and normalized as path.join does" {
+test "the paths of databases.toml and state.json are joined and normalized as path.join does" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -67,7 +119,7 @@ test "the paths of databases.toml and state.yaml are joined and normalized as pa
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", unnormalized);
 
     const expectedDatabases = try node_utils.path.join(allocator, &.{ configDir, "databases.toml" });
-    const expectedState = try node_utils.path.join(allocator, &.{ configDir, "state.yaml" });
+    const expectedState = try node_utils.path.join(allocator, &.{ configDir, "state.json" });
     try std.testing.expect(std.mem.indexOf(u8, expectedDatabases, "..") == null);
     try node_api.databases_config.addDatabaseEntry(allocator, io, .{
         .name = "alpha",
@@ -75,7 +127,8 @@ test "the paths of databases.toml and state.yaml are joined and normalized as pa
         .path = "/a",
     });
     try std.testing.expect(test_files.fileExists(io, expectedDatabases));
-    try std.testing.expectEqualStrings(expectedState, try node_api.state_file.getStatePath(allocator));
+    try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
+    try std.testing.expectEqualStrings(expectedState, try statePath(allocator));
 }
 
 test "returns default config when no file exists" {
@@ -586,7 +639,7 @@ test "replaces matched entry by originalName and saves" {
     defer temp_dirs.removeTempDir(io, configDir);
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
 
-    try databases_config.updateDatabaseEntry(allocator, io, "alpha", .{
+    try databases_config.updateDatabaseEntry(allocator, io, try statePath(allocator), "alpha", .{
         .name = "alpha",
         .description = "changed",
         .path = "/a",
@@ -609,7 +662,7 @@ test "rewrites the matching recent slot when renaming" {
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - beta\n    - alpha\n  last_opened_path: /a\n");
 
-    try databases_config.updateDatabaseEntry(allocator, io, "alpha", .{
+    try databases_config.updateDatabaseEntry(allocator, io, try statePath(allocator), "alpha", .{
         .name = "gamma",
         .description = "",
         .path = "/a",
@@ -617,13 +670,13 @@ test "rewrites the matching recent slot when renaming" {
 
     const written = try databases_config.loadDatabasesConfig(allocator, io);
     try std.testing.expectEqualStrings("gamma", written.databases[0].name);
-    try std.testing.expectEqualStrings("databases:\n  recent_names:\n    - beta\n    - gamma\n  last_opened_path: /a\n", try readState(allocator, io, configDir));
-    const recent = try databases_config.getRecentDatabases(allocator, io);
+    try expectStateMatchesYaml(allocator, io, configDir, "databases:\n  recent_names:\n    - beta\n    - gamma\n  last_opened_path: /a\n");
+    const recent = try databases_config.getRecentDatabases(allocator, io, try statePath(allocator));
     try std.testing.expectEqual(@as(usize, 2), recent.len);
     try std.testing.expectEqualStrings("gamma", recent[1].name);
 }
 
-test "an edit that keeps the name leaves state.yaml unwritten" {
+test "an edit that keeps the name leaves state.json unwritten" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -635,13 +688,13 @@ test "an edit that keeps the name leaves state.yaml unwritten" {
     defer temp_dirs.removeTempDir(io, configDir);
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
 
-    try databases_config.updateDatabaseEntry(allocator, io, "alpha", .{
+    try databases_config.updateDatabaseEntry(allocator, io, try statePath(allocator), "alpha", .{
         .name = "ALPHA",
         .description = "changed",
         .path = "/a",
     });
 
-    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ configDir, "state.yaml" })));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ configDir, "state.json" })));
 }
 
 test "throws when rename collides with another entry" {
@@ -657,7 +710,7 @@ test "throws when rename collides with another entry" {
     const text = "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n";
     try writeToml(allocator, io, configDir, text);
 
-    try std.testing.expectError(error.Thrown, databases_config.updateDatabaseEntry(allocator, io, "alpha", .{
+    try std.testing.expectError(error.Thrown, databases_config.updateDatabaseEntry(allocator, io, try statePath(allocator), "alpha", .{
         .name = "BETA",
         .description = "",
         .path = "/a",
@@ -680,7 +733,7 @@ test "throws when no entry matches originalName" {
     defer temp_dirs.removeTempDir(io, configDir);
     try writeToml(allocator, io, configDir, "databases = []\n");
 
-    try std.testing.expectError(error.Thrown, databases_config.updateDatabaseEntry(allocator, io, "missing", .{
+    try std.testing.expectError(error.Thrown, databases_config.updateDatabaseEntry(allocator, io, try statePath(allocator), "missing", .{
         .name = "missing",
         .description = "",
         .path = "/x",
@@ -701,7 +754,7 @@ test "removes only the first matching entry by name and saves" {
     defer temp_dirs.removeTempDir(io, configDir);
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"dup\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"dup\"\ndescription = \"\"\npath = \"/b\"\n\n[[databases]]\nname = \"unique\"\ndescription = \"\"\npath = \"/c\"\n");
 
-    try databases_config.removeDatabaseEntry(allocator, io, "dup");
+    try databases_config.removeDatabaseEntry(allocator, io, try statePath(allocator), "dup");
 
     const written = try databases_config.loadDatabasesConfig(allocator, io);
     try std.testing.expectEqual(@as(usize, 2), written.databases.len);
@@ -722,11 +775,11 @@ test "also removes the name from recents" {
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
     try writeState(allocator, io, configDir, "gallery:\n  sort: date\ndatabases:\n  recent_names:\n    - ALPHA\n    - beta\n");
 
-    try databases_config.removeDatabaseEntry(allocator, io, "alpha");
+    try databases_config.removeDatabaseEntry(allocator, io, try statePath(allocator), "alpha");
 
     const written = try databases_config.loadDatabasesConfig(allocator, io);
     try std.testing.expectEqual(@as(usize, 1), written.databases.len);
-    try std.testing.expectEqualStrings("gallery:\n  sort: date\ndatabases:\n  recent_names:\n    - beta\n", try readState(allocator, io, configDir));
+    try expectStateMatchesYaml(allocator, io, configDir, "gallery:\n  sort: date\ndatabases:\n  recent_names:\n    - beta\n");
 }
 
 test "idempotent when name not found and recents already clean" {
@@ -742,12 +795,12 @@ test "idempotent when name not found and recents already clean" {
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n");
 
-    try databases_config.removeDatabaseEntry(allocator, io, "missing");
+    try databases_config.removeDatabaseEntry(allocator, io, try statePath(allocator), "missing");
 
     // Nothing to remove, so the contents come back unchanged.
     const written = try databases_config.loadDatabasesConfig(allocator, io);
     try std.testing.expectEqual(@as(usize, 1), written.databases.len);
-    try std.testing.expectEqualStrings("databases:\n  recent_names:\n    - alpha\n", try readState(allocator, io, configDir));
+    try expectStateMatchesYaml(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n");
 }
 
 test "removing a database whose record has already gone still drops it from the recents" {
@@ -763,7 +816,7 @@ test "removing a database whose record has already gone still drops it from the 
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - gone\n    - alpha\n");
 
-    try databases_config.removeDatabaseEntry(allocator, io, "gone");
+    try databases_config.removeDatabaseEntry(allocator, io, try statePath(allocator), "gone");
 
     const recentNames = try recentNamesInState(allocator, io);
     try std.testing.expectEqual(@as(usize, 1), recentNames.len);
@@ -933,14 +986,14 @@ test "getRecentDatabases returns the entries named by the recents in recents ord
     try writeToml(allocator, io, configDir, ALPHA_AND_BETA_TOML);
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - BETA\n    - gone\n    - alpha\n");
 
-    const recent = try databases_config.getRecentDatabases(allocator, io);
+    const recent = try databases_config.getRecentDatabases(allocator, io, try statePath(allocator));
 
     try std.testing.expectEqual(@as(usize, 2), recent.len);
     try std.testing.expectEqualStrings("/b", recent[0].path);
     try std.testing.expectEqualStrings("/a", recent[1].path);
 
-    // The dropped name is dropped on reading only: state.yaml still holds it.
-    try std.testing.expectEqual(@as(usize, 3), (try databases_config.getRecentDatabaseNames(allocator, io)).len);
+    // The dropped name is dropped on reading only: state.json still holds it.
+    try std.testing.expectEqual(@as(usize, 3), (try databases_config.getRecentDatabaseNames(allocator, io, try statePath(allocator))).len);
 }
 
 test "getRecentDatabases returns at most MAX_RECENT_DATABASES entries" {
@@ -956,7 +1009,7 @@ test "getRecentDatabases returns at most MAX_RECENT_DATABASES entries" {
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"d1\"\ndescription = \"\"\npath = \"/1\"\n\n[[databases]]\nname = \"d2\"\ndescription = \"\"\npath = \"/2\"\n\n[[databases]]\nname = \"d3\"\ndescription = \"\"\npath = \"/3\"\n\n[[databases]]\nname = \"d4\"\ndescription = \"\"\npath = \"/4\"\n\n[[databases]]\nname = \"d5\"\ndescription = \"\"\npath = \"/5\"\n\n[[databases]]\nname = \"d6\"\ndescription = \"\"\npath = \"/6\"\n");
     try writeState(allocator, io, configDir, "databases:\n  recent_names: [d1, d2, d3, d4, d5, d6]\n");
 
-    const recent = try databases_config.getRecentDatabases(allocator, io);
+    const recent = try databases_config.getRecentDatabases(allocator, io, try statePath(allocator));
 
     try std.testing.expectEqual(@as(usize, databases_config.MAX_RECENT_DATABASES), recent.len);
     try std.testing.expectEqualStrings("/1", recent[0].path);
@@ -974,12 +1027,12 @@ test "getRecentDatabases returns nothing when there is no file" {
     const configDir = try useNewConfigDir(allocator, io);
     defer temp_dirs.removeTempDir(io, configDir);
 
-    const recent = try databases_config.getRecentDatabases(allocator, io);
+    const recent = try databases_config.getRecentDatabases(allocator, io, try statePath(allocator));
 
     try std.testing.expectEqual(@as(usize, 0), recent.len);
 }
 
-test "the recents are read from state.yaml, not from databases.toml" {
+test "the recents are read from state.json, not from databases.toml" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -991,8 +1044,8 @@ test "the recents are read from state.yaml, not from databases.toml" {
     defer temp_dirs.removeTempDir(io, configDir);
     try writeToml(allocator, io, configDir, "recent_database_names = [ \"alpha\" ]\nlast_database = \"/a\"\n\n" ++ ALPHA_AND_BETA_TOML);
 
-    try std.testing.expectEqual(@as(usize, 0), (try databases_config.getRecentDatabases(allocator, io)).len);
-    try std.testing.expect((try databases_config.getLastDatabase(allocator, io)) == null);
+    try std.testing.expectEqual(@as(usize, 0), (try databases_config.getRecentDatabases(allocator, io, try statePath(allocator))).len);
+    try std.testing.expect((try databases_config.getLastDatabase(allocator, io, try statePath(allocator))) == null);
 }
 
 test "removeRecentDatabaseName removes only the name from the recents and keeps the entry" {
@@ -1008,12 +1061,12 @@ test "removeRecentDatabaseName removes only the name from the recents and keeps 
     try writeToml(allocator, io, configDir, ALPHA_AND_BETA_TOML);
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n    - beta\n  last_opened_path: /b\n");
 
-    try databases_config.removeRecentDatabaseName(allocator, io, "ALPHA");
+    try databases_config.removeRecentDatabaseName(allocator, io, try statePath(allocator), "ALPHA");
 
     const written = try databases_config.loadDatabasesConfig(allocator, io);
     try std.testing.expectEqual(@as(usize, 2), written.databases.len);
     try std.testing.expectEqualStrings(ALPHA_AND_BETA_TOML, try readToml(allocator, io, configDir));
-    try std.testing.expectEqualStrings("databases:\n  recent_names:\n    - beta\n  last_opened_path: /b\n", try readState(allocator, io, configDir));
+    try expectStateMatchesYaml(allocator, io, configDir, "databases:\n  recent_names:\n    - beta\n  last_opened_path: /b\n");
 }
 
 test "removeRecentDatabaseName leaves the recents alone when the name is not there" {
@@ -1029,7 +1082,7 @@ test "removeRecentDatabaseName leaves the recents alone when the name is not the
     try writeToml(allocator, io, configDir, ALPHA_AND_BETA_TOML);
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n");
 
-    try databases_config.removeRecentDatabaseName(allocator, io, "missing");
+    try databases_config.removeRecentDatabaseName(allocator, io, try statePath(allocator), "missing");
 
     const recentNames = try recentNamesInState(allocator, io);
     try std.testing.expectEqual(@as(usize, 1), recentNames.len);
@@ -1049,8 +1102,8 @@ test "markDatabaseOpened moves the entry's own name to the front without repeati
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"Alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n    - beta\n");
 
-    try databases_config.markDatabaseOpened(allocator, io, "BETA");
-    try databases_config.markDatabaseOpened(allocator, io, "alpha");
+    try databases_config.markDatabaseOpened(allocator, io, try statePath(allocator), "BETA");
+    try databases_config.markDatabaseOpened(allocator, io, try statePath(allocator), "alpha");
 
     const recentNames = try recentNamesInState(allocator, io);
     try std.testing.expectEqual(@as(usize, 2), recentNames.len);
@@ -1071,7 +1124,7 @@ test "markDatabaseOpened keeps at most MAX_RECENT_DATABASES names, dropping the 
     try writeToml(allocator, io, configDir, "[[databases]]\nname = \"d1\"\ndescription = \"\"\npath = \"/1\"\n\n[[databases]]\nname = \"d2\"\ndescription = \"\"\npath = \"/2\"\n\n[[databases]]\nname = \"d3\"\ndescription = \"\"\npath = \"/3\"\n\n[[databases]]\nname = \"d4\"\ndescription = \"\"\npath = \"/4\"\n\n[[databases]]\nname = \"d5\"\ndescription = \"\"\npath = \"/5\"\n\n[[databases]]\nname = \"d6\"\ndescription = \"\"\npath = \"/6\"\n");
     try writeState(allocator, io, configDir, "databases:\n  recent_names: [d1, d2, d3, d4, d5]\n");
 
-    try databases_config.markDatabaseOpened(allocator, io, "d6");
+    try databases_config.markDatabaseOpened(allocator, io, try statePath(allocator), "d6");
 
     const recentNames = try recentNamesInState(allocator, io);
     try std.testing.expectEqual(@as(usize, 5), recentNames.len);
@@ -1092,12 +1145,12 @@ test "markDatabaseOpened does nothing when no entry matches" {
     try writeToml(allocator, io, configDir, ALPHA_AND_BETA_TOML);
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n");
 
-    try databases_config.markDatabaseOpened(allocator, io, "missing");
+    try databases_config.markDatabaseOpened(allocator, io, try statePath(allocator), "missing");
 
-    try std.testing.expectEqualStrings("databases:\n  recent_names:\n    - alpha\n", try readState(allocator, io, configDir));
+    try expectStateMatchesYaml(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n");
 }
 
-test "markDatabaseOpened leaves the rest of state.yaml as it was" {
+test "markDatabaseOpened leaves the rest of state.json as it was" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -1110,9 +1163,9 @@ test "markDatabaseOpened leaves the rest of state.yaml as it was" {
     try writeToml(allocator, io, configDir, ALPHA_AND_BETA_TOML);
     try writeState(allocator, io, configDir, "searches:\n  recent:\n    - dogs\nnews:\n  shown_news_ids:\n    - n1\nui:\n  sidebar-collapsed: true\n");
 
-    try databases_config.markDatabaseOpened(allocator, io, "alpha");
+    try databases_config.markDatabaseOpened(allocator, io, try statePath(allocator), "alpha");
 
-    try std.testing.expectEqualStrings("searches:\n  recent:\n    - dogs\nnews:\n  shown_news_ids:\n    - n1\ndatabases:\n  recent_names:\n    - alpha\nui:\n  sidebar-collapsed: true\n", try readState(allocator, io, configDir));
+    try expectStateMatchesYaml(allocator, io, configDir, "searches:\n  recent:\n    - dogs\nnews:\n  shown_news_ids:\n    - n1\ndatabases:\n  recent_names:\n    - alpha\nui:\n  sidebar-collapsed: true\n");
     try std.testing.expectEqualStrings(ALPHA_AND_BETA_TOML, try readToml(allocator, io, configDir));
 }
 
@@ -1126,15 +1179,15 @@ test "getLastDatabase is null when none is recorded and the path when one is" {
     const io = std.testing.io;
     const configDir = try useNewConfigDir(allocator, io);
     defer temp_dirs.removeTempDir(io, configDir);
-    try std.testing.expect((try databases_config.getLastDatabase(allocator, io)) == null);
+    try std.testing.expect((try databases_config.getLastDatabase(allocator, io, try statePath(allocator))) == null);
     try writeState(allocator, io, configDir, "databases:\n  last_opened_path: /some/db\n");
 
-    const last = try databases_config.getLastDatabase(allocator, io);
+    const last = try databases_config.getLastDatabase(allocator, io, try statePath(allocator));
 
     try std.testing.expectEqualStrings("/some/db", last.?);
 }
 
-test "setLastDatabase records the path in state.yaml, carries the recents through, and null clears it" {
+test "setLastDatabase records the path in state.json, carries the recents through, and null clears it" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -1147,18 +1200,18 @@ test "setLastDatabase records the path in state.yaml, carries the recents throug
     try writeToml(allocator, io, configDir, ALPHA_AND_BETA_TOML);
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n");
 
-    try databases_config.setLastDatabase(allocator, io, "/a");
+    try databases_config.setLastDatabase(allocator, io, try statePath(allocator), "/a");
 
-    try std.testing.expectEqualStrings("databases:\n  recent_names:\n    - alpha\n  last_opened_path: /a\n", try readState(allocator, io, configDir));
-    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
+    try expectStateMatchesYaml(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n  last_opened_path: /a\n");
+    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io, try statePath(allocator))).?);
     try std.testing.expectEqualStrings(ALPHA_AND_BETA_TOML, try readToml(allocator, io, configDir));
 
-    try databases_config.setLastDatabase(allocator, io, null);
+    try databases_config.setLastDatabase(allocator, io, try statePath(allocator), null);
 
     // An empty string would send the app looking for a database at an empty path, where an absent key is what
     // "the last database was closed" means on disk.
-    try std.testing.expectEqualStrings("databases:\n  recent_names:\n    - alpha\n", try readState(allocator, io, configDir));
-    try std.testing.expect((try databases_config.getLastDatabase(allocator, io)) == null);
+    try expectStateMatchesYaml(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n");
+    try std.testing.expect((try databases_config.getLastDatabase(allocator, io, try statePath(allocator))) == null);
 }
 
 test "clearing the last database when it is the only thing in the section leaves no empty section" {
@@ -1173,9 +1226,9 @@ test "clearing the last database when it is the only thing in the section leaves
     defer temp_dirs.removeTempDir(io, configDir);
     try writeState(allocator, io, configDir, "gallery:\n  sort: date\ndatabases:\n  last_opened_path: /a\n");
 
-    try databases_config.setLastDatabase(allocator, io, null);
+    try databases_config.setLastDatabase(allocator, io, try statePath(allocator), null);
 
-    try std.testing.expectEqualStrings("gallery:\n  sort: date\n", try readState(allocator, io, configDir));
+    try expectStateMatchesYaml(allocator, io, configDir, "gallery:\n  sort: date\n");
 }
 
 test "the last database survives every other edit to either file" {
@@ -1196,27 +1249,27 @@ test "the last database survives every other edit to either file" {
         .description = "",
         .path = "/b",
     });
-    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
+    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io, try statePath(allocator))).?);
 
-    try databases_config.updateDatabaseEntry(allocator, io, "beta", .{
+    try databases_config.updateDatabaseEntry(allocator, io, try statePath(allocator), "beta", .{
         .name = "gamma",
         .description = "",
         .path = "/b",
     });
-    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
+    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io, try statePath(allocator))).?);
 
-    try databases_config.markDatabaseOpened(allocator, io, "gamma");
-    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
+    try databases_config.markDatabaseOpened(allocator, io, try statePath(allocator), "gamma");
+    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io, try statePath(allocator))).?);
 
-    try databases_config.removeRecentDatabaseName(allocator, io, "alpha");
-    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
+    try databases_config.removeRecentDatabaseName(allocator, io, try statePath(allocator), "alpha");
+    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io, try statePath(allocator))).?);
 
-    try databases_config.removeDatabaseEntry(allocator, io, "gamma");
-    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
+    try databases_config.removeDatabaseEntry(allocator, io, try statePath(allocator), "gamma");
+    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io, try statePath(allocator))).?);
     try std.testing.expectEqual(@as(usize, 0), (try recentNamesInState(allocator, io)).len);
 }
 
-test "the last opened database is undefined when state.yaml names none" {
+test "the last opened database is undefined when state.json names none" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -1228,7 +1281,7 @@ test "the last opened database is undefined when state.yaml names none" {
     defer temp_dirs.removeTempDir(io, configDir);
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n");
 
-    try std.testing.expect((try databases_config.getLastDatabase(allocator, io)) == null);
+    try std.testing.expect((try databases_config.getLastDatabase(allocator, io, try statePath(allocator))) == null);
 }
 
 test "setting the last opened database leaves the databases and recents lists exactly as they were" {
@@ -1244,7 +1297,7 @@ test "setting the last opened database leaves the databases and recents lists ex
     try writeToml(allocator, io, configDir, ALPHA_AND_BETA_TOML);
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - beta\n    - alpha\n");
 
-    try databases_config.setLastDatabase(allocator, io, "/b");
+    try databases_config.setLastDatabase(allocator, io, try statePath(allocator), "/b");
 
     try std.testing.expectEqualStrings(ALPHA_AND_BETA_TOML, try readToml(allocator, io, configDir));
     const recentNames = try recentNamesInState(allocator, io);
@@ -1264,7 +1317,7 @@ test "the last opened database is undefined when there is no file at all" {
     const configDir = try useNewConfigDir(allocator, io);
     defer temp_dirs.removeTempDir(io, configDir);
 
-    try std.testing.expect((try databases_config.getLastDatabase(allocator, io)) == null);
+    try std.testing.expect((try databases_config.getLastDatabase(allocator, io, try statePath(allocator))) == null);
 }
 
 test "a write of the interface's own state keeps the recents and the last database" {
@@ -1280,8 +1333,8 @@ test "a write of the interface's own state keeps the recents and the last databa
     try writeToml(allocator, io, configDir, ALPHA_AND_BETA_TOML);
     try writeState(allocator, io, configDir, "databases:\n  recent_names:\n    - alpha\n  last_opened_path: /a\n");
 
-    try node_api.app_state.updateLastFolder(allocator, io, "/photos");
+    try node_api.app_state.updateLastFolder(allocator, io, try statePath(allocator), "/photos");
 
-    try std.testing.expectEqualStrings("alpha", (try databases_config.getRecentDatabases(allocator, io))[0].name);
-    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
+    try std.testing.expectEqualStrings("alpha", (try databases_config.getRecentDatabases(allocator, io, try statePath(allocator)))[0].name);
+    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io, try statePath(allocator))).?);
 }

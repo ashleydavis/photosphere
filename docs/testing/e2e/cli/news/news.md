@@ -16,6 +16,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-news-news
 mkdir -p /tmp/psi-cli-news-news/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-news-news/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-news-news/config
 ```
 
 Expected: no output.

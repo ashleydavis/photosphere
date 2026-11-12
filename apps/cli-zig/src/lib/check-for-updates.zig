@@ -5,6 +5,14 @@ const config = @import("config.zig");
 const fetch = node_api.fetch.fetch;
 const getLastShownUpdateVersion = node_api.news_state.getLastShownUpdateVersion;
 const setLastShownUpdateVersion = node_api.news_state.setLastShownUpdateVersion;
+const ziggy = @import("ziggy");
+
+//
+// The path of the app's state file, which the news state lives in.
+//
+fn statePath(allocator: std.mem.Allocator) ![]const u8 {
+    return ziggy.state_path.desktopAppStatePath(allocator);
+}
 
 //
 // URL of the GitHub API endpoint that returns the latest non-prerelease release.
@@ -42,7 +50,7 @@ fn checkForUpdatesUnsafe(allocator: std.mem.Allocator, io: std.Io, log: ILog, cu
     if (std.mem.eql(u8, latestVersion, currentVersion)) {
         return null;
     }
-    const lastShown = try getLastShownUpdateVersion(allocator, io, log);
+    const lastShown = try getLastShownUpdateVersion(allocator, io, log, try statePath(allocator));
     if (lastShown != null and std.mem.eql(u8, lastShown.?, latestVersion)) {
         return null;
     }
@@ -72,7 +80,8 @@ pub fn checkForUpdates(allocator: std.mem.Allocator, io: std.Io, log: ILog) ?[]c
 // version ships. Persistence failures are swallowed silently.
 //
 pub fn markUpdateAsShown(allocator: std.mem.Allocator, io: std.Io, latestVersion: []const u8) void {
-    setLastShownUpdateVersion(allocator, io, latestVersion) catch {
+    const path = statePath(allocator) catch return;
+    setLastShownUpdateVersion(allocator, io, path, latestVersion) catch {
         // Update persistence failures must never block the user.
     };
 }

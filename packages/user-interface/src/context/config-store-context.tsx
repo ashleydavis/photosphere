@@ -70,7 +70,7 @@ export function createConfig(
 }
 
 //
-// The store for what the user chose, which each platform backs with config.yaml.
+// The store for what the user chose, which each platform backs with config.toml.
 //
 const ConfigStoreContext = createContext<IConfig | undefined>(undefined);
 

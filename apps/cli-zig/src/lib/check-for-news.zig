@@ -6,6 +6,14 @@ const INewsItem = node_api.news_fetcher.INewsItem;
 const fetchNews = node_api.news_fetcher.fetchNews;
 const getShownNewsIds = node_api.news_state.getShownNewsIds;
 const addShownNewsIds = node_api.news_state.addShownNewsIds;
+const ziggy = @import("ziggy");
+
+//
+// The path of the app's state file, which the news state lives in.
+//
+fn statePath(allocator: std.mem.Allocator) ![]const u8 {
+    return ziggy.state_path.desktopAppStatePath(allocator);
+}
 
 //
 // URL of the news feed published in the Photosphere GitHub repo. Overridable via
@@ -26,7 +34,7 @@ fn NEWS_URL() []const u8 {
 //
 fn checkForNewsUnsafe(allocator: std.mem.Allocator, io: std.Io, log: ILog) !?INewsItem {
     const items = try fetchNews(allocator, io, NEWS_URL());
-    const shownIds = try getShownNewsIds(allocator, io, log);
+    const shownIds = try getShownNewsIds(allocator, io, log, try statePath(allocator));
     var nextItem: ?INewsItem = null;
     for (items) |item| {
         var shown = false;
@@ -42,7 +50,7 @@ fn checkForNewsUnsafe(allocator: std.mem.Allocator, io: std.Io, log: ILog) !?INe
         }
     }
     const found = nextItem orelse return null;
-    try addShownNewsIds(allocator, io, &.{found.id});
+    try addShownNewsIds(allocator, io, try statePath(allocator), &.{found.id});
     return found;
 }
 
@@ -77,7 +85,7 @@ pub const INewsItemWithState = struct {
 //
 fn getAllNewsUnsafe(allocator: std.mem.Allocator, io: std.Io, log: ILog) ![]const INewsItemWithState {
     const items = try fetchNews(allocator, io, NEWS_URL());
-    const shownIds = try getShownNewsIds(allocator, io, log);
+    const shownIds = try getShownNewsIds(allocator, io, log, try statePath(allocator));
     const result = try allocator.alloc(INewsItemWithState, items.len);
     for (items, 0..) |item, index| {
         var seen = false;
@@ -112,7 +120,8 @@ pub fn markNewsAsShown(allocator: std.mem.Allocator, io: std.Io, ids: []const []
     if (ids.len == 0) {
         return;
     }
-    addShownNewsIds(allocator, io, ids) catch {
+    const path = statePath(allocator) catch return;
+    addShownNewsIds(allocator, io, path, ids) catch {
         // News persistence failures must never block the user.
     };
 }

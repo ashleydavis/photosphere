@@ -96,7 +96,7 @@ fn runChildTask(services: TaskServices, io: std.Io, allocator: std.mem.Allocator
 // The five values are read from the payload, because a Ziggy request carries one payload.
 //
 fn saveAsset(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = context;
+
     const asset_id = json.getString(data, "assetId") orelse {
         return utils.errors.throwError("The asset to save needs its id.", .{});
     };
@@ -112,7 +112,7 @@ fn saveAsset(services: TaskServices, timers: Timers, io: std.Io, allocator: std.
         const filename = json.getString(data, "filename") orelse {
             return utils.errors.throwError("The asset to save needs a file name to suggest in the save dialog.", .{});
         };
-        break :blk (try pickers.showSaveDialog(services, io, allocator, timers, filename)) orelse {
+        break :blk (try pickers.showSaveDialog(services, io, allocator, timers, context.state_path, filename)) orelse {
             return try allocator.dupe(u8, "null");
         };
     };
@@ -138,7 +138,7 @@ fn saveAsset(services: TaskServices, timers: Timers, io: std.Io, allocator: std.
 // the database. This handler has to wait for them.
 //
 fn saveAssets(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = context;
+
     const arena = allocator;
     const request = try std.json.parseFromValueLeaky(ISaveAssetsRequest, arena, data, .{
         .ignore_unknown_fields = true,
@@ -147,7 +147,7 @@ fn saveAssets(services: TaskServices, timers: Timers, io: std.Io, allocator: std
         const item = try std.json.parseFromValueLeaky(ISaveAssetItem, arena, request.items[0], .{
             .ignore_unknown_fields = true,
         });
-        const dest_path = (try pickers.pickFile(services, io, allocator, timers, item.filename)) orelse {
+        const dest_path = (try pickers.pickFile(services, io, allocator, timers, context.state_path, item.filename)) orelse {
             return try json.stringify(arena, ISaveAssetsReply{
                 .outcome = "cancelled",
                 .savedCount = 0,
@@ -176,7 +176,7 @@ fn saveAssets(services: TaskServices, timers: Timers, io: std.Io, allocator: std
         });
     }
 
-    const folder_path = (try pickers.pickFolder(services, io, allocator, timers, "Choose folder to save assets", "lastDownloadFolder")) orelse {
+    const folder_path = (try pickers.pickFolder(services, io, allocator, timers, context.state_path, "Choose folder to save assets", "lastDownloadFolder")) orelse {
         return try json.stringify(arena, ISaveAssetsReply{
             .outcome = "cancelled",
             .savedCount = 0,
@@ -212,8 +212,9 @@ fn saveAssets(services: TaskServices, timers: Timers, io: std.Io, allocator: std
 // A file manager that cannot be started is an error.
 //
 fn openPath(services: TaskServices, _: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
     _ = context;
+    _ = services;
+
     if (data != .string) {
         return utils.errors.throwError("The folder to open needs a path.", .{});
     }

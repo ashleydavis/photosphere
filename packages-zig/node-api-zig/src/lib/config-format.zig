@@ -7,18 +7,20 @@ const IAutoImportSource = auto_import_settings.IAutoImportSource;
 const IRawAutoImportSource = auto_import_settings.IRawAutoImportSource;
 const IRawAutoImportSettings = auto_import_settings.IRawAutoImportSettings;
 const normaliseAutoImportSettings = auto_import_settings.normaliseAutoImportSettings;
+const normaliseAutoImportSource = auto_import_settings.normaliseAutoImportSource;
 const IAutoImportFile = api.auto_import_mobile.IAutoImportFile;
 const resolveAutoImportPauseMs = api.auto_import_mobile.resolveAutoImportPauseMs;
 const ISyncFile = api.sync_settings.ISyncFile;
 const IRawSyncSettings = api.sync_settings.IRawSyncSettings;
 const normaliseSyncSettings = api.sync_settings.normaliseSyncSettings;
 const resolveSyncPauseMs = api.sync_settings.resolveSyncPauseMs;
+const config_state = @import("ziggy").config_state;
 
 //
-// The on-disk contents of config.yaml and the conversions between it and the in-memory type.
+// The on-disk contents of config.toml and the conversions between it and the in-memory type.
 //
-// One file holds every setting the app remembers, on every platform: ~/.config/photosphere/config.yaml
-// for the CLI and the desktop app, and config.yaml at the root of the storage sandbox on a phone. One
+// One file holds every setting the app remembers, on every platform: ~/.config/photosphere/config.toml
+// for the CLI and the desktop app, and config.toml at the root of the storage sandbox on a phone. One
 // file means one format definition, so a setting means the same thing whichever platform wrote it.
 // The wiki page "Configuration-File" documents the file for users.
 //
@@ -26,7 +28,7 @@ const resolveSyncPauseMs = api.sync_settings.resolveSyncPauseMs;
 // it is the only definition of the file format, so the reader and the writer cannot drift apart.
 //
 // This file is what the user chose. What the app remembered on its own, so the interface comes back
-// the way it was left, is in state.yaml beside it (see state-format.zig). The two are split because
+// the way it was left, is in state.json beside it (see state-format.zig). The two are split because
 // only one of them is worth documenting, hand-editing or carrying to another machine.
 //
 // The settings themselves are not defined here. The normalisers in `api` own what a valid setting is
@@ -56,7 +58,7 @@ pub const IConfigTheme = enum {
 };
 
 //
-// Everything config.yaml holds, in memory, with camelCase fields.
+// Everything config.toml holds, in memory, with camelCase fields.
 //
 // The auto-import and sync sections are the already-resolved types the rest of the app works with
 // (settings plus pacing plus the database path), not raw stored blobs: anything reading this type
@@ -80,7 +82,7 @@ pub const IConfigFile = struct {
 
     //
     // The searches the user has deliberately saved from the sidebar. The ones they merely ran are in
-    // state.yaml, because those the app remembered rather than the user chose.
+    // state.json, because those the app remembered rather than the user chose.
     //
     savedSearches: ?[]const []const u8 = null,
 
@@ -283,157 +285,208 @@ fn yamlToSyncFile(allocator: std.mem.Allocator, section: ?std.json.Value) !ISync
 // sections that did parse, and a key nothing recognises is ignored rather than rejected. One
 // mistyped line in a hand-edited file must not cost the user every other setting in it.
 //
-pub fn yamlToConfigFile(allocator: std.mem.Allocator, document: ?std.json.Value) !IConfigFile {
-    const parsed: std.json.ObjectMap = if (isSection(document)) document.?.object else .empty;
-
-    var config: IConfigFile = .{
-        .autoImport = try yamlToAutoImportFile(allocator, parsed.get("auto_import")),
-        .sync = try yamlToSyncFile(allocator, parsed.get("sync")),
-    };
-
-    if (parsed.get("theme")) |theme| {
-        if (theme == .string) {
-            for (ALLOWED_THEMES) |allowedTheme| {
-                if (std.mem.eql(u8, theme.string, @tagName(allowedTheme))) {
-                    config.theme = allowedTheme;
-                }
-            }
-        }
-    }
-    if (parsed.get("developer_mode")) |developerMode| {
-        if (developerMode == .bool) {
-            config.developerMode = developerMode.bool;
-        }
-    }
-    if (parsed.get("show_fps_indicator")) |showFpsIndicator| {
-        if (showFpsIndicator == .bool) {
-            config.showFpsIndicator = showFpsIndicator.bool;
-        }
-    }
-    if (parsed.get("saved_searches")) |savedSearches| {
-        if (savedSearches == .array) {
-            var searches: std.ArrayList([]const u8) = .empty;
-            for (savedSearches.array.items) |search| {
-                if (search == .string) {
-                    try searches.append(allocator, search.string);
-                }
-            }
-            config.savedSearches = searches.items;
-        }
-    }
-    if (objectOf(parsed.get("auto_import"))) |autoImport| {
-        if (autoImport.get("cleanup_enabled")) |cleanupEnabled| {
-            if (cleanupEnabled == .bool) {
-                config.autoImportCleanupEnabled = cleanupEnabled.bool;
-            }
-        }
-    }
-
-    return config;
-}
-
-//
-// Turns the configuration into the document written to disk.
-//
-// An absent optional field stays absent rather than being written as null, so a file the app wrote
-// holds only settings that have actually been chosen, and a reader cannot tell "never set" from
-// "explicitly set to nothing" wrongly. An empty sources list is the exception and is written as an
-// empty list, because "watching nothing" is a state a user can choose and is not the same as never
-// having touched automatic import.
-//
-pub fn configFileToYaml(allocator: std.mem.Allocator, config: IConfigFile, emit: ?IConfigSectionsPresent) !std.json.Value {
-    var sources = std.json.Array.init(allocator);
-    for (config.autoImport.settings.sources) |source| {
-        try sources.append(try sourceToYaml(allocator, source));
-    }
-    var autoImport: std.json.ObjectMap = .empty;
-    try autoImport.put(allocator, "enabled", .{
-        .bool = config.autoImport.settings.enabled,
-    });
-    try autoImport.put(allocator, "pause_between_runs_ms", config.autoImport.pauseBetweenRunsMs);
-    try autoImport.put(allocator, "sources", .{
-        .array = sources,
-    });
-    if (config.autoImport.defaultDatabasePath) |defaultDatabasePath| {
-        try autoImport.put(allocator, "default_database_path", .{
-            .string = defaultDatabasePath,
-        });
-    }
-    if (config.autoImportCleanupEnabled) |autoImportCleanupEnabled| {
-        try autoImport.put(allocator, "cleanup_enabled", .{
-            .bool = autoImportCleanupEnabled,
-        });
-    }
-
-    var sync: std.json.ObjectMap = .empty;
-    try sync.put(allocator, "enabled", .{
-        .bool = config.sync.settings.enabled,
-    });
-    try sync.put(allocator, "only_on_wifi", .{
-        .bool = config.sync.settings.onlyOnWifi,
-    });
-    try sync.put(allocator, "pause_between_runs_ms", config.sync.pauseBetweenRunsMs);
-    if (config.sync.databasePath) |databasePath| {
-        try sync.put(allocator, "database_path", .{
-            .string = databasePath,
-        });
-    }
-
-    var document: std.json.ObjectMap = .empty;
-
-    if (config.theme) |theme| {
-        try document.put(allocator, "theme", .{
-            .string = @tagName(theme),
-        });
-    }
-    if (config.developerMode) |developerMode| {
-        try document.put(allocator, "developer_mode", .{
-            .bool = developerMode,
-        });
-    }
-    if (config.showFpsIndicator) |showFpsIndicator| {
-        try document.put(allocator, "show_fps_indicator", .{
-            .bool = showFpsIndicator,
-        });
-    }
-    if (config.savedSearches) |savedSearches| {
-        var searches = std.json.Array.init(allocator);
-        for (savedSearches) |search| {
-            try searches.append(.{
-                .string = search,
-            });
-        }
-        try document.put(allocator, "saved_searches", .{
-            .array = searches,
-        });
-    }
-
-    // A section is written only once its feature has actually been set, so a reader can tell "nobody
-    // has chosen this" from "somebody switched it off". Writing every section every time would put an
-    // `auto_import` section in the file the moment syncing was switched on, and a fresh install would
-    // then be told automatic import had already been decided.
-    if (emit == null or emit.?.autoImport) {
-        try document.put(allocator, "auto_import", .{
-            .object = autoImport,
-        });
-    }
-    if (emit == null or emit.?.sync) {
-        try document.put(allocator, "sync", .{
-            .object = sync,
-        });
-    }
-
-    return .{
-        .object = document,
-    };
-}
-
-//
-// The configuration a reader falls back to when there is no file, used wherever a caller needs the
-// defaults without having a document to convert.
-//
 pub fn defaultConfigFile(allocator: std.mem.Allocator) !IConfigFile {
-    return yamlToConfigFile(allocator, null);
+    return .{
+        .autoImport = try autoImportFileFromStored(allocator, null),
+        .sync = syncFileFromStored(allocator, null),
+    };
+}
+
+//
+// The sync section as the config file holds it, with every field optional and named by its key.
+//
+pub const IStoredSyncSection = struct {
+    // Whether syncing is on.
+    enabled: ?bool = null,
+    // Whether syncing waits for Wi-Fi.
+    only_on_wifi: ?bool = null,
+    // The database the background loop pushes.
+    database_path: ?[]const u8 = null,
+    // How long the loop waits between runs.
+    pause_between_runs_ms: ?f64 = null,
+};
+
+//
+// One watched place as the config file holds it, with every field optional and named by its key.
+//
+pub const IStoredAutoImportSource = struct {
+    // The kind of place, "folder" or "device-album".
+    @"type": ?[]const u8 = null,
+    // The folder's path, for a folder.
+    path: ?[]const u8 = null,
+    // Whether a folder's subfolders are watched, for a folder.
+    recurse: ?bool = null,
+    // The device album's id, for a device album.
+    album_id: ?[]const u8 = null,
+};
+
+//
+// The automatic import section as the config file holds it, with every field optional and named by its key.
+//
+pub const IStoredAutoImportSection = struct {
+    // Whether automatic import is on.
+    enabled: ?bool = null,
+    // The database automatic import writes to.
+    default_database_path: ?[]const u8 = null,
+    // How long automatic import waits between runs.
+    pause_between_runs_ms: ?f64 = null,
+    // Whether the source file is deleted once its photo is in the database.
+    cleanup_enabled: ?bool = null,
+    // The watched places.
+    sources: ?[]const IStoredAutoImportSource = null,
+};
+
+//
+// The pacing as the file's kind of value: a whole number when it is whole and fits, else a float, so a whole pause stays an integer when
+// it is written back.
+//
+pub fn pauseValue(pause: f64) std.json.Value {
+    if (pause == @floor(pause) and pause >= @as(f64, @floatFromInt(std.math.minInt(i64))) and pause <= @as(f64, @floatFromInt(std.math.maxInt(i64)))) {
+        return .{ .integer = @intFromFloat(pause) };
+    }
+    return .{ .float = pause };
+}
+
+//
+// Builds the sync settings from the section the file holds.
+//
+pub fn syncFileFromStored(allocator: std.mem.Allocator, stored: ?IStoredSyncSection) ISyncFile {
+    const section = stored orelse IStoredSyncSection{};
+    var raw: std.json.ObjectMap = .empty;
+    if (section.enabled) |enabled| {
+        raw.put(allocator, "enabled", .{ .bool = enabled }) catch @panic("out of memory reading the sync settings");
+    }
+    if (section.only_on_wifi) |onlyOnWifi| {
+        raw.put(allocator, "onlyOnWifi", .{ .bool = onlyOnWifi }) catch @panic("out of memory reading the sync settings");
+    }
+    const pause: ?std.json.Value = if (section.pause_between_runs_ms) |pauseMs| pauseValue(pauseMs) else null;
+    return .{
+        .settings = normaliseSyncSettings(.{ .object = raw }),
+        .databasePath = section.database_path,
+        .pauseBetweenRunsMs = resolveSyncPauseMs(pause),
+    };
+}
+
+//
+// Builds the automatic import settings from the section the file holds.
+//
+pub fn autoImportFileFromStored(allocator: std.mem.Allocator, stored: ?IStoredAutoImportSection) !IAutoImportFile {
+    const section = stored orelse IStoredAutoImportSection{};
+    var raw: std.json.ObjectMap = .empty;
+    if (section.enabled) |enabled| {
+        try raw.put(allocator, "enabled", .{ .bool = enabled });
+    }
+    var sources: std.json.Array = .init(allocator);
+    if (section.sources) |storedSources| {
+        for (storedSources) |source| {
+            var rawSource: std.json.ObjectMap = .empty;
+            if (source.@"type") |sourceType| {
+                try rawSource.put(allocator, "type", .{ .string = sourceType });
+            }
+            if (source.path) |path| {
+                try rawSource.put(allocator, "path", .{ .string = path });
+            }
+            if (source.recurse) |recurse| {
+                try rawSource.put(allocator, "recurse", .{ .bool = recurse });
+            }
+            if (source.album_id) |albumId| {
+                try rawSource.put(allocator, "albumId", .{ .string = albumId });
+            }
+            try sources.append(.{ .object = rawSource });
+        }
+    }
+    try raw.put(allocator, "sources", .{ .array = sources });
+    const pause: ?std.json.Value = if (section.pause_between_runs_ms) |pauseMs| pauseValue(pauseMs) else null;
+    return .{
+        .settings = try normaliseAutoImportSettings(allocator, .{ .object = raw }),
+        .defaultDatabasePath = section.default_database_path,
+        .pauseBetweenRunsMs = resolveAutoImportPauseMs(pause),
+    };
+}
+
+//
+// The sync section as the file holds it. The pause is left null, because a pause is never written through a stored section.
+//
+pub fn syncFileToStored(file: ISyncFile) IStoredSyncSection {
+    return .{
+        .enabled = file.settings.enabled,
+        .only_on_wifi = file.settings.onlyOnWifi,
+        .database_path = file.databasePath,
+    };
+}
+
+//
+// The automatic import section as the file holds it. The pause is left null, because a pause is never written through a stored section.
+//
+pub fn autoImportFileToStored(allocator: std.mem.Allocator, file: IAutoImportFile) !IStoredAutoImportSection {
+    var sources: std.ArrayList(IStoredAutoImportSource) = .empty;
+    for (file.settings.sources) |source| {
+        switch (source) {
+            .folder => |folder| try sources.append(allocator, .{ .@"type" = "folder", .path = folder.path, .recurse = folder.recurse }),
+            .@"device-album" => |album| try sources.append(allocator, .{ .@"type" = "device-album", .album_id = album.albumId }),
+        }
+    }
+    return .{
+        .enabled = file.settings.enabled,
+        .default_database_path = file.defaultDatabasePath,
+        .cleanup_enabled = null,
+        .sources = sources.items,
+    };
+}
+
+//
+// The watched places as the file holds them, from the settings the app works with.
+//
+pub fn autoImportSourcesToStored(allocator: std.mem.Allocator, sources: ?[]const IAutoImportSource) !?[]const IStoredAutoImportSource {
+    const present = sources orelse return null;
+    var stored: std.ArrayList(IStoredAutoImportSource) = .empty;
+    for (present) |source| {
+        switch (source) {
+            .folder => |folder| try stored.append(allocator, .{ .@"type" = "folder", .path = folder.path, .recurse = folder.recurse }),
+            .@"device-album" => |album| try stored.append(allocator, .{ .@"type" = "device-album", .album_id = album.albumId }),
+        }
+    }
+    return stored.items;
+}
+
+//
+// The watched places the app works with, from the ones the file holds, each through the shared normaliser.
+//
+pub fn autoImportSourcesFromStored(allocator: std.mem.Allocator, sources: ?[]const IStoredAutoImportSource) !?[]const IAutoImportSource {
+    const present = sources orelse return null;
+    var normalised: std.ArrayList(IAutoImportSource) = .empty;
+    for (present) |source| {
+        var raw: std.json.ObjectMap = .empty;
+        if (source.@"type") |sourceType| {
+            try raw.put(allocator, "type", .{ .string = sourceType });
+        }
+        if (source.path) |path| {
+            try raw.put(allocator, "path", .{ .string = path });
+        }
+        if (source.recurse) |recurse| {
+            try raw.put(allocator, "recurse", .{ .bool = recurse });
+        }
+        if (source.album_id) |albumId| {
+            try raw.put(allocator, "albumId", .{ .string = albumId });
+        }
+        if (normaliseAutoImportSource(.{ .object = raw })) |found| {
+            try normalised.append(allocator, found);
+        }
+    }
+    return normalised.items;
+}
+
+//
+// Writes a pause, already the file's kind of value, at a key path. An integer writes as an integer, a float as a float, and a null
+// removes the key.
+//
+pub fn setPause(values: config_state.config.Values, key_path: []const u8, pause: std.json.Value) !void {
+    switch (pause) {
+        .integer => |integer| try values.set(key_path, integer),
+        .float => |float| try values.set(key_path, float),
+        .null => try values.set(key_path, @as(?i64, null)),
+        else => return errors.throwError("The pause at \"{s}\" must be a whole number, a number or null.", .{key_path}),
+    }
 }
 
 //
@@ -458,104 +511,3 @@ pub const IConfigSectionsPresent = struct {
     sync: bool,
 };
 
-//
-// Reports which sections a parsed document carried.
-//
-pub fn sectionsPresent(document: ?std.json.Value) IConfigSectionsPresent {
-    if (!isSection(document)) {
-        return .{
-            .autoImport = false,
-            .sync = false,
-        };
-    }
-
-    return .{
-        .autoImport = isSection(document.?.object.get("auto_import")),
-        .sync = isSection(document.?.object.get("sync")),
-    };
-}
-
-//
-// The result of parsing a config file: the configuration, and whether the text was readable at all.
-//
-pub const IParsedConfigFile = struct {
-    //
-    // The configuration. The defaults when the text could not be parsed.
-    //
-    config: IConfigFile,
-
-    //
-    // True when the text is not valid YAML, so `config` is the defaults rather than anything the
-    // file asked for. The caller reports it: a corrupt settings file is a bug somewhere else, and a
-    // reader that quietly substituted the defaults would hide it.
-    //
-    malformed: bool,
-
-    //
-    // What the YAML parser said, when it refused the text. Absent otherwise.
-    //
-    parseError: ?[]const u8 = null,
-
-    //
-    // Which sections the document actually carried. Both false for text that would not parse.
-    //
-    present: IConfigSectionsPresent,
-
-    //
-    // The document as it was parsed, before any section was filled in from the defaults. Undefined
-    // for an empty file and for text that would not parse.
-    //
-    // A caller that writes one setting by the name the interface uses needs this rather than the
-    // configuration: the flat view has to be able to tell a setting nobody has chosen from one that
-    // was switched off, and the configuration has already lost that distinction.
-    //
-    document: ?std.json.Value = null,
-};
-
-//
-// Parses the text of a config file, reporting whether it was readable.
-//
-// Text that will not parse as YAML comes back as the defaults rather than throwing, for the same
-// reason an absent file does: this runs on a phone whose only copy of the file may have been
-// hand-edited, and refusing to start is a worse answer than starting with syncing switched off. The
-// caller is told, so the failure reaches the log instead of being silent.
-//
-// (Zig: only the YAML parser's own refusal (a thrown YAMLException) is reported as malformed; running out of memory is
-// not a parse failure and is returned as the error it is.)
-//
-pub fn parseConfigYamlChecked(allocator: std.mem.Allocator, text: []const u8) !IParsedConfigFile {
-    const loaded = node_utils.yaml.load(allocator, text) catch |err| {
-        if (err != error.Thrown) {
-            return err;
-        }
-        return .{
-            .config = try defaultConfigFile(allocator),
-            .malformed = true,
-            .parseError = try errors.errorToString(allocator, err),
-            .present = sectionsPresent(null),
-        };
-    };
-
-    const parsed: ?std.json.Value = if (loaded == .null) null else loaded;
-    return .{
-        .config = try yamlToConfigFile(allocator, parsed),
-        .malformed = false,
-        .present = sectionsPresent(parsed),
-        .document = if (isSection(parsed)) parsed else null,
-    };
-}
-
-//
-// Parses the text of a config file into the configuration, for a caller with nothing useful to do
-// about text that will not parse.
-//
-pub fn parseConfigYaml(allocator: std.mem.Allocator, text: []const u8) !IConfigFile {
-    return (try parseConfigYamlChecked(allocator, text)).config;
-}
-
-//
-// Renders the configuration as the text of a config file.
-//
-pub fn buildConfigYaml(allocator: std.mem.Allocator, config: IConfigFile, emit: ?IConfigSectionsPresent) ![]const u8 {
-    return node_utils.yaml.dump(allocator, try configFileToYaml(allocator, config, emit));
-}

@@ -14,6 +14,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-hash-hash
 mkdir -p /tmp/psi-cli-hash-hash/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-hash-hash/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-hash-hash/config
 psi init --db /tmp/psi-cli-hash-hash/source --yes
 psi add test/test.png --db /tmp/psi-cli-hash-hash/source --yes
 ```

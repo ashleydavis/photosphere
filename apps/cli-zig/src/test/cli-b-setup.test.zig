@@ -950,6 +950,7 @@ fn useNewsFeed(allocator: std.mem.Allocator, environ_map: *std.process.Environ.M
     const config_dir = try std.fs.path.join(allocator, &.{ root, "config" });
     try std.Io.Dir.cwd().createDirPath(io, config_dir);
     try environ_map.put("PHOTOSPHERE_CONFIG_DIR", config_dir);
+    try environ_map.put("PHOTOSPHERE_STATE_DIR", config_dir);
     const feed_path = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = feed_path, .data = feed });
     try environ_map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, feed_path));

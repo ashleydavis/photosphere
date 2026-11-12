@@ -18,6 +18,7 @@ Run this in both terminals. It keeps the test's settings, secrets, cache, logs a
 
 ```bash
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-replicate-partial-copy/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-desktop-replicate-partial-copy/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-replicate-partial-copy/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-replicate-partial-copy/cache

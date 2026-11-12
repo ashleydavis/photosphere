@@ -30,6 +30,7 @@ case "$PLATFORM" in
     *)
         log_info "Pre-creating api-key secret with the CLI (using the same vault as the app)..."
         if ! (PHOTOSPHERE_CONFIG_DIR="$TMP_DIR/config" \
+            PHOTOSPHERE_STATE_DIR="$TMP_DIR/config" \
             PHOTOSPHERE_VAULT_DIR="$TMP_DIR/vault" \
             PHOTOSPHERE_VAULT_TYPE=plaintext \
             "$PHOTOSPHERE_ZIG_CLI" secrets add --yes --type api-key --name smoke-geocoding --value "fake-geocoding-key"); then

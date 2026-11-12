@@ -16,6 +16,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-s3-s3-replicate-and-sync
 mkdir -p /tmp/psi-cli-s3-s3-replicate-and-sync/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-s3-s3-replicate-and-sync/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-s3-s3-replicate-and-sync/config
 bun run s3-emulator start /tmp/psi-cli-s3-s3-replicate-and-sync/s3
 source /tmp/psi-cli-s3-s3-replicate-and-sync/s3/env
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"

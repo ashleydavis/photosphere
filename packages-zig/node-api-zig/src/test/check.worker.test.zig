@@ -109,7 +109,7 @@ const CheckTest = struct {
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "check-task-id", .{
             .context = null,
             .function = ignoreMessage,
-        }, 10);
+        }, 10, "", "");
         self.mediaTools = try MediaTools.init();
         self.toolRunner = self.mediaTools.runner();
     }

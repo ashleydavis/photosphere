@@ -43,7 +43,7 @@ SECRET_NAME="background-sync-smoke-test-s3"
 # The database this scenario seeds and syncs.
 #
 # Named for the scenario rather than "photosphere-default", so a run against a real phone never touches the database that phone actually
-# backs up to. Which database the background sync pushes is whatever config.yaml names, and this scenario names this one for as long as
+# backs up to. Which database the background sync pushes is whatever config.toml names, and this scenario names this one for as long as
 # it runs. The path is the absolute one in the app's files directory, for what the test does from outside the app.
 DB_NAME="background-sync-test-db"
 DB_PATH="$("${PLATFORM}_app_path" "$DB_NAME")"

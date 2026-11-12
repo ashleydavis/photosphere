@@ -77,8 +77,8 @@ fn optionalPathReply(allocator: std.mem.Allocator, path: ?[]const u8) ![]const u
 // Opens a directory picker and returns the folder chosen, or null if the user cancelled. It starts in the last folder opened in a
 // file dialog.
 //
-fn showDirectoryPicker(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, title: []const u8) !?[]const u8 {
-    const state = try app_state.loadAppState(allocator, io);
+fn showDirectoryPicker(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, state_path: []const u8, title: []const u8) !?[]const u8 {
+    const state = try app_state.loadAppState(allocator, io, services.log, state_path);
     const paths = try pickedPaths(services, io, allocator, timers, .folder, title, state.lastFolder);
     if (paths.len == 0) {
         return null;
@@ -94,19 +94,19 @@ fn showDirectoryPicker(services: TaskServices, io: std.Io, allocator: std.mem.Al
 // In test mode, PHOTOSPHERE_TEST_DOWNLOAD_FOLDER answers the dialog for the download folder, so the smoke test for downloading several
 // assets does not block on a native dialog. Nothing is remembered when it does.
 //
-pub fn pickFolder(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, title: []const u8, folder_key: []const u8) !?[]const u8 {
+pub fn pickFolder(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, state_path: []const u8, title: []const u8, folder_key: []const u8) !?[]const u8 {
     if (test_mode.isTestMode() and std.mem.eql(u8, folder_key, "lastDownloadFolder")) {
         if (test_mode.envValue("PHOTOSPHERE_TEST_DOWNLOAD_FOLDER")) |download_folder| {
             return download_folder;
         }
     }
-    const default_path = try app_state.getFolderPath(allocator, io, folder_key);
+    const default_path = try app_state.getFolderPath(allocator, io, state_path, folder_key);
     const paths = try pickedPaths(services, io, allocator, timers, .folder, title, default_path);
     if (paths.len == 0) {
         return null;
     }
     const chosen = paths[0];
-    try app_state.updateFolderPath(allocator, io, folder_key, chosen);
+    try app_state.updateFolderPath(allocator, io, state_path, folder_key, chosen);
     return chosen;
 }
 
@@ -116,10 +116,9 @@ pub fn pickFolder(services: TaskServices, io: std.Io, allocator: std.mem.Allocat
 // remembers the folder chosen under that key. The reply is the folder's path, or null when the user cancelled.
 //
 fn pickFolderChannel(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = context;
     const title = nonEmptyString(data, "title") orelse "Select Folder";
     const folder_key = nonEmptyString(data, "folderKey") orelse "lastFolder";
-    return try optionalPathReply(allocator, try pickFolder(services, io, allocator, timers, title, folder_key));
+    return try optionalPathReply(allocator, try pickFolder(services, io, allocator, timers, context.state_path, title, folder_key));
 }
 
 //
@@ -129,13 +128,13 @@ fn pickFolderChannel(services: TaskServices, timers: Timers, io: std.Io, allocat
 // In test mode, PHOTOSPHERE_TEST_PICK_FILE_PATH answers the dialog, so the smoke test for downloading one asset does not block on a
 // native dialog. Nothing is remembered when it does.
 //
-pub fn pickFile(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, default_filename: []const u8) !?[]const u8 {
+pub fn pickFile(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, state_path: []const u8, default_filename: []const u8) !?[]const u8 {
     if (test_mode.isTestMode()) {
         if (test_mode.envValue("PHOTOSPHERE_TEST_PICK_FILE_PATH")) |pick_file_path| {
             return pick_file_path;
         }
     }
-    return try showSaveDialog(services, io, allocator, timers, default_filename);
+    return try showSaveDialog(services, io, allocator, timers, state_path, default_filename);
 }
 
 //
@@ -143,13 +142,13 @@ pub fn pickFile(services: TaskServices, io: std.Io, allocator: std.mem.Allocator
 // the path, or null when the user cancelled. This is the dialog the pick-file message shows, and the one the save-asset handler
 // shows for itself, which has no test mode answer.
 //
-pub fn showSaveDialog(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, default_filename: []const u8) !?[]const u8 {
+pub fn showSaveDialog(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, state_path: []const u8, default_filename: []const u8) !?[]const u8 {
     const paths = try pickedPaths(services, io, allocator, timers, .save_file, null, default_filename);
     if (paths.len == 0) {
         return null;
     }
     const chosen = paths[0];
-    try app_state.updateLastDownloadFolder(allocator, io, node_utils.path.dirname(chosen));
+    try app_state.updateLastDownloadFolder(allocator, io, state_path, node_utils.path.dirname(chosen));
     return chosen;
 }
 
@@ -157,11 +156,10 @@ pub fn showSaveDialog(services: TaskServices, io: std.Io, allocator: std.mem.All
 // pick-file: the payload is the suggested file name. Replies with the path chosen in a save dialog, or null when the user cancelled.
 //
 fn pickFileChannel(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The save dialog needs a suggested file name.", .{});
     }
-    return try optionalPathReply(allocator, try pickFile(services, io, allocator, timers, data.string));
+    return try optionalPathReply(allocator, try pickFile(services, io, allocator, timers, context.state_path, data.string));
 }
 
 //
@@ -169,11 +167,10 @@ fn pickFileChannel(services: TaskServices, timers: Timers, io: std.Io, allocator
 // file dialog. The reply is the paths chosen, or null when the user cancelled.
 //
 fn pickFilesChannel(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The file dialog needs a title.", .{});
     }
-    const state = try app_state.loadAppState(allocator, io);
+    const state = try app_state.loadAppState(allocator, io, services.log, context.state_path);
     const paths = try pickedPaths(services, io, allocator, timers, .open_files, data.string, state.lastFolder);
     if (paths.len == 0) {
         return try allocator.dupe(u8, "null");
@@ -186,12 +183,11 @@ fn pickFilesChannel(services: TaskServices, timers: Timers, io: std.Io, allocato
 // it (the `database-opened` event). The reply is null.
 //
 fn openDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = context;
     _ = data;
-    const database_path = (try showDirectoryPicker(services, io, allocator, timers, "Open Database")) orelse {
+    const database_path = (try showDirectoryPicker(services, io, allocator, timers, context.state_path, "Open Database")) orelse {
         return try allocator.dupe(u8, "null");
     };
-    try app_state.updateLastFolder(allocator, io, node_utils.path.dirname(database_path));
+    try app_state.updateLastFolder(allocator, io, context.state_path, node_utils.path.dirname(database_path));
 
     // Tell the page to load the database. The asset server does not need to be restarted since it handles multiple databases
     // dynamically. The menu is updated when the page calls notify-database-opened.

@@ -13,6 +13,7 @@ fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !*std
     const map = try allocator.create(std.process.Environ.Map);
     map.* = std.process.Environ.Map.init(allocator);
     try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fs.path.join(allocator, &.{ root, "config" }));
+    try map.put("PHOTOSPHERE_STATE_DIR", try std.fs.path.join(allocator, &.{ root, "config" }));
     const feedPath = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feedPath, .data = feed });
     try map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, feedPath));
@@ -85,8 +86,12 @@ test "printNotifications prints the next unseen news item once" {
     const thirdStart = memory.stdout().len;
     try cli.print_notifications.printNotifications(allocator, std.testing.io, memory.log, false);
     try std.testing.expectEqualStrings("", memory.stdout()[thirdStart..]);
-    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" }), allocator, .unlimited);
-    try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n", state);
+    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.json" }), allocator, .unlimited);
+    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, state, .{});
+    const ids = parsed.object.get("news").?.object.get("shown_news_ids").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), ids.len);
+    try std.testing.expectEqualStrings("first", ids[0].string);
+    try std.testing.expectEqualStrings("second", ids[1].string);
 }
 
 test "checkForNews returns nothing when the feed cannot be read" {
@@ -126,7 +131,7 @@ test "prints nothing when quiet is set, and does not even check" {
     try std.testing.expectEqual(@as(usize, 0), mock.callCount(.info));
 
     // The news was not even checked, so it is not recorded as shown.
-    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" })));
+    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.json" })));
 }
 
 test "does not record any update when no update is available" {
@@ -142,7 +147,7 @@ test "does not record any update when no update is available" {
 
     try cli.print_notifications.printNotifications(allocator, std.testing.io, log, false);
 
-    try std.testing.expect(try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log) == null);
+    try std.testing.expect(try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log, try std.fs.path.join(allocator, &.{ root, "config", "state.json" })) == null);
 }
 
 test "omits update line when checkForUpdates returns undefined" {

@@ -53,7 +53,7 @@ const Sandbox = struct {
     // The database the task creates.
     databasePath: []const u8,
 
-    // The path of config.yaml.
+    // The path of config.toml.
     configPath: []const u8,
 
     // The task context. The database it creates is stamped with the identifiers from here.
@@ -70,7 +70,7 @@ const Sandbox = struct {
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "create-default-database");
         try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", self.tempDir);
         self.databasePath = try std.fs.path.join(allocator, &.{ self.tempDir, "photosphere-default" });
-        self.configPath = try std.fs.path.join(allocator, &.{ self.tempDir, "config.yaml" });
+        self.configPath = try std.fs.path.join(allocator, &.{ self.tempDir, "config.toml" });
         try self.context.init(allocator, null, null);
     }
 
@@ -125,7 +125,7 @@ const Sandbox = struct {
     }
 
     //
-    // Writes a config.yaml holding the given automatic import and syncing settings.
+    // Writes a config.toml holding the given automatic import and syncing settings.
     //
     fn writeConfig(self: *Sandbox, albumId: []const u8, autoImportPauseMs: i64, syncEnabled: bool, syncOnlyOnWifi: bool, syncDatabasePath: ?[]const u8, syncPauseMs: i64) !void {
         const allocator = self.arena.allocator();
@@ -154,7 +154,7 @@ const Sandbox = struct {
                 .integer = syncPauseMs,
             },
         };
-        try test_files.writeFile(std.testing.io, self.configPath, try buildConfigYaml(allocator, config, null));
+        try node_api.config_file.saveConfigFile(allocator, std.testing.io, self.configPath, config);
     }
 };
 
@@ -254,7 +254,7 @@ test "keeps the databases the user already has" {
         .description = "Trip photos",
         .path = "holiday",
     });
-    try markDatabaseOpened(allocator, io, "Holiday");
+    try markDatabaseOpened(allocator, io, try std.fs.path.join(allocator, &.{ sandbox.tempDir, "state.json" }), "Holiday");
 
     _ = try sandbox.run(log, true);
 
@@ -262,7 +262,7 @@ test "keeps the databases the user already has" {
     try std.testing.expectEqual(@as(usize, 2), paths.len);
     try std.testing.expectEqualStrings("holiday", paths[0]);
     try std.testing.expectEqualStrings(sandbox.databasePath, paths[1]);
-    const recentNames = try getRecentDatabaseNames(allocator, io);
+    const recentNames = try getRecentDatabaseNames(allocator, io, try std.fs.path.join(allocator, &.{ sandbox.tempDir, "state.json" }));
     try std.testing.expectEqual(@as(usize, 1), recentNames.len);
     try std.testing.expectEqualStrings("Holiday", recentNames[0]);
 }
@@ -299,11 +299,11 @@ test "keeps the database the user had open" {
         .description = "Trip photos",
         .path = "holiday",
     });
-    try setLastDatabase(allocator, io, "holiday");
+    try setLastDatabase(allocator, io, try std.fs.path.join(allocator, &.{ sandbox.tempDir, "state.json" }), "holiday");
 
     _ = try sandbox.run(log, true);
 
-    try std.testing.expectEqualStrings("holiday", (try getLastDatabase(allocator, io)).?);
+    try std.testing.expectEqualStrings("holiday", (try getLastDatabase(allocator, io, try std.fs.path.join(allocator, &.{ sandbox.tempDir, "state.json" }))).?);
 }
 
 test "recording the same database twice does not list it twice" {

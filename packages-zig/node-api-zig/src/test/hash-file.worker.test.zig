@@ -105,7 +105,7 @@ const HandlerTest = struct {
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "task-1", .{
             .context = &self.messages,
             .function = MessageCounter.send,
-        }, 10);
+        }, 10, "", "");
         self.mediaTools = try MediaTools.init();
         self.toolRunner = self.mediaTools.runner();
     }

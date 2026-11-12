@@ -15,6 +15,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-view
 mkdir -p /tmp/psi-cli-dbs-view/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-view/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-view/config
 cat > /tmp/psi-cli-dbs-view/config/databases.toml <<'TOML'
 [[databases]]
 name = "view-db"

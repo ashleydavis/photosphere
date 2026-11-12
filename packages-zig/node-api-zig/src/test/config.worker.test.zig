@@ -1,7 +1,7 @@
 //
 // Tests for config.worker.zig.
 //
-// Tests for the mobile config.yaml handlers.
+// Tests for the mobile config.toml handlers.
 //
 // These run against the real filesystem rather than a mock, for the same reason the databases.toml
 // tests do: the point of the handlers is the bytes they put on disk. The settings are read by the
@@ -30,8 +30,7 @@ const errors = utils.errors;
 const config_worker = node_api.config_worker;
 const readConfigHandler = config_worker.readConfigHandler;
 const writeConfigHandler = config_worker.writeConfigHandler;
-const readConfigFromStorage = config_worker.readConfigFromStorage;
-const buildConfigYaml = config_worker.buildConfigYaml;
+const readConfig = config_worker.readConfig;
 const TestTaskContext = test_task_context.TestTaskContext;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import_mobile.DEFAULT_AUTO_IMPORT_PAUSE_MS;
@@ -40,7 +39,7 @@ const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
 //
 // The path the tests read and write, relative to the temporary sandbox below.
 //
-const CONFIG_PATH = "config.yaml";
+const CONFIG_PATH = "config.toml";
 
 //
 // A temporary working directory standing in for the app's storage sandbox, the directory the test switches back to
@@ -113,8 +112,7 @@ const Sandbox = struct {
     // Reads the config file back as a parsed document.
     //
     fn readConfigDocument(self: *Sandbox) !std.json.Value {
-        const text = try std.Io.Dir.cwd().readFileAlloc(self.io, CONFIG_PATH, self.arenaAllocator(), .unlimited);
-        return (try node_utils.yaml.load(self.arenaAllocator(), text));
+        return node_utils.fs.readToml(self.arenaAllocator(), self.io, CONFIG_PATH);
     }
 
     //
@@ -279,7 +277,7 @@ test "a corrupt config file reads as the defaults rather than throwing" {
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfigText("sync:\n  enabled: true\n   this: [is not yaml");
+    try sandbox.writeConfigText("sync = = 1\n");
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
 
@@ -297,7 +295,7 @@ test "a corrupt config file reports that no section could be read" {
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfigText("not: [valid");
+    try sandbox.writeConfigText("oops = = 1\n");
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
 
@@ -311,7 +309,7 @@ test "writing then reading round-trips the syncing settings and the pacing" {
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"photosphere-default","pauseBetweenRunsMs":60000}}
+        \\{"configPath":"config.toml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"photosphere-default","pauseBetweenRunsMs":60000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -328,7 +326,7 @@ test "writing then reading round-trips the automatic import settings and the def
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"},{"type":"folder","path":"/photos/holiday","recurse":false}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000}}
+        \\{"configPath":"config.toml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"},{"type":"folder","path":"/photos/holiday","recurse":false}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -353,7 +351,7 @@ test "writing then reading round-trips both sections written together" {
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000},"sync":{"settings":{"enabled":true,"onlyOnWifi":true},"databasePath":"photosphere-default","pauseBetweenRunsMs":60000}}
+        \\{"configPath":"config.toml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000},"sync":{"settings":{"enabled":true,"onlyOnWifi":true},"databasePath":"photosphere-default","pauseBetweenRunsMs":60000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -370,7 +368,7 @@ test "writing then reading says a file that is there is there, even when it says
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","sync":{"settings":{"enabled":false,"onlyOnWifi":false},"pauseBetweenRunsMs":300000}}
+        \\{"configPath":"config.toml","sync":{"settings":{"enabled":false,"onlyOnWifi":false},"pauseBetweenRunsMs":300000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -387,10 +385,10 @@ test "a write of one section leaves the others alone: writing the syncing settin
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"holiday-album"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000}}
+        \\{"configPath":"config.toml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"holiday-album"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000}}
     );
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"pauseBetweenRunsMs":60000}}
+        \\{"configPath":"config.toml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"pauseBetweenRunsMs":60000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -408,10 +406,10 @@ test "a write of one section leaves the others alone: writing the automatic impo
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"the-database-being-synced","pauseBetweenRunsMs":60000}}
+        \\{"configPath":"config.toml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"the-database-being-synced","pauseBetweenRunsMs":60000}}
     );
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":false,"sources":[]},"pauseBetweenRunsMs":5000}}
+        \\{"configPath":"config.toml","autoImport":{"settings":{"enabled":false,"sources":[]},"pauseBetweenRunsMs":5000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -430,9 +428,9 @@ test "a write of one section leaves the others alone: keeps settings the task kn
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfigText("theme: dark\ndeveloper_mode: true\nshow_fps_indicator: true\nsaved_searches:\n  - beach\n");
+    try sandbox.writeConfigText("theme = \"dark\"\ndeveloper_mode = true\nshow_fps_indicator = true\nsaved_searches = [\"beach\"]\n");
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
+        \\{"configPath":"config.toml","sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
     );
 
     const document = try sandbox.readConfigDocument();
@@ -456,7 +454,7 @@ test "whether a feature's settings have been written: writing only the automatic
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"pauseBetweenRunsMs":5000}}
+        \\{"configPath":"config.toml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"pauseBetweenRunsMs":5000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -471,7 +469,7 @@ test "whether a feature's settings have been written: writing only the syncing s
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
+        \\{"configPath":"config.toml","sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -485,7 +483,7 @@ test "whether a feature's settings have been written: a file holding only anothe
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfigText("theme: dark\ndesktop:\n  last_folder: /home/someone/photos\n");
+    try sandbox.writeConfigText("theme = \"dark\"\n");
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
 
@@ -499,7 +497,7 @@ test "whether a feature's settings have been written: both are claimed once both
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":false,"sources":[]},"pauseBetweenRunsMs":5000},"sync":{"settings":{"enabled":false,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
+        \\{"configPath":"config.toml","autoImport":{"settings":{"enabled":false,"sources":[]},"pauseBetweenRunsMs":5000},"sync":{"settings":{"enabled":false,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -516,7 +514,7 @@ test "the file on disk is YAML with snake_case keys nested by feature" {
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":30000},"sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":300000}}
+        \\{"configPath":"config.toml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":30000},"sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":300000}}
     );
 
     const document = try sandbox.readConfigDocument();
@@ -541,13 +539,13 @@ test "values a hand-edited file may hold: a gap of zero or less falls back to th
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfigText("auto_import:\n  enabled: true\n  pause_between_runs_ms: 0\nsync:\n  enabled: true\n  pause_between_runs_ms: 0\n");
+    try sandbox.writeConfigText("[auto_import]\nenabled = true\npause_between_runs_ms = 0\n\n[sync]\nenabled = true\npause_between_runs_ms = 0\n");
 
     const zeroGap = try sandbox.readConfig(log, CONFIG_PATH);
     try expectInteger(DEFAULT_AUTO_IMPORT_PAUSE_MS, zeroGap, "autoImport.pauseBetweenRunsMs");
     try expectInteger(DEFAULT_SYNC_PAUSE_MS, zeroGap, "sync.pauseBetweenRunsMs");
 
-    try sandbox.writeConfigText("auto_import:\n  pause_between_runs_ms: -1000\nsync:\n  pause_between_runs_ms: -1000\n");
+    try sandbox.writeConfigText("[auto_import]\npause_between_runs_ms = -1000\n\n[sync]\npause_between_runs_ms = -1000\n");
 
     const negativeGap = try sandbox.readConfig(log, CONFIG_PATH);
     try expectInteger(DEFAULT_AUTO_IMPORT_PAUSE_MS, negativeGap, "autoImport.pauseBetweenRunsMs");
@@ -560,7 +558,7 @@ test "values a hand-edited file may hold: a value that is not a boolean is not t
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfigText("sync:\n  enabled: \"false\"\n  only_on_wifi: \"no\"\n");
+    try sandbox.writeConfigText("[sync]\nenabled = \"false\"\nonly_on_wifi = \"no\"\n");
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
 
@@ -573,7 +571,7 @@ test "values a hand-edited file may hold: a missing setting falls back rather th
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfigText("sync:\n  enabled: true\n");
+    try sandbox.writeConfigText("[sync]\nenabled = true\n");
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
 
@@ -586,16 +584,16 @@ test "values a hand-edited file may hold: a malformed source is dropped rather t
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfigText("auto_import:\n  enabled: true\n  sources:\n    - type: device-album\n      album_id: all\n    - type: folder\n");
+    try sandbox.writeConfigText("[auto_import]\nenabled = true\n\n[[auto_import.sources]]\ntype = \"device-album\"\nalbum_id = \"all\"\n\n[[auto_import.sources]]\ntype = \"folder\"\n");
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectOneAlbum("all", result, "autoImport.settings.sources");
 }
 
-// buildConfigYaml is what a host-side script uses to seed a device's settings, so it has to produce exactly the file the
+// saveConfigFile is what a host-side script uses to seed a device's settings, so it has to produce exactly the file the
 // handler would have written.
-test "buildConfigYaml produces a document the reader reads back as the input" {
+test "saveConfigFile produces a document the reader reads back as the input" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     const log = utils.mute_log.MuteLog.init();
@@ -622,11 +620,9 @@ test "buildConfigYaml produces a document the reader reads back as the input" {
             .integer = 120000,
         },
     };
-    const rendered = try buildConfigYaml(allocator, config, null);
+    try node_api.config_file.saveConfigFile(allocator, sandbox.io, CONFIG_PATH, config);
 
-    try sandbox.writeConfigText(rendered);
-
-    const contents = (try readConfigFromStorage(allocator, sandbox.io, log, CONFIG_PATH)).config;
+    const contents = (try readConfig(allocator, sandbox.io, log, CONFIG_PATH)).config;
 
     try std.testing.expectEqual(true, contents.autoImport.settings.enabled);
     try std.testing.expect(contents.autoImport.defaultDatabasePath == null);
@@ -666,7 +662,7 @@ test "bad input to the handlers: a write with nothing to write fails rather than
     defer sandbox.deinit();
 
     try expectThrown("write-config was given no autoImport section, no sync section and no settings to write, so there is nothing to write.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.yaml"}
+        \\{"configPath":"config.toml"}
     ), sandbox.taskContext.context.taskContext()));
 }
 
@@ -677,7 +673,7 @@ test "bad input to the handlers: a setting with no key fails rather than being w
     defer sandbox.deinit();
 
     try expectThrown("write-config was given a setting with no key.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.yaml","entries":[{"key":"","value":true}]}
+        \\{"configPath":"config.toml","entries":[{"key":"","value":true}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 
@@ -688,10 +684,10 @@ test "bad input to the handlers: a write of a section with no settings fails rat
     defer sandbox.deinit();
 
     try expectThrown("autoImport.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.yaml","autoImport":{"pauseBetweenRunsMs":5000}}
+        \\{"configPath":"config.toml","autoImport":{"pauseBetweenRunsMs":5000}}
     ), sandbox.taskContext.context.taskContext()));
     try expectThrown("sync.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.yaml","sync":{"pauseBetweenRunsMs":5000}}
+        \\{"configPath":"config.toml","sync":{"pauseBetweenRunsMs":5000}}
     ), sandbox.taskContext.context.taskContext()));
 }
 
@@ -711,14 +707,14 @@ test "bad input to the handlers: a config path that is not a string fails with a
 
 // The settings the interface names, which is how a phone reads and writes what the desktop app and the CLI keep in this same
 // file. Each one goes to the section the format puts it in. A key this file does not hold is not this handler's business: the
-// routing sends it to state.yaml instead.
+// routing sends it to state.json instead.
 test "the settings the interface names: a setting the format declares is written into its own section and read back by name" {
     var sandbox: Sandbox = undefined;
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"dark"}]}
+        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"dark"}]}
     );
 
     try expectString("dark", try sandbox.readConfigDocument(), "theme");
@@ -731,7 +727,7 @@ test "the settings the interface names: the searches the user saved are written 
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"savedSearches","value":["beach","dogs"]}]}
+        \\{"configPath":"config.toml","entries":[{"key":"savedSearches","value":["beach","dogs"]}]}
     );
 
     try expectStrings(&.{ "beach", "dogs" }, try sandbox.readConfigDocument(), "saved_searches");
@@ -744,10 +740,10 @@ test "the settings the interface names: an entry with no value clears the settin
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"dark"}]}
+        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"dark"}]}
     );
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"theme"}]}
+        \\{"configPath":"config.toml","entries":[{"key":"theme"}]}
     );
 
     try expectMissing(try sandbox.readConfigDocument(), "theme");
@@ -760,11 +756,11 @@ test "the settings the interface names: writing a setting leaves a feature's set
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"the-database","pauseBetweenRunsMs":90000}}
+        \\{"configPath":"config.toml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"the-database","pauseBetweenRunsMs":90000}}
     );
 
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"light"}]}
+        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"light"}]}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -784,7 +780,7 @@ test "the settings the interface names: writing a setting does not make it look 
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"light"}]}
+        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"light"}]}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -793,7 +789,7 @@ test "the settings the interface names: writing a setting does not make it look 
     try expectMissing(try sandbox.readConfigDocument(), "sync");
 }
 
-// The routing sends it to state.yaml, so config.yaml never carries it and reading it back through this handler has to come up
+// The routing sends it to state.json, so config.toml never carries it and reading it back through this handler has to come up
 // empty rather than finding a stale copy.
 test "the settings the interface names: a setting the state file holds is not answered from here" {
     var sandbox: Sandbox = undefined;
@@ -801,7 +797,7 @@ test "the settings the interface names: a setting the state file holds is not an
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"dark"}]}
+        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"dark"}]}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -815,7 +811,7 @@ test "the settings the interface names: a switch is written as a boolean and rea
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"developerMode","value":true}]}
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode","value":true}]}
     );
 
     try expectBool(true, try sandbox.readConfig(log, CONFIG_PATH), "settings.developerMode");
@@ -827,7 +823,7 @@ test "the settings the interface names: the places automatic import watches are 
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfig(log, 
-        \\{"configPath":"config.yaml","entries":[{"key":"autoImportSources","value":[{"type":"folder","path":"/photos","recurse":true}]}]}
+        \\{"configPath":"config.toml","entries":[{"key":"autoImportSources","value":[{"type":"folder","path":"/photos","recurse":true}]}]}
     );
 
     const sources = at(try sandbox.readConfig(log, CONFIG_PATH), "settings.autoImportSources").?.array.items;
@@ -843,7 +839,7 @@ test "bad input to the handlers: a place to watch that is neither a folder nor a
     defer sandbox.deinit();
 
     try expectThrown("The config setting \"autoImportSources\" was given a place to watch that is not a folder or a device album.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.yaml","entries":[{"key":"autoImportSources","value":[{"type":"cloud"}]}]}
+        \\{"configPath":"config.toml","entries":[{"key":"autoImportSources","value":[{"type":"cloud"}]}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 
@@ -854,7 +850,7 @@ test "bad input to the handlers: a list holding something other than text fails 
     defer sandbox.deinit();
 
     try expectThrown("The config setting \"savedSearches\" was given a list that holds something other than text.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.yaml","entries":[{"key":"savedSearches","value":["beach",3]}]}
+        \\{"configPath":"config.toml","entries":[{"key":"savedSearches","value":["beach",3]}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 
@@ -865,7 +861,7 @@ test "bad input to the handlers: a value no setting can hold fails rather than b
     defer sandbox.deinit();
 
     try expectThrown("The config setting \"theme\" cannot hold that kind of value.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.yaml","entries":[{"key":"theme","value":{"name":"dark"}}]}
+        \\{"configPath":"config.toml","entries":[{"key":"theme","value":{"name":"dark"}}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 
@@ -876,6 +872,6 @@ test "bad input to the handlers: a number for a switch fails rather than being s
     defer sandbox.deinit();
 
     try expectThrown("The config setting \"developerMode\" cannot hold a value of that type.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.yaml","entries":[{"key":"developerMode","value":1}]}
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode","value":1}]}
     ), sandbox.taskContext.context.taskContext()));
 }

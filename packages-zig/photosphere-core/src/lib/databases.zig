@@ -158,9 +158,8 @@ pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, base_dir: [
 fn removeDatabaseEntry(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = services;
     _ = timers;
-    _ = context;
     const name = try databaseName(data);
-    try databases_config.removeDatabaseEntry(allocator, io, name);
+    try databases_config.removeDatabaseEntry(allocator, io, context.state_path, name);
     return try allocator.dupe(u8, "null");
 }
 
@@ -211,7 +210,6 @@ fn addDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: st
 fn updateDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = services;
     _ = timers;
-    _ = context;
     const original_name = json.getString(data, "originalName") orelse {
         return utils.errors.throwError("The database needs a name.", .{});
     };
@@ -222,7 +220,7 @@ fn updateDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator:
         return utils.errors.throwError("The request needs the database entry to save.", .{});
     };
     const entry = try entryFromJson(entry_data);
-    try databases_config.updateDatabaseEntry(allocator, io, original_name, entry);
+    try databases_config.updateDatabaseEntry(allocator, io, context.state_path, original_name, entry);
     return try allocator.dupe(u8, "null");
 }
 
@@ -274,7 +272,7 @@ fn setDatabaseOrigin(services: TaskServices, timers: Timers, io: std.Io, allocat
         if (!optionalStringsEqual(found_entry.origin, origin)) {
             var updated_entry = found_entry;
             updated_entry.origin = origin;
-            try databases_config.updateDatabaseEntry(allocator, io, found_entry.name, updated_entry);
+            try databases_config.updateDatabaseEntry(allocator, io, context.state_path, found_entry.name, updated_entry);
         }
     }
     log.event(try std.fmt.allocPrint(allocator, "Database origin updated for {s}", .{node_utils.path.basename(database_path)}));

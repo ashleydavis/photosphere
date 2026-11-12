@@ -156,7 +156,7 @@ const ScannerTest = struct {
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session", "task", .{
             .context = null,
             .function = ignoreMessage,
-        }, 10);
+        }, 10, "", "");
     }
 
     //

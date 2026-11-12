@@ -15,6 +15,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-remove
 mkdir -p /tmp/psi-cli-dbs-remove/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-remove/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-remove/config
 cat > /tmp/psi-cli-dbs-remove/config/databases.toml <<'TOML'
 [[databases]]
 name = "keep-db"

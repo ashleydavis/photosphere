@@ -54,6 +54,7 @@ photosphere_platform_start() {
         CFFIXED_USER_HOME="$test_dir/home" \
         PHOTOSPHERE_TEST_MODE=1 \
         PHOTOSPHERE_CONFIG_DIR="$test_dir/config" \
+        PHOTOSPHERE_STATE_DIR="$test_dir/config" \
         PHOTOSPHERE_DATA_DIR="$test_dir/files" \
         PHOTOSPHERE_CACHE_DIR="$test_dir/cache" \
         PHOTOSPHERE_VAULT_DIR="$test_dir/vault" \
@@ -133,7 +134,7 @@ macos_reset_path() {
 }
 
 #
-# Writes the syncing settings into the sync section of the app's config.yaml, keeping every other section the file already has. The pause
+# Writes the syncing settings into the sync section of the app's config.toml, keeping every other section the file already has. The pause
 # is left out, so the app's default applies, when none is given. The old section is cut out with one sed expression per -e, because the
 # BSD sed of a Mac refuses a block whose last command is not followed by a newline.
 # Usage: macos_seed_sync_config <enabled true|false> <only_on_wifi true|false> [pause_ms] [database_path]
@@ -155,23 +156,28 @@ macos_seed_sync_config() {
         return 1
     fi
     mkdir -p "$TMP_DIR/config" || return 1
-    local rendered
-    rendered="$(mktemp)"
-    if [ -f "$TMP_DIR/config/config.yaml" ]; then
-        sed -e '/^sync:/,/^[^[:space:]]/{' -e '/^sync:/d' -e '/^[[:space:]]/d' -e '}' "$TMP_DIR/config/config.yaml" > "$rendered" || return 1
-    fi
+    local replacement
+    replacement="$(mktemp)"
     {
-        echo "sync:"
-        echo "  enabled: $enabled"
-        echo "  only_on_wifi: $only_on_wifi"
+        echo "[sync]"
+        echo "enabled = $enabled"
+        echo "only_on_wifi = $only_on_wifi"
         if [ -n "$pause_ms" ]; then
-            echo "  pause_between_runs_ms: $pause_ms"
+            echo "pause_between_runs_ms = $pause_ms"
         fi
         if [ -n "$database_path" ]; then
-            echo "  database_path: $(jq -n --arg path "$database_path" '$path')"
+            echo "database_path = $(jq -n --arg path "$database_path" '$path')"
         fi
-    } >> "$rendered"
-    mv "$rendered" "$TMP_DIR/config/config.yaml"
+    } > "$replacement"
+    local rendered
+    rendered="$(mktemp)"
+    if [ -f "$TMP_DIR/config/config.toml" ]; then
+        replace_config_table sync "$replacement" < "$TMP_DIR/config/config.toml" > "$rendered" || return 1
+    else
+        cat "$replacement" > "$rendered"
+    fi
+    rm -f "$replacement"
+    mv "$rendered" "$TMP_DIR/config/config.toml"
 }
 
 #
@@ -287,7 +293,7 @@ macos_apply_settings_change() {
 }
 
 #
-# Has the app open the given database when it starts, by naming it as the database to reopen in its state.yaml, keeping the recents
+# Has the app open the given database when it starts, by naming it as the database to reopen in its state.json, keeping the recents
 # macos_seed_databases_config wrote. A desktop syncs the database that is open, so this gives the sync a database to push. Written
 # before the app starts, after macos_seed_databases_config. Usage: macos_open_database_on_launch <database_path>
 #
@@ -432,7 +438,7 @@ macos_library_remove() {
 }
 
 #
-# Writes the automatic import settings into the auto_import section of the app's config.yaml, keeping every other section the file
+# Writes the automatic import settings into the auto_import section of the app's config.toml, keeping every other section the file
 # already has, so the import watches the library and nothing else. The last argument names a photo the library holds on a phone, where
 # the device must know an album before it can be watched, and is not needed here.
 # Usage: macos_seed_library_auto_import_config <enabled true|false> <default_database_path or ""> <pause_ms> <library> <photo_name_in_it>
@@ -451,24 +457,29 @@ macos_seed_library_auto_import_config() {
         return 1
     fi
     mkdir -p "$TMP_DIR/config" "$library" || return 1
+    local replacement
+    replacement="$(mktemp)"
+    {
+        echo "[auto_import]"
+        echo "enabled = $enabled"
+        echo "pause_between_runs_ms = $pause_ms"
+        if [ -n "$default_database_path" ]; then
+            echo "default_database_path = $(jq -n --arg path "$default_database_path" '$path')"
+        fi
+        echo "[[auto_import.sources]]"
+        echo "type = \"folder\""
+        echo "path = $(jq -n --arg path "$library" '$path')"
+        echo "recurse = true"
+    } > "$replacement"
     local rendered
     rendered="$(mktemp)"
-    if [ -f "$TMP_DIR/config/config.yaml" ]; then
-        sed -e '/^auto_import:/,/^[^[:space:]]/{/^auto_import:/d;/^[[:space:]]/d;}' "$TMP_DIR/config/config.yaml" > "$rendered"
+    if [ -f "$TMP_DIR/config/config.toml" ]; then
+        replace_config_table auto_import "$replacement" < "$TMP_DIR/config/config.toml" > "$rendered"
+    else
+        cat "$replacement" > "$rendered"
     fi
-    {
-        echo "auto_import:"
-        echo "  enabled: $enabled"
-        echo "  pause_between_runs_ms: $pause_ms"
-        echo "  sources:"
-        echo "    - type: folder"
-        echo "      path: $(jq -n --arg path "$library" '$path')"
-        echo "      recurse: true"
-        if [ -n "$default_database_path" ]; then
-            echo "  default_database_path: $(jq -n --arg path "$default_database_path" '$path')"
-        fi
-    } >> "$rendered"
-    mv "$rendered" "$TMP_DIR/config/config.yaml"
+    rm -f "$replacement"
+    mv "$rendered" "$TMP_DIR/config/config.toml"
 }
 
 #
@@ -545,10 +556,10 @@ macos_seed_database() {
 }
 
 #
-# Writes the app's databases.toml and the databases section of its state.yaml into its settings directory, from outside the app and
+# Writes the app's databases.toml and the databases section of its state.json into its settings directory, from outside the app and
 # before it starts. The first two arguments are JSON: the databases as an array of {name, path} (description, origin, s3Key,
 # encryptionKey and geocodingKey optional), written to databases.toml, and the recents as an array of names, empty when omitted. The
-# third is the path of the database the app reopens on launch, left out of state.yaml when omitted.
+# third is the path of the database the app reopens on launch, left out of state.json when omitted.
 # Usage: macos_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
 #
 macos_seed_databases_config() {

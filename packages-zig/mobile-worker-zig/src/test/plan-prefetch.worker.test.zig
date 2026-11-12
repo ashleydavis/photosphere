@@ -38,7 +38,7 @@ const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const ReportingHost = test_hosts.ReportingHost;
 const planPrefetchHandler = mobile_worker.plan_prefetch_worker.planPrefetchHandler;
 const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
-const readConfigFromStorage = node_api.config_worker.readConfigFromStorage;
+const readConfig = node_api.config_worker.readConfig;
 const buildConfigYaml = node_api.config_worker.buildConfigYaml;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const at = @import("sandbox.zig").at;
@@ -49,12 +49,12 @@ const at = @import("sandbox.zig").at;
 const DATABASE_PATH = "photosphere-default";
 
 //
-// Writes the syncing settings into the temporary sandbox's config.yaml, exactly as the app would,
+// Writes the syncing settings into the temporary sandbox's config.toml, exactly as the app would,
 // putting back only the syncing section so whatever automatic import was told to watch survives.
 //
 fn writeSyncSettings(sandbox: *Sandbox, log: ILog, enabled: bool, onlyOnWifi: bool, pauseBetweenRunsMs: i64) !void {
     const allocator = sandbox.arenaAllocator();
-    var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
+    var config = (try readConfig(allocator, sandbox.io, log, "config.toml")).config;
     config.sync = .{
         .settings = .{
             .enabled = enabled,
@@ -65,7 +65,7 @@ fn writeSyncSettings(sandbox: *Sandbox, log: ILog, enabled: bool, onlyOnWifi: bo
             .integer = pauseBetweenRunsMs,
         },
     };
-    try sandbox.writeFile("config.yaml", try buildConfigYaml(allocator, config, null));
+    try node_api.config_file.saveConfigFile(allocator, sandbox.io, "config.toml", config);
 }
 
 //
@@ -74,7 +74,7 @@ fn writeSyncSettings(sandbox: *Sandbox, log: ILog, enabled: bool, onlyOnWifi: bo
 //
 fn writeDefaultDatabase(sandbox: *Sandbox, log: ILog, defaultDatabasePath: ?[]const u8) !void {
     const allocator = sandbox.arenaAllocator();
-    var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
+    var config = (try readConfig(allocator, sandbox.io, log, "config.toml")).config;
     config.autoImport = .{
         .settings = .{
             .enabled = true,
@@ -91,7 +91,7 @@ fn writeDefaultDatabase(sandbox: *Sandbox, log: ILog, defaultDatabasePath: ?[]co
             .integer = 30000,
         },
     };
-    try sandbox.writeFile("config.yaml", try buildConfigYaml(allocator, config, null));
+    try node_api.config_file.saveConfigFile(allocator, sandbox.io, "config.toml", config);
 }
 
 //

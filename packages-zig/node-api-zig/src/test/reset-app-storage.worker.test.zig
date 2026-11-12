@@ -104,7 +104,7 @@ test "empties the config and cache directories and leaves the directories in pla
     const configDir = try std.fs.path.join(allocator, &.{ tempDir, "config" });
     const cacheDir = try std.fs.path.join(allocator, &.{ tempDir, "cache" });
     try writeTestFile(allocator, io, configDir, "databases.toml", "databases = []");
-    try writeTestFile(allocator, io, configDir, "config.yaml", "theme: dark\n");
+    try writeTestFile(allocator, io, configDir, "config.toml", "theme: dark\n");
     try writeTestFile(allocator, io, cacheDir, "hashes.dat", "hashes");
     try useDirectories(configDir, cacheDir);
 
@@ -249,7 +249,7 @@ test "empties a phone's data directory as well, where the databases are, when it
     try writeTestFile(allocator, io, try std.fs.path.join(allocator, &.{ dataDir, "test-db", ".db" }), "files.dat", "bytes");
     try useDirectories(configDir, cacheDir);
 
-    const result = try resetAppStorage(allocator, io, dataDir);
+    const result = try resetAppStorage(allocator, io, dataDir, .{ .configPath = "", .statePath = "" });
 
     try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, configDir)).len);
     try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, dataDir)).len);
@@ -277,7 +277,7 @@ test "empties a phone's data directory once when the cache directory is the same
     try writeTestFile(allocator, io, try std.fs.path.join(allocator, &.{ sandboxDir, "test-db" }), "files.dat", "bytes");
     try useDirectories(configDir, sandboxDir);
 
-    const result = try resetAppStorage(allocator, io, sandboxDir);
+    const result = try resetAppStorage(allocator, io, sandboxDir, .{ .configPath = "", .statePath = "" });
 
     try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, sandboxDir)).len);
     try std.testing.expectEqual(@as(u64, 1), result.entriesRemoved);

@@ -161,6 +161,7 @@ test "resolveDatabaseOption leaves a --db value that names a database record, an
     var environment = std.process.Environ.Map.init(allocator);
     try environment.put("PHOTOSPHERE_DATA_DIR", dataDir);
     try environment.put("PHOTOSPHERE_CONFIG_DIR", configDir);
+    try environment.put("PHOTOSPHERE_STATE_DIR", configDir);
     const previous = node_utils.process_env.getEnvironMap();
     node_utils.process_env.setEnvironMap(&environment);
     defer node_utils.process_env.setEnvironMap(previous);

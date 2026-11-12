@@ -70,7 +70,7 @@ test "asking for the query again does not start another asset server" {
 
 test "the query says the saved theme" {
     var app: TestApp = undefined;
-    try app.startWithTasksAndConfigFile(&.{}, "theme: dark\n");
+    try app.startWithTasksAndConfigFile(&.{}, "theme = \"dark\"\n");
     defer app.stop();
 
     const query = try app.native_app.uiQuery(std.testing.allocator);

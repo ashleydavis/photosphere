@@ -74,6 +74,7 @@ const IToolsTestEnvironment = struct {
             try self.environ_map.put("PATH", searchPath);
         }
         try self.environ_map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
+        try self.environ_map.put("PHOTOSPHERE_STATE_DIR", configDir);
         try self.environ_map.put("PHOTOSPHERE_CACHE_DIR", try std.fs.path.join(allocator, &.{ self.root, "cache" }));
         try self.environ_map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
         try self.environ_map.put("PHOTOSPHERE_VAULT_DIR", try helpers.emptySharedVaultDir(allocator));

@@ -100,7 +100,7 @@ Two toggles on the configuration dialog control automatic syncing, on every plat
 
 Neither affects a sync the user asks for explicitly, and neither affects the CLI, which syncs when the command says to.
 
-**They live in the `sync` section of `config.yaml`**, in the app's storage sandbox on mobile and in `~/.config/photosphere` on desktop and the CLI. A file there is readable by the native loop that runs while the app is off screen, which has to find out whether syncing is switched on at all before it does anything. The [configuration file](https://github.com/ashleydavis/photosphere/wiki/Configuration-File) page in the wiki describes the whole file.
+**They live in the `sync` section of `config.toml`**, in the app's storage sandbox on mobile and in `~/.config/photosphere` on desktop and the CLI. A file there is readable by the native loop that runs while the app is off screen, which has to find out whether syncing is switched on at all before it does anything. The [configuration file](https://github.com/ashleydavis/photosphere/wiki/Configuration-File) page in the wiki describes the whole file.
 
 The section holds the two toggles and the gap between passes:
 
@@ -152,7 +152,7 @@ Only the periodic background sync waits. A sync the user asks for, and the one a
 
 ## What gets synced in the background on mobile
 
-The database the app last opened, recorded in `sync.database_path` as it is opened. Failing that, the one automatic import writes to, from `auto_import.default_database_path`. Both are in `config.yaml`, so resolving this costs one file read rather than two.
+The database the app last opened, recorded in `sync.database_path` as it is opened. Failing that, the one automatic import writes to, from `auto_import.default_database_path`. Both are in `config.toml`, so resolving this costs one file read rather than two.
 
 The opened one comes first because it is what the user is actually using, and because syncing must not need automatic import switched on to have anything to push. The import's database is the fallback for a phone that has been importing in the background without anybody opening it.
 
@@ -239,7 +239,7 @@ End to end:
 | `85-consolidate` (CLI) | Sync working after consolidation where it refused before. |
 | `86-multi-device` (CLI) | Two databases connected to one remote each end up with the other's photos. |
 | `bun run test:cli:sync` | Several processes syncing one database at once. |
-| `24-sync-settings` (Electron) | Each toggle recomputes whether syncing is permitted and pushes that to the main process, and both values persist to the `sync` section of `config.yaml`. |
+| `24-sync-settings` (Electron) | Each toggle recomputes whether syncing is permitted and pushes that to the main process, and both values persist to the `sync` section of `config.toml`. |
 | `36-consolidate-database` (Electron) | Consolidating through the UI leaves ordinary sync working. |
 | `45-s3-share-replica-sync` (mobile, Android) | An edit made on the phone reaching an encrypted S3 origin, and the early-out firing when there is nothing to sync. |
 | `50-background-sync` (mobile, Android) | A photo imported while the app is backgrounded, and again while the screen is off, reaching an S3 origin without the app being opened. With **Enable syncing** switched off nothing reaches the origin while the app and its service are still running; switched back on, the same photo arrives. Everything is measured by reading the bucket, because a backgrounded WebView may have its socket to the harness suspended, which is the exact moment the test cares about. |

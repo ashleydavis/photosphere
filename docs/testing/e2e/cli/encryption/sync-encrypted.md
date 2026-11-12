@@ -16,6 +16,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-encryption-sync-encrypted
 mkdir -p /tmp/psi-cli-encryption-sync-encrypted/config /tmp/psi-cli-encryption-sync-encrypted/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-encryption-sync-encrypted/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-encryption-sync-encrypted/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-encryption-sync-encrypted/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 psi init --db /tmp/psi-cli-encryption-sync-encrypted/original --key sync-enc-key --generate-key --yes

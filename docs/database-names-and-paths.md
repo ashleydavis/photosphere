@@ -20,7 +20,7 @@ Each database in the list is a `[[databases]]` table in `databases.toml`, called
 - `origin`: the path of the database this database syncs with, mirrored from the database's own `.db/config.json`.
 - `s3_key`, `encryption_key`, `geocoding_key`: names of vault secrets.
 
-`databases.toml` holds only the database records. The recent databases and the database to reopen at the next start are in [state.yaml](#stateyaml).
+`databases.toml` holds only the database records. The recent databases and the database to reopen at the next start are in [state.json](#stateyaml).
 
 ## The name
 
@@ -119,7 +119,7 @@ Paths are compared character for character. So `/home/me/photos` and `/home/me/p
 - the UI marking which database is open and which is the default;
 - the UI offering origins.
 
-What is stored is what was given. `databases.last_opened_path` in `state.yaml`, a database record's `path` and an `origin` are all written as the string the user typed or picked, after trimming.
+What is stored is what was given. `databases.last_opened_path` in `state.json`, a database record's `path` and an `origin` are all written as the string the user typed or picked, after trimming.
 
 ### Origin
 
@@ -159,7 +159,7 @@ What the folder picker returns:
 
 ## The default database
 
-- Where: `auto_import.default_database_path` in `config.yaml`, otherwise `<data dir>/dbs/photosphere-default`, in the same [data directory](#simple-names-and-the-data-directory) simple names resolve against.
+- Where: `auto_import.default_database_path` in `config.toml`, otherwise `<data dir>/dbs/photosphere-default`, in the same [data directory](#simple-names-and-the-data-directory) simple names resolve against.
 - Desktop and mobile both look for it in that same directory and check it exists there.
 - Made on desktop when automatic import starts. On mobile it is the first step of the automatic import plan.
 - Recorded: the path goes into `auto_import.default_database_path` and a database record named `My Photos` is added with the absolute path.
@@ -173,7 +173,7 @@ The data directory is the one Ziggy's native app chooses. [Filesystem layout per
 - Windows, macOS and iOS: see the layout trees.
 - The app id comes from the Linux and Windows app builds, the macOS and iOS bundle ids from their Xcode projects and the Android id from its Gradle build.
 
-On mobile, sync and prefetch work on `sync.database_path` in `config.yaml`, which is the last database opened, or else on the default database. They run only when that database has an origin.
+On mobile, sync and prefetch work on `sync.database_path` in `config.toml`, which is the last database opened, or else on the default database. They run only when that database has an origin.
 
 ## The asset server
 
@@ -204,7 +204,7 @@ The files below are the ones the app and the CLI write that refer to a database.
 
 ### What each directory is for
 
-- Settings: what the user chose and the app remembered: `databases.toml`, `config.yaml`, `state.yaml`.
+- Settings: what the user chose and the app remembered: `databases.toml`, `config.toml`, `state.json`.
 - Data: the app's own files, including its databases under `dbs/`. The trees below show what is in it.
 - Cache: what this machine has worked out about each database and its own import history, kept outside the database. See [Per database, on this machine](#per-database-on-this-machine).
 - Vault: the secrets a database record names by `s3_key`, `encryption_key` and `geocoding_key`. See [The vault](#the-vault).
@@ -218,9 +218,9 @@ The files below are the ones the app and the CLI write that refer to a database.
 - Refers to databases: database records by name and path; `origin` by path.
 - Read and written by the app's database handlers, by creating the default database and by the CLI's `dbs` commands and `--db` lookup.
 
-### config.yaml
+### config.toml
 
-- On a phone the page asks for `config.yaml` and the core points that at the settings directory, so every platform uses the one file there.
+- On a phone the page asks for `config.toml` and the core points that at the settings directory, so every platform uses the one file there.
 - What the user chose:
   - `theme`: `light`, `dark` or `system`.
   - `developer_mode`, `show_fps_indicator`: developer settings.
@@ -233,10 +233,10 @@ The files below are the ones the app and the CLI write that refer to a database.
 - Read and written by the app's settings handlers.
 - Creating the default database writes `auto_import.default_database_path`. Automatic import reads it.
 - On a phone the page writes only the `sync` section.
-- Writes merge under a lock file beside `config.yaml`.
+- Writes merge under a lock file beside `config.toml`.
 - Read and written by the app only.
 
-### state.yaml
+### state.json
 
 - `databases.recent_names`: up to 5 database **names**, most recent first. A name with no database record is dropped when read.
 - `databases.last_opened_path`: a **path**, the database to reopen at the next start.
@@ -318,8 +318,8 @@ App id `au.com.codecapers.photosphere`.
 ~/
 ├── .config/photosphere/          Settings
 │   ├── databases.toml            Database list
-│   ├── config.yaml               What the user chose
-│   ├── state.yaml                What the app remembered,
+│   ├── config.toml               What the user chose
+│   ├── state.json                What the app remembered,
 │   │                             including recents and the
 │   │                             last database
 │   └── vault/vault.json          Plaintext vault, tests only
@@ -442,8 +442,8 @@ App id `au.com.codecapers.photosphere.ziggy`.
 └── files/                        Files dir: data dir, home,
     │                             settings and cache in one
     ├── databases.toml            Database list
-    ├── config.yaml               What the user chose
-    ├── state.yaml                What the app remembered
+    ├── config.toml               What the user chose
+    ├── state.json                What the app remembered
     ├── <key>/                    Per-database cache
     ├── logs/                     App logs
     └── dbs/                      The app's own databases
@@ -492,6 +492,7 @@ Each smoke test scenario sets its own, so scenarios running side by side each us
 | Variable | What it does | Smoke tests set it on |
 |---|---|---|
 | `PHOTOSPHERE_CONFIG_DIR` | Moves the settings directory | Every platform |
+| `PHOTOSPHERE_STATE_DIR` | Moves the state directory | Every platform |
 | `PHOTOSPHERE_DATA_DIR` | Replaces the `<data dir>` that `dbs/` is in | Every platform |
 | `PHOTOSPHERE_LOG_DIR` | Moves the app's logs | Every platform |
 | `PHOTOSPHERE_CACHE_DIR` | Moves the cache directory | Desktop |

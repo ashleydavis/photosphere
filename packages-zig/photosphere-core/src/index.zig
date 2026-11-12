@@ -5,7 +5,8 @@
 //
 
 pub const background_work = @import("lib/background-work.zig");
-pub const config_and_state = @import("lib/config-and-state.zig");
+pub const config = @import("lib/config.zig");
+pub const reset_app_storage = @import("lib/reset-app-storage.zig");
 pub const databases = @import("lib/databases.zig");
 pub const describe_error = @import("lib/describe-error.zig");
 pub const environment = @import("lib/environment.zig");

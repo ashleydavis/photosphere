@@ -44,7 +44,7 @@ const TestContext = struct {
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "test-session", "test-task", .{
             .context = null,
             .function = ignoreMessage,
-        }, 10);
+        }, 10, "", "");
     }
 };
 

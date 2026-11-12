@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Switches syncing on in the Photosphere App on an Android device and sets how many seconds it waits between sync passes, by
-# writing the sync section of the app's config.yaml. For manual tests that wait on a sync. See set-sync-interval-android.md.
+# writing the sync table of the app's config.toml. For manual tests that wait on a sync. See set-sync-interval-android.md.
 
 set -euo pipefail
 
@@ -51,24 +51,39 @@ fi
 # The app writes its settings when it closes, so a running app would put the old ones back over these.
 "$adb_command" -s "$serial" shell am force-stop "$app_id"
 
-# The file as it stands, minus its sync section, which runs from the line "sync:" to the next line that is not indented. After a reset
-# there is no file yet, and nothing is kept.
+# The file as it stands, minus its sync table, which runs from the header line "[sync]" to the next line starting with "[". After a
+# reset there is no file yet, and nothing is kept.
 existing=""
-if "$adb_command" -s "$serial" shell run-as "$app_id" test -f files/config.yaml; then
-    existing="$("$adb_command" -s "$serial" shell run-as "$app_id" cat files/config.yaml | tr -d '\r' \
-        | sed -e '/^sync:/,/^[^[:space:]]/{/^sync:/d;/^[[:space:]]/d}')"
+if "$adb_command" -s "$serial" shell run-as "$app_id" test -f files/config.toml; then
+    existing="$("$adb_command" -s "$serial" shell run-as "$app_id" cat files/config.toml | tr -d '\r' | {
+        in_table="false"
+        while IFS= read -r line; do
+            if [ "$in_table" = "false" ] && [ "$line" = "[sync]" ]; then
+                in_table="true"
+                continue
+            fi
+            if [ "$in_table" = "true" ]; then
+                if [[ "$line" == \[* ]]; then
+                    in_table="false"
+                else
+                    continue
+                fi
+            fi
+            printf '%s\n' "$line"
+        done
+    })"
 fi
 
 {
     if [ -n "$existing" ]; then
         printf '%s\n' "$existing"
     fi
-    printf 'sync:\n  enabled: true\n  only_on_wifi: true\n  pause_between_runs_ms: %s\n' "$((seconds * 1000))"
-} | "$adb_command" -s "$serial" shell "run-as $app_id sh -c 'mkdir -p files && cat > files/config.yaml'"
+    printf '[sync]\nenabled = true\nonly_on_wifi = true\npause_between_runs_ms = %s\n' "$((seconds * 1000))"
+} | "$adb_command" -s "$serial" shell "run-as $app_id sh -c 'mkdir -p files && cat > files/config.toml'"
 
-written="$("$adb_command" -s "$serial" shell run-as "$app_id" cat files/config.yaml | tr -d '\r')"
-if ! printf '%s\n' "$written" | grep -q "^  pause_between_runs_ms: $((seconds * 1000))$"; then
-    echo "ERROR: the app's config.yaml on $serial does not hold the new sync setting after writing it. It holds:" >&2
+written="$("$adb_command" -s "$serial" shell run-as "$app_id" cat files/config.toml | tr -d '\r')"
+if ! printf '%s\n' "$written" | grep -q "^pause_between_runs_ms = $((seconds * 1000))$"; then
+    echo "ERROR: the app's config.toml on $serial does not hold the new sync setting after writing it. It holds:" >&2
     printf '%s\n' "$written" >&2
     exit 1
 fi

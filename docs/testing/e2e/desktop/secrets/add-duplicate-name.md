@@ -19,6 +19,7 @@ Run this in the same terminal. It keeps the test's settings, secrets, cache, log
 
 ```bash
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-add-duplicate-name/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-desktop-add-duplicate-name/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-add-duplicate-name/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-add-duplicate-name/cache

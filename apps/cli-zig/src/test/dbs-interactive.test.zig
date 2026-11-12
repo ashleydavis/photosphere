@@ -243,8 +243,8 @@ test "dbs edit changes a database picked from the list, with its secrets, and sa
 
     // The database is in the recents, which the rename has to carry to the new name.
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/state.yaml", .{root}),
-        .data = "databases:\n  recent_names:\n    - photos\n",
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/state.json", .{root}),
+        .data = "{\"databases\":{\"recent_names\":[\"photos\"]}}",
     });
 
     // Each prompt starts with the current value: typing adds to it. The S3 credentials and the geocoding key are
@@ -270,7 +270,11 @@ test "dbs edit changes a database picked from the list, with its secrets, and sa
         \\encryption_key = "my-key"
         \\
     , try helpers.readRootFile(allocator, root, "config/databases.toml"));
-    try std.testing.expectEqualStrings("databases:\n  recent_names:\n    - photos2\n", try helpers.readRootFile(allocator, root, "config/state.yaml"));
+    const state_text = try helpers.readRootFile(allocator, root, "config/state.json");
+    const state = try std.json.parseFromSliceLeaky(std.json.Value, allocator, state_text, .{});
+    const recent_names = state.object.get("databases").?.object.get("recent_names").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), recent_names.len);
+    try std.testing.expectEqualStrings("photos2", recent_names[0].string);
 
     const selectCancelled = try helpers.runPsiWithPrompts(allocator, environment, &.{ "dbs", "edit" }, &.{
         .{ .waitFor = "Select a database to edit:", .keys = cancel },

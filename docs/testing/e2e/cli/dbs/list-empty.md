@@ -19,6 +19,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-list-empty
 mkdir -p /tmp/psi-cli-dbs-list-empty/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-list-empty/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-list-empty/config
 ```
 
 Expected:

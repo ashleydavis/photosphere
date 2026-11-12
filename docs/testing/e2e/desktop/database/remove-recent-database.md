@@ -20,6 +20,7 @@ Run this in both terminals. It keeps the test's settings, secrets, cache, logs a
 
 ```bash
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-remove-recent-database/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-desktop-remove-recent-database/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-remove-recent-database/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-remove-recent-database/cache
@@ -76,12 +77,12 @@ Expected:
 
 ```bash
 grep -E "db-a|db-b" /tmp/psi-desktop-remove-recent-database/config/databases.toml
-cat /tmp/psi-desktop-remove-recent-database/config/state.yaml
+cat /tmp/psi-desktop-remove-recent-database/config/state.json
 ```
 
 Expected:
 - Both `db-a` and `db-b` are still listed as `[[databases]]` entries in `databases.toml`.
-- In `state.yaml`, `recent_names` under `databases` lists `db-b` and leaves out `db-a`.
+- In `state.json`, `recent_names` under `databases` lists `db-b` and leaves out `db-a`.
 
 ---
 

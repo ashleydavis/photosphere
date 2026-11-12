@@ -1,4 +1,4 @@
-import type { IActionHandler, IActionInfo, IAddTask, ICoreErrorEvent, IJsonObject, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskEvent, ITestCommandEvent, IToolOutput, IZiggyBridge, LogLevel } from "ziggy";
+import type { IActionHandler, IActionInfo, IAddTask, IConfigProblem, ICoreErrorEvent, IJsonObject, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskEvent, ITestCommandEvent, IToolOutput, IZiggyBridge, LogLevel } from "ziggy";
 
 //
 // A message the page sent with send or invoke, or one of Ziggy's own calls that sends a message.
@@ -38,6 +38,15 @@ export class FakeZiggy implements IZiggyBridge {
     // The handler registered for each action, by its name.
     private actionHandlers: Map<string, IActionHandler> = new Map();
 
+    // The value stored under each config key path.
+    configValues: Map<string, IJsonValue> = new Map();
+
+    // The value stored under each state key path.
+    stateValues: Map<string, IJsonValue> = new Map();
+
+    // The problem getConfigProblem resolves with, or undefined.
+    configProblem: IConfigProblem | undefined = undefined;
+
     invoke<TResponse>(name: string, data: IJsonValue): Promise<TResponse> {
         this.invoked.push({
             name,
@@ -67,6 +76,38 @@ export class FakeZiggy implements IZiggyBridge {
             data: null,
         });
         return this.respond<IPlatformInfo>("get-platform");
+    }
+
+    getConfig<TValue extends IJsonValue>(path: string): Promise<TValue | undefined> {
+        return Promise.resolve(this.configValues.get(path) as TValue | undefined);
+    }
+
+    setConfig(path: string, value: IJsonValue | undefined): Promise<void> {
+        if (value === undefined) {
+            this.configValues.delete(path);
+        }
+        else {
+            this.configValues.set(path, value);
+        }
+        return Promise.resolve();
+    }
+
+    getState<TValue extends IJsonValue>(path: string): Promise<TValue | undefined> {
+        return Promise.resolve(this.stateValues.get(path) as TValue | undefined);
+    }
+
+    setState(path: string, value: IJsonValue | undefined): Promise<void> {
+        if (value === undefined) {
+            this.stateValues.delete(path);
+        }
+        else {
+            this.stateValues.set(path, value);
+        }
+        return Promise.resolve();
+    }
+
+    getConfigProblem(): Promise<IConfigProblem | undefined> {
+        return Promise.resolve(this.configProblem);
     }
 
     addTask(task: IAddTask): void {

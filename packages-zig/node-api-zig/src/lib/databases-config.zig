@@ -8,6 +8,7 @@ const IStateFile = state_format.IStateFile;
 const tomlEntryToDatabaseEntry = databases_config_format.tomlEntryToDatabaseEntry;
 const databaseEntryToToml = databases_config_format.databaseEntryToToml;
 const errors = @import("utils-zig").errors;
+const config_state = @import("ziggy").config_state;
 
 // Re-exported: this module has always been where the codebase imports the entry type from. The
 // definition now lives with the file format, which mobile shares.
@@ -18,7 +19,7 @@ pub const IDatabaseEntry = databases_config_format.IDatabaseEntry;
 //
 // Only the database records. Which databases were opened lately and which one to reopen is what
 // the app remembered rather than what the user configured, so it is in the `databases` section of
-// state.yaml, and the functions below that read or change it go there.
+// state.json, and the functions below that read or change it go there.
 //
 pub const IDatabasesConfig = struct {
     //
@@ -282,7 +283,7 @@ const UpdateDatabaseEntryMutator = struct {
 };
 
 //
-// The state.yaml mutator of updateDatabaseEntry's rename: points the recents slot of the old name
+// The state.json mutator of updateDatabaseEntry's rename: points the recents slot of the old name
 // at the new one.
 //
 const RenameRecentDatabaseMutator = struct {
@@ -307,28 +308,51 @@ const RenameRecentDatabaseMutator = struct {
 //
 // Updates the entry currently identified by `originalName` with the new fields in `entry`.
 // If the new entry's name differs from `originalName`, the matching slot in the recents in
-// state.yaml is rewritten to keep the recents list pointing at the same entry.
+// state.json is rewritten to keep the recents list pointing at the same entry.
 // Throws if the rename would collide with another existing entry, or if no entry with
 // `originalName` is found.
 //
-// databases.toml is changed first and state.yaml second, each under its own lock. The recents are
+// databases.toml is changed first and state.json second, each under its own lock. The recents are
 // read against the records in databases.toml, so a slot still holding the old name after the first
 // write is dropped when the recents are read rather than pointing at the wrong database.
 //
-pub fn updateDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, originalName: []const u8, entry: IDatabaseEntry) !void {
+pub fn updateDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, originalName: []const u8, entry: IDatabaseEntry) !void {
     const mutator: UpdateDatabaseEntryMutator = .{
         .originalName = originalName,
         .entry = entry,
     };
     try updateDatabasesConfig(allocator, io, &mutator);
     if (!namesMatch(entry.name, originalName)) {
-        const renameMutator: RenameRecentDatabaseMutator = .{
+        try config_state.state.update(allocator, io, state_path, RenameRecentDatabaseChange{
             .originalName = originalName,
             .newName = entry.name,
-        };
-        try state_file.updateStateFile(allocator, io, &renameMutator);
+        });
     }
 }
+
+//
+// The change a database rename runs: points every recents slot of the old name at the new one, under one lock.
+//
+const RenameRecentDatabaseChange = struct {
+    // The name the database had.
+    originalName: []const u8,
+
+    // The name it has now.
+    newName: []const u8,
+
+    //
+    // Rewrites every recents slot holding the old name.
+    //
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: config_state.state.Values) !void {
+        var recentNames: std.ArrayList([]const u8) = .empty;
+        if (try values.get(?[]const []const u8, "databases.recent_names")) |existing| {
+            for (existing) |recentName| {
+                try recentNames.append(arena, if (namesMatch(recentName, self.originalName)) self.newName else recentName);
+            }
+        }
+        try values.set("databases.recent_names", recentNames.items);
+    }
+};
 
 //
 // The mutator of removeDatabaseEntry.
@@ -363,28 +387,27 @@ const RemoveDatabaseEntryMutator = struct {
 //
 // Removes a database entry by name (case-insensitive).
 // Removes only the first matching entry from `databases` (defensive against legacy state
-// where two entries share a name). Also removes the same name from the recents in state.yaml.
+// where two entries share a name). Also removes the same name from the recents in state.json.
 // No-op if no entry matches.
 //
 // The recents are cleaned whether or not the entry is there, in case of stale state naming an
 // entry that has already gone. databases.toml is changed first, so a name still in the recents
 // after the first write has no record and is dropped when the recents are read.
 //
-pub fn removeDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+pub fn removeDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, name: []const u8) !void {
     const mutator: RemoveDatabaseEntryMutator = .{
         .name = name,
     };
     try updateDatabasesConfig(allocator, io, &mutator);
-    try removeRecentDatabaseName(allocator, io, name);
+    try removeRecentDatabaseName(allocator, io, state_path, name);
 }
 
 //
-// Returns the recently opened database names as state.yaml holds them, most recent first, including
+// Returns the recently opened database names as the state file holds them, most recent first, including
 // any that no longer have a record in databases.toml.
 //
-pub fn getRecentDatabaseNames(allocator: std.mem.Allocator, io: std.Io) ![]const []const u8 {
-    const state = try state_file.loadStateFile(allocator, io);
-    return state.databases.recentNames;
+pub fn getRecentDatabaseNames(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8) ![]const []const u8 {
+    return (try config_state.state.get(?[]const []const u8, allocator, io, state_path, "databases.recent_names")) orelse &.{};
 }
 
 //
@@ -392,9 +415,9 @@ pub fn getRecentDatabaseNames(allocator: std.mem.Allocator, io: std.Io) ![]const
 // MAX_RECENT_DATABASES of them.
 // Names that no longer resolve to an entry in the databases list are silently dropped.
 //
-pub fn getRecentDatabases(allocator: std.mem.Allocator, io: std.Io) ![]const IDatabaseEntry {
+pub fn getRecentDatabases(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8) ![]const IDatabaseEntry {
     const config = try loadDatabasesConfig(allocator, io);
-    const recentNames = try getRecentDatabaseNames(allocator, io);
+    const recentNames = try getRecentDatabaseNames(allocator, io, state_path);
     var result: std.ArrayList(IDatabaseEntry) = .empty;
     for (recentNames) |recentName| {
         if (result.items.len >= MAX_RECENT_DATABASES) {
@@ -436,15 +459,35 @@ const RemoveRecentDatabaseNameMutator = struct {
 };
 
 //
-// Removes the given name from the recents in state.yaml only. Leaves the matching entry
+// Removes the given name from the recents in state.json only. Leaves the matching entry
 // in `databases` untouched. No-op if the name is not in the recent list.
 //
-pub fn removeRecentDatabaseName(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
-    const mutator: RemoveRecentDatabaseNameMutator = .{
-        .name = name,
-    };
-    try state_file.updateStateFile(allocator, io, &mutator);
+pub fn removeRecentDatabaseName(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, name: []const u8) !void {
+    try config_state.state.update(allocator, io, state_path, RemoveRecentDatabaseNameChange{ .name = name });
 }
+
+//
+// The change removeRecentDatabaseName runs, reading the recents and writing them back under one lock.
+//
+const RemoveRecentDatabaseNameChange = struct {
+    // The name to remove from the recents.
+    name: []const u8,
+
+    //
+    // Drops the name from the recents and leaves everything else as it was.
+    //
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: config_state.state.Values) !void {
+        var recentNames: std.ArrayList([]const u8) = .empty;
+        if (try values.get(?[]const []const u8, "databases.recent_names")) |existing| {
+            for (existing) |recentName| {
+                if (!namesMatch(recentName, self.name)) {
+                    try recentNames.append(arena, recentName);
+                }
+            }
+        }
+        try values.set("databases.recent_names", recentNames.items);
+    }
+};
 
 //
 // The mutator of markDatabaseOpened.
@@ -470,25 +513,45 @@ const MarkDatabaseOpenedMutator = struct {
 
 //
 // Moves the database entry matching the given name (case-insensitive) to the front of
-// the recents in state.yaml, trimming the list to MAX_RECENT_DATABASES entries.
+// the recents in state.json, trimming the list to MAX_RECENT_DATABASES entries.
 // No-op if no entry matches.
 //
-pub fn markDatabaseOpened(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+pub fn markDatabaseOpened(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, name: []const u8) !void {
     const foundEntry = try findDatabase(allocator, io, name) orelse {
         return;
     };
-    const mutator: MarkDatabaseOpenedMutator = .{
-        .name = foundEntry.name,
-    };
-    try state_file.updateStateFile(allocator, io, &mutator);
+    try config_state.state.update(allocator, io, state_path, MarkDatabaseOpenedChange{ .name = foundEntry.name });
 }
+
+//
+// The change markDatabaseOpened runs, reading the recents and writing them back under one lock.
+//
+const MarkDatabaseOpenedChange = struct {
+    // The name of the database that was opened, as its record in databases.toml spells it.
+    name: []const u8,
+
+    //
+    // Puts the name first in the recents, trimming the list.
+    //
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: config_state.state.Values) !void {
+        var recentNames: std.ArrayList([]const u8) = .empty;
+        try recentNames.append(arena, self.name);
+        if (try values.get(?[]const []const u8, "databases.recent_names")) |existing| {
+            for (existing) |recentName| {
+                if (!namesMatch(recentName, self.name)) {
+                    try recentNames.append(arena, recentName);
+                }
+            }
+        }
+        try values.set("databases.recent_names", recentNames.items[0..@min(recentNames.items.len, MAX_RECENT_DATABASES)]);
+    }
+};
 
 //
 // Returns the path of the database to reopen on the next launch, or null when none is open.
 //
-pub fn getLastDatabase(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
-    const state = try state_file.loadStateFile(allocator, io);
-    return state.databases.lastOpenedPath;
+pub fn getLastDatabase(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8) !?[]const u8 {
+    return config_state.state.get(?[]const u8, allocator, io, state_path, "databases.last_opened_path");
 }
 
 //
@@ -508,15 +571,12 @@ const SetLastDatabaseMutator = struct {
 };
 
 //
-// Records the database to reopen on the next launch in state.yaml. null clears it, which is what
+// Records the database to reopen on the next launch in state.json. null clears it, which is what
 // closing a database does.
 //
 // Written through updateStateFile like every other edit of that file, so the rest of the state is
 // carried through untouched rather than being rewritten from a copy read earlier.
 //
-pub fn setLastDatabase(allocator: std.mem.Allocator, io: std.Io, databasePath: ?[]const u8) !void {
-    const mutator: SetLastDatabaseMutator = .{
-        .databasePath = databasePath,
-    };
-    try state_file.updateStateFile(allocator, io, &mutator);
+pub fn setLastDatabase(allocator: std.mem.Allocator, io: std.Io, state_path: []const u8, databasePath: ?[]const u8) !void {
+    try config_state.state.set(allocator, io, state_path, "databases.last_opened_path", databasePath);
 }

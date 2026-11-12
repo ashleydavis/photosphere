@@ -25,6 +25,7 @@ Start the **sender** in terminal A:
 
 ```bash
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-share-secret/sender/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-desktop-share-secret/sender/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-share-secret/sender/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-share-secret/sender/cache
@@ -37,6 +38,7 @@ Start the **receiver** in terminal B:
 
 ```bash
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-share-secret/receiver/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-desktop-share-secret/receiver/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-share-secret/receiver/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-share-secret/receiver/cache

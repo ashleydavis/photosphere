@@ -1,43 +1,29 @@
 const std = @import("std");
 const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
 const state_file = node_api.state_file;
-const state_format = node_api.state_format;
-const std_json = std.json;
 
 //
-// Points PHOTOSPHERE_CONFIG_DIR at a new empty directory and returns it.
+// Points PHOTOSPHERE_STATE_DIR at a new directory and returns the state file's path.
 //
-fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
+fn freshStatePath(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
-    const configDir = try std.fs.path.join(allocator, &.{ dir, "config" });
-    try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
-    return configDir;
+    const state_dir = try std.fs.path.join(allocator, &.{ dir, "state" });
+    try std.Io.Dir.cwd().createDirPath(io, state_dir);
+    return std.fs.path.join(allocator, &.{ state_dir, "state.json" });
 }
 
 //
-// Writes the state file in the config directory.
+// Writes the state file.
 //
-fn writeState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, text: []const u8) !void {
-    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "state.yaml" }), text);
+fn writeState(io: std.Io, state_path: []const u8, text: []const u8) !void {
+    try test_files.writeFile(io, state_path, text);
 }
 
-//
-// The desktop section as JSON.
-//
-fn desktopJson(allocator: std.mem.Allocator, state: state_format.IStateFile) ![]const u8 {
-    return std.json.Stringify.valueAlloc(allocator, state.desktop, .{
-        .emit_null_optional_fields = false,
-    });
-}
-
-//
-// loadStateFile hands readYaml whatever is on disk, and yamlToStateFile turns a document that is not one into every
-// section's own defaults, so an install that has never run the app reads as empty rather than throwing.
-//
 test "loadStateFile returns the defaults when the state file does not exist" {
     const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
@@ -45,130 +31,97 @@ test "loadStateFile returns the defaults when the state file does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const configDir = try freshConfigDir(allocator, io, "state-file-missing");
-    defer temp_dirs.removeTempDir(io, configDir);
-    try std.Io.Dir.cwd().createDirPath(io, configDir);
+    const state_path = try freshStatePath(allocator, std.testing.io, "state-file-missing");
 
-    const state = try state_file.loadStateFile(allocator, io);
-    try std.testing.expectEqualStrings("{}", try desktopJson(allocator, state));
+    const state = try state_file.loadStateFile(allocator, std.testing.io, log, state_path);
+    try std.testing.expect(state.desktop.lastFolder == null);
+    try std.testing.expect(state.desktop.devToolsOpen == null);
     try std.testing.expect(state.searches.recentSearches == null);
     try std.testing.expect(state.gallery.sort == null);
+    try std.testing.expect(state.gallery.rowHeight == null);
     try std.testing.expectEqual(@as(usize, 0), state.news.shownNewsIds.len);
-    try std.testing.expectEqual(@as(usize, 0), state.ui.count());
+    try std.testing.expectEqual(@as(usize, 0), state.news.feed.len);
+    try std.testing.expectEqual(@as(usize, 0), state.databases.recentNames.len);
+    try std.testing.expect(state.databases.lastOpenedPath == null);
 }
 
-//
-// A state file the app wrote is read back into the sections it holds, and a section that is not an object falls back to
-// its own defaults rather than taking the rest of the document down with it.
-//
-test "loadStateFile reads the sections of the file and keeps a malformed section out of the way" {
+test "loadStateFile reads every key of state.json" {
     const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const configDir = try freshConfigDir(allocator, io, "state-file-sections");
-    defer temp_dirs.removeTempDir(io, configDir);
-    try writeState(allocator, io, configDir,
-        \\desktop:
-        \\  last_folder: /home/me/photos
-        \\  dev_tools_open: true
-        \\searches: not-a-section
-        \\ui:
-        \\  sidebar-collapsed: true
-        \\  sidebar-size: 320
-);
+    const state_path = try freshStatePath(allocator, std.testing.io, "state-file-sections");
+    try writeState(std.testing.io, state_path,
+        \\{
+        \\  "desktop": { "last_folder": "/home/me/photos", "dev_tools_open": true },
+        \\  "searches": { "recent": ["beach", "dogs"] },
+        \\  "gallery": { "sort": "date", "row_height": 220 },
+        \\  "news": { "shown_news_ids": ["a"], "last_shown_update_version": "1.2.3", "feed": [{ "id": "a", "message": "hello", "color": "primary", "duration": 4000 }] },
+        \\  "databases": { "recent_names": ["one"], "last_opened_path": "/db" }
+        \\}
+    );
 
-    const state = try state_file.loadStateFile(allocator, io);
+    const state = try state_file.loadStateFile(allocator, std.testing.io, log, state_path);
     try std.testing.expectEqualStrings("/home/me/photos", state.desktop.lastFolder.?);
     try std.testing.expect(state.desktop.devToolsOpen.?);
     try std.testing.expect(state.desktop.lastDownloadFolder == null);
-    try std.testing.expect(state.searches.recentSearches == null);
-    try std.testing.expectEqual(@as(usize, 2), state.ui.count());
-    try std.testing.expectEqualStrings("sidebar-collapsed", state.ui.keys()[0]);
+    try std.testing.expectEqualStrings("beach", state.searches.recentSearches.?[0]);
+    try std.testing.expectEqualStrings("date", state.gallery.sort.?);
+    try std.testing.expectEqual(@as(f64, 220), state.gallery.rowHeight.?.float);
+    try std.testing.expectEqual(@as(usize, 1), state.news.shownNewsIds.len);
+    try std.testing.expectEqualStrings("1.2.3", state.news.lastShownUpdateVersion.?);
+    try std.testing.expectEqualStrings("hello", state.news.feed[0].message);
+    try std.testing.expectEqual(@as(usize, 1), state.databases.recentNames.len);
+    try std.testing.expectEqualStrings("/db", state.databases.lastOpenedPath.?);
 }
 
-//
-// isUiStateValue decides which of the interface's own keys survive a read. A boolean, a number, a string or an array of
-// strings is one; an array holding anything else is not, and neither is a nested object, a null or nothing at all. An
-// empty array is one, because every element of it is a string.
-//
-test "isUiStateValue takes booleans, numbers, strings and arrays of strings, and nothing else" {
+test "a partial state file gives every absent key its default" {
     const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const state_path = try freshStatePath(allocator, std.testing.io, "state-file-partial");
+    try writeState(std.testing.io, state_path, "{\"desktop\":{\"last_folder\":\"/p\"}}");
 
-    try std.testing.expect(state_format.isUiStateValue(.{
-        .bool = true,
-    }));
-    try std.testing.expect(state_format.isUiStateValue(.{
-        .float = 1.5,
-    }));
-    try std.testing.expect(state_format.isUiStateValue(.{
-        .integer = 7,
-    }));
-    try std.testing.expect(state_format.isUiStateValue(.{
-        .string = "value",
-    }));
-
-    var strings = std_json.Array.init(allocator);
-    try strings.append(.{
-        .string = "a",
-    });
-    try strings.append(.{
-        .string = "b",
-    });
-    try std.testing.expect(state_format.isUiStateValue(.{
-        .array = strings,
-    }));
-
-    var mixed = std_json.Array.init(allocator);
-    try mixed.append(.{
-        .string = "a",
-    });
-    try mixed.append(.{
-        .bool = true,
-    });
-    try std.testing.expect(!state_format.isUiStateValue(.{
-        .array = mixed,
-    }));
-
-    var nulls = std_json.Array.init(allocator);
-    try nulls.append(.null);
-    try std.testing.expect(!state_format.isUiStateValue(.{
-        .array = nulls,
-    }));
-
-    try std.testing.expect(!state_format.isUiStateValue(.null));
-    try std.testing.expect(!state_format.isUiStateValue(.{
-        .object = .empty,
-    }));
+    const state = try state_file.loadStateFile(allocator, std.testing.io, log, state_path);
+    try std.testing.expectEqualStrings("/p", state.desktop.lastFolder.?);
+    try std.testing.expect(state.desktop.devToolsOpen == null);
+    try std.testing.expectEqual(@as(usize, 0), state.news.feed.len);
+    try std.testing.expectEqual(@as(usize, 0), state.databases.recentNames.len);
 }
 
-//
-// The ui section keeps the keys whose values the interface is allowed to hold and drops the rest, so a nested object or
-// a list of numbers left in the file by an older build does not reach the interface.
-//
-test "yamlToStateFile keeps the interface keys it can hold and drops the ones it cannot" {
+test "one wrong-typed key gives only its own field its default, and the log names it" {
     const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const state_path = try freshStatePath(allocator, std.testing.io, "state-file-wrong-type");
+    try writeState(std.testing.io, state_path, "{\"gallery\":{\"sort\":\"date\",\"row_height\":\"tall\"}}");
 
-    const document = try std.json.parseFromSliceLeaky(std_json.Value, allocator,
-        \\{"ui":{"collapsed":["a"],"width":320,"name":"gallery","numbers":[1,2],"nested":{"a":1},"nothing":null}}
-    , .{});
-    const state = try state_format.yamlToStateFile(allocator, document);
-    try std.testing.expectEqual(@as(usize, 3), state.ui.count());
-    try std.testing.expectEqualStrings("collapsed", state.ui.keys()[0]);
-    try std.testing.expectEqualStrings("width", state.ui.keys()[1]);
-    try std.testing.expectEqualStrings("name", state.ui.keys()[2]);
+    const state = try state_file.loadStateFile(allocator, std.testing.io, log, state_path);
+    try std.testing.expect(state.gallery.rowHeight == null);
+    try std.testing.expectEqualStrings("date", state.gallery.sort.?);
+    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "row_height") != null);
+    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "a string") != null);
+}
+
+test "unreadable state text gives every field its default rather than throwing" {
+    const log = MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const state_path = try freshStatePath(allocator, std.testing.io, "state-file-unreadable");
+    try writeState(std.testing.io, state_path, "not json");
+
+    const state = try state_file.loadStateFile(allocator, std.testing.io, log, state_path);
+    try std.testing.expect(state.desktop.lastFolder == null);
+    try std.testing.expectEqual(@as(usize, 0), state.news.shownNewsIds.len);
 }

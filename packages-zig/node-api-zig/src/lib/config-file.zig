@@ -2,12 +2,22 @@ const std = @import("std");
 const node_utils = @import("node-utils-zig");
 const config_format = @import("config-format.zig");
 const fs = node_utils.fs;
+const ziggy = @import("ziggy");
+const ILog = @import("utils-zig").log.ILog;
 const IConfigFile = config_format.IConfigFile;
-const configFileToYaml = config_format.configFileToYaml;
-const yamlToConfigFile = config_format.yamlToConfigFile;
 
 //
-// Reading and writing config.yaml where there is a filesystem: the CLI and the desktop app.
+// One setting of one config file, as a struct so that the path and the key path cannot be swapped.
+//
+pub const ISettingTarget = struct {
+    // The config file's path.
+    configPath: []const u8,
+    // The dotted key path of the setting.
+    keyPath: []const u8,
+};
+
+//
+// Reading and writing config.toml where there is a filesystem: the CLI and the desktop app.
 //
 // The mobile apps read and write the same document through worker tasks instead (config.worker.zig),
 // because a phone's WebView has no filesystem of its own. Both go through config-format.zig, so the
@@ -16,73 +26,90 @@ const yamlToConfigFile = config_format.yamlToConfigFile;
 //
 
 //
-// Returns the absolute path of the config file. PHOTOSPHERE_CONFIG_DIR moves it, which is how the
-// smoke tests give each run its own settings and how two installations run side by side.
+// Reads one setting through the typed API. A value of the wrong type in a hand-edited file is logged, and the setting is given its
+// default; every other error is returned.
 //
-pub fn getConfigPath(allocator: std.mem.Allocator) ![]const u8 {
-    return node_utils.path.join(allocator, &.{ try fs.getConfigDir(allocator), "config.yaml" });
-}
-
-//
-// Loads the configuration from disk, returning the defaults when there is no file yet.
-//
-pub fn loadConfigFile(allocator: std.mem.Allocator, io: std.Io) !IConfigFile {
-    const document = try fs.readYaml(allocator, io, try getConfigPath(allocator));
-    return yamlToConfigFile(allocator, document);
-}
-
-//
-// Writes the whole configuration to disk, replacing whatever was there.
-//
-// Only for a caller that has the complete configuration in hand, which in practice means a test or a
-// first write. Everything the app does goes through updateConfigFile instead, for the reason recorded
-// there.
-//
-pub fn saveConfigFile(allocator: std.mem.Allocator, io: std.Io, config: IConfigFile) !void {
-    try fs.writeYaml(allocator, io, try getConfigPath(allocator), try configFileToYaml(allocator, config, null));
-}
-
-//
-// The mutator updateConfigFile hands to updateYaml: it turns the document into the
-// configuration, lets the caller change it and turns it back into a document.
-//
-fn ConfigMutator(comptime MutatorT: type) type {
-    return struct {
-        // The caller's mutator.
-        mutator: MutatorT,
-
-        //
-        // Applies the caller's mutator to the configuration the document holds.
-        //
-        pub fn run(self: *const @This(), allocator: std.mem.Allocator, document: std.json.Value) !std.json.Value {
-            var config = try yamlToConfigFile(allocator, document);
-            try self.mutator.run(allocator, &config);
-            return configFileToYaml(allocator, config, null);
+pub fn readSetting(comptime T: type, arena: std.mem.Allocator, io: std.Io, log: ILog, target: ISettingTarget) !T {
+    comptime {
+        if (@typeInfo(T) != .optional) {
+            @compileError("readSetting reads an optional type, so a bad setting can be told apart from an absent one.");
         }
+    }
+    return ziggy.config_state.config.get(T, arena, io, target.configPath, target.keyPath) catch |err| switch (err) {
+        error.SettingWrongType => {
+            log.@"error"(ziggy.utils.errors.lastErrorMessage());
+            log.@"error"("The setting is at its default.");
+            return null;
+        },
+        else => return err,
     };
 }
 
 //
-// Changes the configuration on disk. Every edit the app makes goes through here.
+// Loads the configuration from disk, returning the defaults when there is no file yet. Every key is read on its own, so one value of
+// the wrong type gives only its own setting its default.
 //
-// The mutator is handed the file's CURRENT contents and changes them in place. updateYaml runs it
-// under the update lock beside the file, checks the file has not moved before renaming, and re-runs
-// the mutator against the new contents if it has, so two edits arriving together both survive.
-//
-// A load-then-save pair in its place would silently discard any edit made between the read and the
-// write, and the window is not theoretical: a folder picker stays open for as long as the user takes
-// to choose, so a config read before the dialog opened is stale by the time it closes.
-//
-// In Zig the mutator is a value with a method `run(self, allocator, config: *IConfigFile) !void`.
-//
-pub fn updateConfigFile(allocator: std.mem.Allocator, io: std.Io, mutator: anytype) !void {
-    const configMutator: ConfigMutator(@TypeOf(mutator)) = .{
-        .mutator = mutator,
+pub fn loadConfigFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, config_path: []const u8) !IConfigFile {
+    const loaded_sync = config_format.IStoredSyncSection{
+        .enabled = try readSetting(?bool, allocator, io, log, .{ .configPath = config_path, .keyPath = "sync.enabled" }),
+        .only_on_wifi = try readSetting(?bool, allocator, io, log, .{ .configPath = config_path, .keyPath = "sync.only_on_wifi" }),
+        .database_path = try readSetting(?[]const u8, allocator, io, log, .{ .configPath = config_path, .keyPath = "sync.database_path" }),
+        .pause_between_runs_ms = try readSetting(?f64, allocator, io, log, .{ .configPath = config_path, .keyPath = "sync.pause_between_runs_ms" }),
     };
-    try fs.updateYaml(allocator, io, try getConfigPath(allocator), .{
-        .object = .empty,
-    }, &configMutator, 3);
+    const loaded_auto_import = config_format.IStoredAutoImportSection{
+        .enabled = try readSetting(?bool, allocator, io, log, .{ .configPath = config_path, .keyPath = "auto_import.enabled" }),
+        .default_database_path = try readSetting(?[]const u8, allocator, io, log, .{ .configPath = config_path, .keyPath = "auto_import.default_database_path" }),
+        .pause_between_runs_ms = try readSetting(?f64, allocator, io, log, .{ .configPath = config_path, .keyPath = "auto_import.pause_between_runs_ms" }),
+        .cleanup_enabled = try readSetting(?bool, allocator, io, log, .{ .configPath = config_path, .keyPath = "auto_import.cleanup_enabled" }),
+        .sources = try readSetting(?[]const config_format.IStoredAutoImportSource, allocator, io, log, .{ .configPath = config_path, .keyPath = "auto_import.sources" }),
+    };
+    return .{
+        .theme = try readSetting(?config_format.IConfigTheme, allocator, io, log, .{ .configPath = config_path, .keyPath = "theme" }),
+        .developerMode = try readSetting(?bool, allocator, io, log, .{ .configPath = config_path, .keyPath = "developer_mode" }),
+        .showFpsIndicator = try readSetting(?bool, allocator, io, log, .{ .configPath = config_path, .keyPath = "show_fps_indicator" }),
+        .savedSearches = try readSetting(?[]const []const u8, allocator, io, log, .{ .configPath = config_path, .keyPath = "saved_searches" }),
+        .autoImport = try config_format.autoImportFileFromStored(allocator, loaded_auto_import),
+        .autoImportCleanupEnabled = loaded_auto_import.cleanup_enabled,
+        .sync = config_format.syncFileFromStored(allocator, loaded_sync),
+    };
 }
+
+//
+// Writes every setting in one update, so the whole configuration lands in one rename and a reader sees all of it or none of it.
+//
+pub fn saveConfigFile(allocator: std.mem.Allocator, io: std.Io, config_path: []const u8, config: IConfigFile) !void {
+    try ziggy.config_state.config.update(allocator, io, config_path, SaveConfigChange{ .config = config });
+}
+
+//
+// The change saveConfigFile runs: one set per leaf key.
+//
+const SaveConfigChange = struct {
+    // The configuration to write.
+    config: IConfigFile,
+
+    //
+    // Writes every key.
+    //
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: ziggy.config_state.config.Values) !void {
+        try values.set("theme", self.config.theme);
+        try values.set("developer_mode", self.config.developerMode);
+        try values.set("show_fps_indicator", self.config.showFpsIndicator);
+        try values.set("saved_searches", self.config.savedSearches);
+        const sync = self.config.sync;
+        try values.set("sync.enabled", sync.settings.enabled);
+        try values.set("sync.only_on_wifi", sync.settings.onlyOnWifi);
+        try values.set("sync.database_path", sync.databasePath);
+        try config_format.setPause(values, "sync.pause_between_runs_ms", sync.pauseBetweenRunsMs);
+        const auto_import = self.config.autoImport;
+        try values.set("auto_import.enabled", auto_import.settings.enabled);
+        try values.set("auto_import.default_database_path", auto_import.defaultDatabasePath);
+        try config_format.setPause(values, "auto_import.pause_between_runs_ms", auto_import.pauseBetweenRunsMs);
+        try values.set("auto_import.cleanup_enabled", self.config.autoImportCleanupEnabled);
+        const stored_sources = (try config_format.autoImportSourcesToStored(arena, auto_import.settings.sources)) orelse &[_]config_format.IStoredAutoImportSource{};
+        try values.set("auto_import.sources", stored_sources);
+    }
+};
 
 //
 // The configuration a reader falls back to when there is no file. Re-exported so callers that only

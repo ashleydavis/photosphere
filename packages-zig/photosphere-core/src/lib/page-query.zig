@@ -23,7 +23,7 @@ const app_config = node_api.app_config;
 pub fn pageQuery(services: ziggy.core.HandlerServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, test_mode: bool) anyerror![]const u8 {
     const state = main_state.current();
     const port = try state.startAssetServer(services, io, main_state.stateAllocator());
-    const theme = try app_config.getTheme(allocator, io);
+    const theme = try app_config.getTheme(allocator, io, services.log, services.configPath());
     const query = try buildQuery(allocator, port, @tagName(theme), test_mode);
     try state.mainWindowCreated(services, timers, io, main_state.stateAllocator());
     return query;

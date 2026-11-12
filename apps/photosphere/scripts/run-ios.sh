@@ -65,11 +65,13 @@ APP="$APPLE_APP_DIR/native/ios/zig-out/xcode/Build/Products/Debug-iphonesimulato
 xcrun simctl install "$UDID" "$APP"
 
 # The fixture is copied into the app's storage directory, Application Support named for its bundle identifier, and registered in
-# databases.toml in its settings directory, $HOME/.config/photosphere, where HOME is the app's data container, so the app opens it
-# on launch. The container is on this machine's filesystem, so a copy is enough. The copy is made over any copy an earlier run left.
+# databases.toml in its settings directory, $HOME/.config/photosphere, and in state.json in the storage directory the app uses with
+# no override, where HOME is the app's data container, so the app opens it on launch. The container is on this machine's
+# filesystem, so a copy is enough. The copy is made over any copy an earlier run left.
 if [ -n "$fixture_dir" ]; then
     CONTAINER="$(xcrun simctl get_app_container "$UDID" au.com.codecapers.photosphere.ziggy data)" || apple_fail "the app has no data container on the simulator $UDID."
     DATABASE_DIR="$CONTAINER/Library/Application Support/au.com.codecapers.photosphere.ziggy/$fixture_dir"
+    STATE_DIR="$CONTAINER/Library/Application Support/au.com.codecapers.photosphere.ziggy"
     CONFIG_DIR="$CONTAINER/.config/photosphere"
     mkdir -p "$DATABASE_DIR" "$CONFIG_DIR"
     cp -R "$APPLE_REPO_ROOT/test/dbs/$fixture_dir/." "$DATABASE_DIR/"
@@ -78,10 +80,10 @@ if [ -n "$fixture_dir" ]; then
     if [ -f "$CONFIG_DIR/databases.toml" ]; then
         cp "$CONFIG_DIR/databases.toml" "$EXISTING_CONFIG"
     fi
-    if [ -f "$CONFIG_DIR/state.yaml" ]; then
-        cp "$CONFIG_DIR/state.yaml" "$EXISTING_STATE"
+    if [ -f "$STATE_DIR/state.json" ]; then
+        cp "$STATE_DIR/state.json" "$EXISTING_STATE"
     fi
-    (cd "$APPLE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "$DATABASE_DIR" "$EXISTING_CONFIG" "$CONFIG_DIR/databases.toml" "$EXISTING_STATE" "$CONFIG_DIR/state.yaml")
+    (cd "$APPLE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "$DATABASE_DIR" "$EXISTING_CONFIG" "$CONFIG_DIR/databases.toml" "$EXISTING_STATE" "$STATE_DIR/state.json")
     rm -f "$EXISTING_CONFIG" "$EXISTING_STATE"
     echo "Registered test-$fixture_dir in the app's database list. The app opens it on launch."
 fi

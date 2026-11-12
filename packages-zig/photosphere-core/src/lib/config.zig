@@ -1,6 +1,6 @@
 //
-// The messages the page reads and writes its settings and its remembered state through: get-config and set-config (config.yaml, what the
-// user chose), and get-state and set-state (state.yaml, what the
+// The messages the page reads and writes its settings and its remembered state through: get-config and set-config (config.toml, what the
+// user chose), and get-state and set-state (state.json, what the
 // app remembered).
 //
 // Each is a task type, because it reads or writes a file.
@@ -26,59 +26,6 @@ const auto_import_settings = @import("api-zig").auto_import_settings;
 const events = @import("events.zig");
 const main_state = @import("main-state.zig");
 const logExceptions = @import("log-exceptions.zig").logExceptions;
-
-//
-// get-state: the payload is a state key. The reply is the value remembered under it, or null when there is none.
-//
-fn getState(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
-    _ = timers;
-    _ = context;
-    if (data != .string) {
-        return utils.errors.throwError("The state request needs the name of a key.", .{});
-    }
-    const state = try app_state.loadAppState(allocator, io);
-    const value = try app_state.getAppStateValue(allocator, state, data.string);
-    return try json.stringify(allocator, value);
-}
-
-//
-// The change set-state makes to the state: one key set to a value, or removed.
-//
-const SetStateMutator = struct {
-    // The key to write.
-    key: []const u8,
-    // The value to store, or null to remove the key.
-    value: ?std.json.Value,
-
-    //
-    // Writes the key into the state, which is the file's current contents.
-    //
-    pub fn run(self: *const SetStateMutator, allocator: std.mem.Allocator, state: *app_state.IAppState) !void {
-        try app_state.setAppStateValue(allocator, state, self.key, self.value);
-    }
-};
-
-//
-// set-state: the payload is {key, value}. Writes the value under the key in state.yaml, or removes the key when the value is null or
-// left out. Nothing here reacts to a particular key the way set-config does: the theme and the automatic import settings are the
-// user's, and this file holds nothing anything else has to be told about. The reply is null.
-//
-fn setState(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
-    _ = timers;
-    _ = context;
-    const key = json.getString(data, "key") orelse {
-        return utils.errors.throwError("The state request needs the name of a key.", .{});
-    };
-    const value: ?std.json.Value = if (data.object.get("value")) |present| (if (present == .null) null else present) else null;
-    const mutator: SetStateMutator = .{
-        .key = key,
-        .value = value,
-    };
-    try app_state.updateAppState(allocator, io, &mutator);
-    return try allocator.dupe(u8, "null");
-}
 
 //
 // The config keys that change what automatic import should be doing, so writing one restarts it.
@@ -139,56 +86,57 @@ fn configValueToJson(arena: std.mem.Allocator, value: ?app_config.IAppConfigValu
 }
 
 //
-// get-config: the payload is a config key. The reply is the setting the user chose under it, from config.yaml, or null when there is
+// get-config: the payload is a config key. The reply is the setting the user chose under it, from config.toml, or null when there is
 // none.
 //
 fn getConfig(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
     _ = timers;
-    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The config request needs the name of a key.", .{});
     }
-    const config = try app_config.loadAppConfig(allocator, io);
+    const config = try app_config.loadAppConfig(allocator, io, services.log, context.config_path);
     return try configValueToJson(allocator, app_config.getAppConfigValue(config, data.string));
 }
 
 //
-// The change set-config makes to the config: one key set to a value, or removed.
+// The change set-config makes to the config: one setting set to a value, or removed, in one update.
 //
-const SetConfigMutator = struct {
+const SetConfigChange = struct {
     // The key to write.
     key: []const u8,
-    // The value to store, or null to remove the key.
-    value: ?app_config.IAppConfigValue,
+    // The config holding the one field the key names, already checked.
+    config: app_config.IAppConfig,
 
     //
-    // Writes the key into the config, which is the file's current contents.
+    // Writes the field the key names.
     //
-    pub fn run(self: *const SetConfigMutator, allocator: std.mem.Allocator, config: *app_config.IAppConfig) !void {
-        _ = allocator;
-        try app_config.setAppConfigValue(config, self.key, self.value);
+    pub fn run(self: *const @This(), arena: std.mem.Allocator, values: ziggy.config_state.config.Values) !void {
+        _ = arena;
+        inline for (std.meta.fields(app_config.IAppConfig)) |field| {
+            if (std.mem.eql(u8, field.name, self.key)) {
+                try app_config.setAppConfigIn(field.name, values, @field(self.config, field.name));
+            }
+        }
     }
 };
 
 //
-// set-config: the payload is {key, value}. Writes the setting to config.yaml, or removes it when the value is null or left out. A change
+// set-config: the payload is {key, value}. Writes the setting to config.toml, or removes it when the value is null or left out. A change
 // of theme is announced to the page (the `theme-changed` event), so the menu bar can follow, and a change to a setting that decides what
 // automatic import does takes effect now rather than at the next start. The reply is null.
 //
 fn setConfig(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = context;
     const arena = allocator;
     const key = json.getString(data, "key") orelse {
         return utils.errors.throwError("The config request needs the name of a key.", .{});
     };
     const json_value: ?std.json.Value = if (data.object.get("value")) |present| (if (present == .null) null else present) else null;
     const value: ?app_config.IAppConfigValue = if (json_value) |present| try configValueFromJson(arena, key, present) else null;
-    const mutator: SetConfigMutator = .{
-        .key = key,
-        .value = value,
-    };
-    try app_config.updateAppConfig(arena, io, &mutator);
+    // The setting is checked against a config with nothing in it, so a key that is no setting and a value of the wrong type fail
+    // before anything is written, and the one field the key names is what the update writes.
+    var checked: app_config.IAppConfig = .{};
+    try app_config.setAppConfigValue(&checked, key, value);
+    try ziggy.config_state.config.update(arena, io, context.config_path, SetConfigChange{ .key = key, .config = checked });
     // Keep the theme-changed event so the menu bar can react to theme changes.
     if (std.mem.eql(u8, key, "theme")) {
         try events.sendThemeChanged(services, io, arena, json_value);
@@ -209,14 +157,6 @@ fn setConfig(services: TaskServices, timers: Timers, io: std.Io, allocator: std.
 }
 
 //
-// The get-state message's handler: getState, with its errors logged.
-//
-pub const getStateHandler = logExceptions(getState, "Error getting state value");
-
-//
-// The set-state message's handler: setState, with its errors logged.
-//
-pub const setStateHandler = logExceptions(setState, "Error setting state value");
 
 //
 // The get-config message's handler: getConfig, with its errors logged.
@@ -229,28 +169,6 @@ pub const getConfigHandler = logExceptions(getConfig, "Error getting config valu
 pub const setConfigHandler = logExceptions(setConfig, "Error setting config value");
 
 //
-// reset-app-storage: no payload. Empties the app's config and cache directories and, on a phone, the app's data directory, which is
-// where every database the app made sits. The reply is what was removed (node-api's IResetAppStorageResult).
-//
-// Ziggy runs this ahead of the handler node-api registers under the same task type, because that one cannot know the data directory:
-// on Android the data directory is the home directory, which the cache directory already is, but on iOS it is the app's Application
-// Support directory, which neither the config nor the cache directory is, so without this a reset on iOS left every database on the
-// device. On desktop the data directory holds the default database, the user's photos, so it is left alone there.
-//
-fn resetAppStorage(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
-    _ = timers;
-    _ = data;
-    const device_data_dir: ?[]const u8 = if (builtin.os.tag == .ios or builtin.abi.isAndroid()) context.data_dir else null;
-    const result = try node_api.reset_app_storage_worker.resetAppStorage(allocator, io, device_data_dir);
-    return try json.stringify(allocator, result);
-}
-
-//
-// The reset-app-storage task's handler: resetAppStorage, with its errors logged.
-//
-pub const resetAppStorageHandler = logExceptions(resetAppStorage, "Error resetting the app's storage");
-
 //
 // get-config: the data is a config key, answered by the get-config task. The response is the setting, or null.
 //
@@ -334,44 +252,4 @@ fn isAutoImportConfigKey(key: []const u8) bool {
         }
     }
     return false;
-}
-
-//
-// get-state: the data is a state key, answered by the get-state task. The response is the value remembered, or null.
-//
-pub fn getStateMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, key: []const u8) !ziggy.core.Response(std.json.Value) {
-    _ = services;
-    _ = timers;
-    _ = io;
-    return .{
-        .task = .{
-            .task_type = "get-state",
-            .data = try json.stringify(allocator, key),
-        },
-    };
-}
-
-//
-// The data of set-state.
-//
-pub const SetStateRequest = struct {
-    // The state key to write.
-    key: []const u8,
-    // The value to remember, or null to remove the key.
-    value: std.json.Value = .null,
-};
-
-//
-// set-state: answered by the set-state task. The response is null.
-//
-pub fn setStateMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SetStateRequest) !ziggy.core.Response(void) {
-    _ = services;
-    _ = timers;
-    _ = io;
-    return .{
-        .task = .{
-            .task_type = "set-state",
-            .data = try json.stringify(allocator, request),
-        },
-    };
 }

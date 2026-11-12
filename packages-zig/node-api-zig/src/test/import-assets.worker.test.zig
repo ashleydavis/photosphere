@@ -673,7 +673,7 @@ const ImportTest = struct {
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "orchestrator-task-id", .{
             .context = &self.messages,
             .function = MessageRecorder.send,
-        }, 10);
+        }, 10, "", "");
         self.backend = .{
             .resultFactory = resultFactory,
         };

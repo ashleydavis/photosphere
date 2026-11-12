@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Opens the sidebar and removes a recent database. On a desktop two databases are created with the CLI, databases.toml is seeded with
-# both as entries and state.yaml with both as recents, and the files are checked afterwards: the recent name is gone from state.yaml and
+# both as entries and state.json with both as recents, and the files are checked afterwards: the recent name is gone from state.json and
 # both entries remain in databases.toml. On a phone
 # the recent list lives on the device, so one database is copied into the sandbox, configured and opened, and only the removal is covered.
 
@@ -23,7 +23,7 @@ case "$PLATFORM" in
         create_database "$TMP_DIR/test-db-a"
         create_database "$TMP_DIR/test-db-b"
 
-        log_info "Writing databases.toml with two entries and state.yaml with both as recents..."
+        log_info "Writing databases.toml with two entries and state.json with both as recents..."
         "${PLATFORM}_seed_databases_config" \
             "$(jq -cn --arg a "$TMP_DIR/test-db-a" --arg b "$TMP_DIR/test-db-b" '[{name: "test-db-a", path: $a}, {name: "test-db-b", path: $b}]')" \
             '["test-db-a","test-db-b"]' || exit 1
@@ -69,19 +69,19 @@ case "$PLATFORM" in
         ;;
     *)
         TOML_FILE="$TMP_DIR/config/databases.toml"
-        STATE_FILE="$TMP_DIR/config/state.yaml"
+        STATE_FILE="$TMP_DIR/config/state.json"
 
-        # The app writes the recents as a YAML sequence, one name to a line under recent_names.
-        recent_names="$(sed -n '/^databases:/,/^[^[:space:]]/p' "$STATE_FILE" | sed -n '/^  recent_names:/,/^  [^[:space:]-]/p' | grep '^    - ' || true)"
+        # The app writes the recents as a JSON array under databases.recent_names.
+        recent_names="$(jq -r '.databases.recent_names[]' "$STATE_FILE" 2>/dev/null || true)"
 
         if grep -q "test-db-a" <<< "$recent_names"; then
-            log_error "test-db-a still present in the recents in state.yaml"
+            log_error "test-db-a still present in the recents in state.json"
             cat "$STATE_FILE"
             exit 1
         fi
 
         if ! grep -q "test-db-b" <<< "$recent_names"; then
-            log_error "test-db-b unexpectedly missing from the recents in state.yaml"
+            log_error "test-db-b unexpectedly missing from the recents in state.json"
             cat "$STATE_FILE"
             exit 1
         fi

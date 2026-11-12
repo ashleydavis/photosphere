@@ -2,7 +2,7 @@ import { DEFAULT_SYNC_PAUSE_MS, DEFAULT_SYNC_SETTINGS, INITIAL_SYNC_SETTINGS } f
 import { planSyncSeed, planSyncDatabase, type IMobileSyncSettings } from "../lib/background-work";
 
 //
-// Tests for the two decisions the phone makes about the syncing section of config.yaml that no other
+// Tests for the two decisions the phone makes about the syncing section of config.toml that no other
 // platform makes: what to write into a fresh installation, and what to write when a database is
 // opened.
 //

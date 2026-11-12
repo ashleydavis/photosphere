@@ -14,6 +14,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-origin-set-origin
 mkdir -p /tmp/psi-cli-origin-set-origin/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-origin-set-origin/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-origin-set-origin/config
 psi init --db /tmp/psi-cli-origin-set-origin/main --yes
 psi add test/test.jpg --db /tmp/psi-cli-origin-set-origin/main --yes
 psi replicate --db /tmp/psi-cli-origin-set-origin/main --dest /tmp/psi-cli-origin-set-origin/backup --yes

@@ -15,6 +15,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-resolve-by-name
 mkdir -p /tmp/psi-cli-dbs-resolve-by-name/config /tmp/psi-cli-dbs-resolve-by-name/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-resolve-by-name/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-resolve-by-name/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-dbs-resolve-by-name/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 psi init --db /tmp/psi-cli-dbs-resolve-by-name/db --key dbs-enc-key --generate-key --yes

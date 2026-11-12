@@ -37,7 +37,7 @@ fn runHandler(allocator: std.mem.Allocator, io: std.Io, log: ILog, databaseDir: 
     adjust(&node);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
-    var context = TaskContext.init(uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", "task", .{ .context = null, .function = ignoreMessage }, 10);
+    var context = TaskContext.init(uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", "task", .{ .context = null, .function = ignoreMessage }, 10, "", "");
     const data = try verify_worker.verifyFileDataToJson(allocator, .{ .node = node, .storageDescriptor = .{ .databasePath = databaseDir }, .options = .{ .full = false } });
     const output = try verify_worker.verifyFileHandler(allocator, io, test_timers.timers(), log, data, context.taskContext());
     return std.json.parseFromValueLeaky(verify_worker.IVerifyFileResult, allocator, output, .{});

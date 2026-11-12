@@ -21,7 +21,7 @@ Sourcing it does more than define functions:
 - It creates `TEST_PID_FILE` (`$TEST_TMP_DIR/test-pids`) empty. Every process a test starts is recorded there and in `TEST_PIDS`, and is stopped by pid through `kill_process_tree`, never by name.
 - On macOS, where there is no `sha256sum`, it defines one over `shasum -a 256`.
 
-Pairing codes come from `allocate_pairing_code` (`scripts/lib/test-lib.sh`), so a test cannot pair with a receiver belonging to another run on the machine. Vault secrets and the database list are seeded with `common.sh`'s `seed_vault_secret` and `seed_databases_config`, with `PHOTOSPHERE_VAULT_DIR` or `PHOTOSPHERE_CONFIG_DIR` set to the side's directory in front of the call.
+Pairing codes come from `allocate_pairing_code` (`scripts/lib/test-lib.sh`), so a test cannot pair with a receiver belonging to another run on the machine. Vault secrets and the database list are seeded with `common.sh`'s `seed_vault_secret` and `seed_databases_config`, with `PHOTOSPHERE_VAULT_DIR`, `PHOTOSPHERE_CONFIG_DIR` or `PHOTOSPHERE_STATE_DIR` set to the side's directory in front of the call.
 
 ## Functions
 

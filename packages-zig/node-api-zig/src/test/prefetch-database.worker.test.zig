@@ -71,7 +71,7 @@ fn makeContext(allocator: std.mem.Allocator, isCancelled: bool) !*TestContext {
     testContext.context = TaskContext.init(testContext.uuidGenerator.uuidGenerator(), testContext.timestampProvider.timestampProvider(), "session-1", "prefetch-task-id", .{
         .context = null,
         .function = TestContext.sendEvent,
-    }, 10);
+    }, 10, "", "");
     if (isCancelled) {
         testContext.context.cancel();
     }

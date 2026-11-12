@@ -56,65 +56,6 @@ fn expectReply(app: *TestApp, message_type: []const u8, data_json: []const u8, e
     try std.testing.expectEqualStrings(expected_json, reply);
 }
 
-test "set-state stores a value that get-state then returns" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try expectReply(&app, "set-state", "{\"key\":\"gallerySort\",\"value\":\"date\"}", "null");
-    try expectReply(&app, "get-state", "\"gallerySort\"", "\"date\"");
-}
-
-test "get-state replies null for a key nothing is remembered under" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try expectReply(&app, "get-state", "\"lastFolder\"", "null");
-    try expectReply(&app, "get-state", "\"something-the-page-made-up\"", "null");
-}
-
-test "set-state keeps the page's own working state under any key it chooses" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try expectReply(&app, "set-state", "{\"key\":\"sidebar.collapsed\",\"value\":true}", "null");
-    try expectReply(&app, "get-state", "\"sidebar.collapsed\"", "true");
-    try expectReply(&app, "set-state", "{\"key\":\"recent\",\"value\":[\"a\",\"b\"]}", "null");
-    try expectReply(&app, "get-state", "\"recent\"", "[\"a\",\"b\"]");
-}
-
-test "set-state with a null value, or none, removes the key" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try expectReply(&app, "set-state", "{\"key\":\"gallerySort\",\"value\":\"date\"}", "null");
-    try expectReply(&app, "set-state", "{\"key\":\"gallerySort\",\"value\":null}", "null");
-    try expectReply(&app, "get-state", "\"gallerySort\"", "null");
-    try expectReply(&app, "set-state", "{\"key\":\"lastFolder\",\"value\":\"/x\"}", "null");
-    try expectReply(&app, "set-state", "{\"key\":\"lastFolder\"}", "null");
-    try expectReply(&app, "get-state", "\"lastFolder\"", "null");
-}
-
-test "set-state with a value the key cannot hold is an error reply that says which key" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    const reply = try app.requestError("set-state", "{\"key\":\"lastFolder\",\"value\":42}");
-    defer std.testing.allocator.free(reply);
-    try std.testing.expect(std.mem.indexOf(u8, reply, "\"lastFolder\"") != null);
-}
-
-test "get-state and set-state without a key are error replies" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    const get_reply = try app.requestError("get-state", "null");
-    defer std.testing.allocator.free(get_reply);
-    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", get_reply);
-    const set_reply = try app.requestError("set-state", "{\"value\":1}");
-    defer std.testing.allocator.free(set_reply);
-    try std.testing.expectEqualStrings("InvalidMessageData: the field \"key\" is missing", set_reply);
-}
-
 test "set-config stores a setting that get-config then returns" {
     var app: TestApp = undefined;
     try app.start();
@@ -296,7 +237,7 @@ test "set-config of the theme with no value removes it and tells the page, with 
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\"}}");
 }
 
-test "a failing config or state request logs the error with the message of its handler" {
+test "a failing config request logs the error with the message of its handler" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -304,19 +245,13 @@ test "a failing config or state request logs the error with the message of its h
     try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error getting config value") != null);
     try app.queueFailingTask("set-config", "null");
     try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error setting config value") != null);
-    try app.queueFailingTask("get-state", "null");
-    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error getting state value") != null);
-    try app.queueFailingTask("set-state", "null");
-    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error setting state value") != null);
 }
 
-test "config and state requests that succeed log nothing to the error output" {
+test "config requests that succeed log nothing to the error output" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    allocator.free(try app.requestOk("set-state", "{\"key\":\"lastFolder\",\"value\":\"/photos\"}"));
-    allocator.free(try app.requestOk("get-state", "\"lastFolder\""));
     allocator.free(try app.requestOk("get-config", "\"theme\""));
     try std.testing.expectEqual(@as(usize, 0), (try app.consoleErr()).len);
 }
@@ -337,6 +272,12 @@ test "reset-app-storage on desktop empties the settings and cache directories an
         .sub_path = settings_path,
         .data = "databases = []",
     });
+    const config_path = try app.configPath(allocator);
+    defer allocator.free(config_path);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = config_path, .data = "theme = \"dark\"\n" });
+    const state_path = try app.statePath(allocator);
+    defer allocator.free(state_path);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = state_path, .data = "{\"desktop\":{\"last_folder\":\"/p\"}}" });
     const hash_cache_dir = try std.fs.path.join(allocator, &.{ cache_dir, "a-database-key" });
     defer allocator.free(hash_cache_dir);
     try std.Io.Dir.cwd().createDirPath(io, hash_cache_dir);
@@ -362,7 +303,10 @@ test "reset-app-storage on desktop empties the settings and cache directories an
     app.native_app.sendMessage(std.testing.allocator, message);
 
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"reset-1\",\"status\":\"succeeded\"");
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"entriesRemoved\":2}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"entriesRemoved\":2");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"configFileDeleted\":true,\"stateFileDeleted\":true");
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, config_path, .{}));
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, state_path, .{}));
     var config_contents = try std.Io.Dir.cwd().openDir(io, config_dir, .{
         .iterate = true,
     });

@@ -255,6 +255,7 @@ start_receiver_with_code() {
 
     PHOTOSPHERE_VAULT_DIR="$RECEIVER_VAULT_DIR" \
     PHOTOSPHERE_CONFIG_DIR="$RECEIVER_CONFIG_DIR" \
+    PHOTOSPHERE_STATE_DIR="$RECEIVER_CONFIG_DIR" \
         $RECEIVER_CLI_CMD $cmd_prefix receive --yes --code "$code" > "$log_file" 2>&1 &
     RECEIVER_PID=$!
     track_test_pid "$RECEIVER_PID"
@@ -360,6 +361,7 @@ share_database_and_check() {
     run_cli_tracked "$sender_log" env \
         PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
         PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
+        PHOTOSPHERE_STATE_DIR="$SENDER_CONFIG_DIR" \
         $SENDER_CLI_CMD dbs send --name share-test-db --yes --code "$test_code" || true
 
     if grep -q "sent successfully" "$sender_log" 2>/dev/null; then
@@ -413,6 +415,7 @@ share_secret_and_check() {
     run_cli_tracked "$sender_log" env \
         PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
         PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
+        PHOTOSPHERE_STATE_DIR="$SENDER_CONFIG_DIR" \
         $SENDER_CLI_CMD secrets send --name "apikey01" --yes --code "$test_code" || true
 
     if grep -q "sent successfully" "$sender_log" 2>/dev/null; then

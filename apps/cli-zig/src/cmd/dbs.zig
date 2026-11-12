@@ -13,6 +13,14 @@ const spinner_module = @import("../lib/spinner.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const commander = @import("../lib/commander.zig");
 const process_signals = @import("../lib/process-signals.zig");
+const ziggy = @import("ziggy");
+
+//
+// The path of the app's state file, which the recents of the database list live in.
+//
+fn statePath(allocator: std.mem.Allocator) ![]const u8 {
+    return ziggy.state_path.desktopAppStatePath(allocator);
+}
 
 //
 // Names used from other files.
@@ -881,7 +889,7 @@ pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: 
             .geocodingKey = cmdOptions.geocodingKey orelse found.geocodingKey,
         };
 
-        try updateDatabaseEntry(allocator, io, found.name, updated);
+        try updateDatabaseEntry(allocator, io, try statePath(allocator), found.name, updated);
 
         log.info(try pc.green(allocator, try format(allocator, "\u{2713} Database \"{s}\" updated.", .{updated.name})));
         return;
@@ -945,7 +953,7 @@ pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: 
 
     // updateDatabaseEntry handles both renames (rewrites the recents slot) and field
     // changes; the original name is the lookup key.
-    try updateDatabaseEntry(allocator, io, found.name, updated);
+    try updateDatabaseEntry(allocator, io, try statePath(allocator), found.name, updated);
 
     try outro(io, try pc.green(allocator, try format(allocator, "\u{2713} Database \"{s}\" updated.", .{updated.name})), .{});
 }
@@ -997,7 +1005,7 @@ pub fn dbsRemove(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions
         }
     }
 
-    try removeDatabaseEntry(allocator, io, found.name);
+    try removeDatabaseEntry(allocator, io, try statePath(allocator), found.name);
     try outro(io, try pc.green(allocator, try format(allocator, "\u{2713} Database \"{s}\" removed from list.", .{found.name})), .{});
 }
 
@@ -1041,7 +1049,7 @@ pub fn dbsClear(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions:
     }
 
     for (databases) |dbEntry| {
-        try removeDatabaseEntry(allocator, io, dbEntry.name);
+        try removeDatabaseEntry(allocator, io, try statePath(allocator), dbEntry.name);
     }
 
     try outro(io, try pc.green(allocator, try format(allocator, "\u{2713} Removed {d} database(s) from the list.", .{databases.len})), .{});
@@ -1584,7 +1592,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOption
     };
     payload.name = resolution.finalName;
     if (resolution.replaceExisting) |replaceExisting| {
-        try removeDatabaseEntry(allocator, io, replaceExisting);
+        try removeDatabaseEntry(allocator, io, try statePath(allocator), replaceExisting);
     }
 
     // Import the payload

@@ -9,8 +9,9 @@ test_dbs_list_empty() {
     local test_number="$1"
     print_test_header "$test_number" "DBS LIST EMPTY"
 
-    # Ensure no databases.json exists.
+    # Ensure no databases.json and no remembered database exist.
     rm -f "${PHOTOSPHERE_CONFIG_DIR}/databases.json"
+    rm -f "${PHOTOSPHERE_STATE_DIR}/state.json"
 
     local dbs_output
     invoke_command "List databases (empty)" "$(get_zig_cli_command) dbs list" 0 "dbs_output"

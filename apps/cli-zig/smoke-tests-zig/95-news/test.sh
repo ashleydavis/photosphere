@@ -3,7 +3,7 @@ DESCRIPTION="psi news shows the whole feed newest first and marks what it showed
 
 # The feed is the checked-in test/demo-news.yaml, read through a file:// URL (PHOTOSPHERE_NEWS_URL,
 # the override the demo scripts use), so the test needs no network and knows exactly what the feed
-# holds. Each part of the test records what it has shown in state.yaml under a config directory of its
+# holds. Each part of the test records what it has shown in state.json under a config directory of its
 # own, so each starts from nothing shown.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,7 +42,7 @@ test_news() {
     # --- 1. The first run shows every item as new, newest first. ---
 
     local first_output
-    invoke_command "Show the news with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$zig_config\" $(get_zig_cli_command) news" 0 "first_output"
+    invoke_command "Show the news with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$zig_config\" PHOTOSPHERE_STATE_DIR=\"$zig_config\" $(get_zig_cli_command) news" 0 "first_output"
 
     expect_output_string "$first_output" "Photosphere News" "The news has its heading"
     expect_output_string "$first_output" "^Running version: v" "The news shows the running version"
@@ -55,18 +55,18 @@ test_news() {
     item_order="$(echo "$first_output" | grep -o "Heads up\|v1.5 is out\|New blog post\|We'd love your feedback\|Welcome to Photosphere" | tr '\n' ',')"
     expect_value "$item_order" "Heads up,v1.5 is out,New blog post,We'd love your feedback,Welcome to Photosphere," "The items are shown newest first"
 
-    check_exists "$zig_config/state.yaml" "The state the news command records"
-    local zig_state
-    zig_state="$(cat "$zig_config/state.yaml")"
+    check_exists "$zig_config/state.json" "The state the news command records"
+    local shown_ids
+    shown_ids="$(jq -r '.news.shown_news_ids[]' "$zig_config/state.json")"
     local item_id
     for item_id in demo-001-welcome demo-002-survey demo-003-blog demo-004-release demo-005-bare; do
-        expect_output_string "$zig_state" "^    - $item_id$" "$item_id is recorded as shown"
+        expect_output_string "$shown_ids" "^$item_id$" "$item_id is recorded as shown"
     done
 
     # --- 2. The second run shows every item as seen. ---
 
     local second_output
-    invoke_command "Show the news again with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$zig_config\" $(get_zig_cli_command) news" 0 "second_output"
+    invoke_command "Show the news again with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$zig_config\" PHOTOSPHERE_STATE_DIR=\"$zig_config\" $(get_zig_cli_command) news" 0 "second_output"
     expect_output_string "$second_output" "(new)" "No item is new the second time" false
     expect_output_string "$second_output" "Welcome to Photosphere. Thanks for trying it out!$" "The seen items are still listed"
 
@@ -76,17 +76,17 @@ test_news() {
     mkdir -p "$notify_config"
 
     local notify_output
-    invoke_command "Run another command with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$notify_config\" $(get_zig_cli_command) examples" 0 "notify_output"
+    invoke_command "Run another command with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$notify_config\" PHOTOSPHERE_STATE_DIR=\"$notify_config\" $(get_zig_cli_command) examples" 0 "notify_output"
     expect_output_string "$notify_output" "News:" "The command shows a news item first"
     expect_output_string "$notify_output" "^   Welcome to Photosphere. Thanks for trying it out!$" "The item shown is the oldest one"
     expect_output_string "$notify_output" "user survey" "Only one item is shown" false
 
     local notify_again_output
-    invoke_command "Run it again with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$notify_config\" $(get_zig_cli_command) examples" 0 "notify_again_output"
+    invoke_command "Run it again with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$notify_config\" PHOTOSPHERE_STATE_DIR=\"$notify_config\" $(get_zig_cli_command) examples" 0 "notify_again_output"
     expect_output_string "$notify_again_output" "^   We'd love your feedback. Take our 2-minute user survey!$" "The next run shows the next item"
 
     local after_notify_output
-    invoke_command "Show the news with the Zig CLI after those notifications" "PHOTOSPHERE_CONFIG_DIR=\"$notify_config\" $(get_zig_cli_command) news" 0 "after_notify_output"
+    invoke_command "Show the news with the Zig CLI after those notifications" "PHOTOSPHERE_CONFIG_DIR=\"$notify_config\" PHOTOSPHERE_STATE_DIR=\"$notify_config\" $(get_zig_cli_command) news" 0 "after_notify_output"
     expect_output_string "$after_notify_output" "Welcome to Photosphere. Thanks for trying it out!$" "The news command knows the first item was shown"
     expect_output_string "$after_notify_output" "Welcome to Photosphere. Thanks for trying it out! (new)" "The news command does not show the first item as new" false
     expect_output_string "$after_notify_output" "Take our 2-minute user survey! (new)" "The news command does not show the second item as new" false
@@ -100,7 +100,7 @@ test_news() {
     missing_feed_url="$(file_url "$test_dir/no-such-feed.yaml")"
 
     local missing_output
-    invoke_command "Show the news of a feed that is not there with the Zig CLI" "PHOTOSPHERE_NEWS_URL=\"$missing_feed_url\" PHOTOSPHERE_CONFIG_DIR=\"$empty_config\" $(get_zig_cli_command) news" 0 "missing_output"
+    invoke_command "Show the news of a feed that is not there with the Zig CLI" "PHOTOSPHERE_NEWS_URL=\"$missing_feed_url\" PHOTOSPHERE_CONFIG_DIR=\"$empty_config\" PHOTOSPHERE_STATE_DIR=\"$empty_config\" $(get_zig_cli_command) news" 0 "missing_output"
     expect_output_string "$missing_output" "^No news items available.$" "An unreadable feed shows no items"
 
     test_passed

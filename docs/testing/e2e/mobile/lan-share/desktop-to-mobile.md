@@ -82,4 +82,4 @@ bun run stop-minio -- desktop-share
 ## Agent notes
 
 - How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Android: the agent does the UI steps with adb. iOS: the human does them, and the agent reads the results from screenshots.
-- The desktop side is driven as in the desktop part of the guide, through a test-hooks build started with its control connection rather than `bun run linux`, with `PHOTOSPHERE_CONFIG_DIR`, `PHOTOSPHERE_VAULT_DIR` and `PHOTOSPHERE_VAULT_TYPE` taken from `tmp/minio/desktop-share.env`. The desktop shows the pairing code: read it with `get-value` on `share-pairing-code` and type it on the phone with `input text`.
+- The desktop side is driven as in the desktop part of the guide, through a test-hooks build started with its control connection rather than `bun run linux`, with `PHOTOSPHERE_CONFIG_DIR`, `PHOTOSPHERE_STATE_DIR`, `PHOTOSPHERE_VAULT_DIR` and `PHOTOSPHERE_VAULT_TYPE` taken from `tmp/minio/desktop-share.env`. The desktop shows the pairing code: read it with `get-value` on `share-pairing-code` and type it on the phone with `input text`.

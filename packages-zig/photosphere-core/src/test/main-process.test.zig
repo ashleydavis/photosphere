@@ -73,9 +73,9 @@ test "notify-database-opened adds an entry for a database that has none, with th
     const entry = (try node_api.databases_config.findDatabase(arena.allocator(), std.testing.io, "opened-new")).?;
     try std.testing.expectEqualStrings(database_path, entry.path);
     try std.testing.expectEqualStrings("/the/origin", entry.origin.?);
-    const last = (try node_api.databases_config.getLastDatabase(arena.allocator(), std.testing.io)).?;
+    const last = (try node_api.databases_config.getLastDatabase(arena.allocator(), std.testing.io, try app.statePath(arena.allocator()))).?;
     try std.testing.expectEqualStrings(database_path, last);
-    const recents = try node_api.databases_config.getRecentDatabases(arena.allocator(), std.testing.io);
+    const recents = try node_api.databases_config.getRecentDatabases(arena.allocator(), std.testing.io, try app.statePath(arena.allocator()));
     try std.testing.expectEqual(@as(usize, 1), recents.len);
     try app.onState(@as([]const u8, database_path), struct {
         fn check(path: []const u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
@@ -108,7 +108,7 @@ test "notify-database-opened refreshes the origin of a database that is already 
     const entry = (try node_api.databases_config.findDatabase(arena.allocator(), std.testing.io, "listed")).?;
     try std.testing.expectEqualStrings("/new/origin", entry.origin.?);
     try std.testing.expectEqualStrings("mine", entry.description);
-    const recents = try node_api.databases_config.getRecentDatabases(arena.allocator(), std.testing.io);
+    const recents = try node_api.databases_config.getRecentDatabases(arena.allocator(), std.testing.io, try app.statePath(arena.allocator()));
     try std.testing.expectEqualStrings("listed", recents[0].name);
 }
 
@@ -136,7 +136,7 @@ test "notify-database-closed forgets the database to reopen and the open databas
     try std.testing.expectEqualStrings("null", reply);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    try std.testing.expect((try node_api.databases_config.getLastDatabase(arena.allocator(), std.testing.io)) == null);
+    try std.testing.expect((try node_api.databases_config.getLastDatabase(arena.allocator(), std.testing.io, try app.statePath(arena.allocator()))) == null);
     try app.onState(@as(u8, 0), struct {
         fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
             try std.testing.expect(!state.is_database_open);
@@ -619,10 +619,10 @@ const auto_import_tasks = [_]ziggy.task_runner.TaskHandlerEntry{
 };
 
 //
-// The config.yaml of a user who has switched automatic import on, with a default database at the path.
+// The config.toml of a user who has switched automatic import on, with a default database at the path.
 //
 fn autoImportConfigYaml(allocator: std.mem.Allocator, database_path: []const u8) ![]u8 {
-    return try std.fmt.allocPrint(allocator, "auto_import:\n  enabled: true\n  default_database_path: \"{s}\"\n  sources:\n    - type: folder\n      path: /watched\n      recurse: true\n", .{database_path});
+    return try std.fmt.allocPrint(allocator, "[auto_import]\nenabled = true\ndefault_database_path = \"{s}\"\n\n[[auto_import.sources]]\ntype = \"folder\"\npath = \"/watched\"\nrecurse = true\n", .{database_path});
 }
 
 //
@@ -671,7 +671,7 @@ fn setAutoImportCheckMs(app: *TestApp, milliseconds: u64) !void {
 
 test "a new default database for automatic import is put in the dbs directory of the directory PHOTOSPHERE_DATA_DIR names, where short names resolve" {
     var app: TestApp = undefined;
-    try app.prepareWithConfigFile("auto_import:\n  enabled: true\n  sources:\n    - type: folder\n      path: /watched\n      recurse: true\n");
+    try app.prepareWithConfigFile("[auto_import]\nenabled = true\n\n[[auto_import.sources]]\ntype = \"folder\"\npath = \"/watched\"\nrecurse = true\n");
     try app.environ_map.put("PHOTOSPHERE_DATA_DIR", "/scenario/files");
     try app.launchWithTasks(&auto_import_tasks);
     defer app.stop();

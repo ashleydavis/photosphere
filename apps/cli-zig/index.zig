@@ -8,6 +8,7 @@ const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const media_tools = @import("media-tools-zig");
+const ziggy = @import("ziggy");
 
 pub const picocolors = @import("src/lib/picocolors.zig");
 pub const format = @import("src/lib/format.zig");
@@ -2708,6 +2709,9 @@ fn run(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, main_log: *ut
     var state: IProgramState = .{
         .allocator = allocator,
     };
+    // Where the app's config file and state file are, worked out once for every command that names them.
+    const config_file_path = try ziggy.config_path.desktopAppConfigPath(allocator);
+    const state_file_path = try ziggy.state_path.desktopAppStatePath(allocator);
     const program = try createProgram(allocator, &state);
     var outcome = try parseCommandLine(program, &state, userArgs);
     try resolveDatabaseOptions(allocator, io, &outcome);
@@ -3122,7 +3126,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, main_log: *ut
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try versionCommand(allocator, io, consoleLog, mediaTools.runner());
+            try versionCommand(allocator, io, consoleLog, mediaTools.runner(), config_file_path, state_file_path);
         },
         .versionOption => {
             console.log(config.version);

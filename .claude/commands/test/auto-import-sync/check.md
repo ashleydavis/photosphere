@@ -23,7 +23,7 @@ Reports on a run started with `/test:auto-import-sync:start`. Everything here on
 2. **On the phone.**
     - Count the device's media: `content query --uri content://media/external/images/media --projection _id` and the same for `video`, counting the rows.
     - Write the replica's asset names, from `ls files/dbs/my-photos/asset`, to the project's `tmp/`.
-    - Read `files/config.yaml` to check automatic import and syncing are both still on.
+    - Read `files/config.toml` to check automatic import and syncing are both still on.
     - From the newest log in `files/logs`, read the last `Import: ` lines and the last `Sync started for`, `Push completed` and `Sync timings` lines. Read the matching errors log for the files that failed to import.
 3. **In the bucket.**
     - Write the names under `s3://photosphere-test-bucket-1/<folder>/asset/` to the project's `tmp/` with `aws s3 ls` and the vault credentials, and compare them with the phone's names using `comm`.

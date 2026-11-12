@@ -8,7 +8,7 @@ const ITaskContext = task_queue_zig.types.ITaskContext;
 const IJobTag = task_queue_zig.types.IJobTag;
 const planMobileAutoImport = api.auto_import_mobile.planMobileAutoImport;
 const autoImportSettingsToJson = api.auto_import_settings.autoImportSettingsToJson;
-const readConfigFromStorage = node_api.config_worker.readConfigFromStorage;
+const readConfig = node_api.config_worker.readConfig;
 
 //
 // The task that decides what a background automatic import pass should do.
@@ -73,7 +73,7 @@ const ICreateDefaultDatabaseStepData = struct {
     // The sandbox-relative path of the database to create.
     databasePath: []const u8,
 
-    // The sandbox-relative path of config.yaml.
+    // The sandbox-relative path of config.toml.
     configPath: []const u8,
 
     // Whether the database is also opened on screen.
@@ -136,7 +136,7 @@ pub fn planAutoImportHandler(
     data: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
-    const read = try readConfigFromStorage(allocator, io, log, try node_api.config_file.getConfigPath(allocator));
+    const read = try readConfig(allocator, io, log, context.configPath);
     const contents = read.config.autoImport;
     var plan = try planMobileAutoImport(allocator, try autoImportSettingsToJson(allocator, contents.settings), contents.defaultDatabasePath);
     // Where the default database is made is a folder of the app's databases directory when the caller names one. A caller whose working
@@ -162,7 +162,7 @@ pub fn planAutoImportHandler(
                 .@"type" = "create-default-database",
                 .data = try toJsonValue(allocator, ICreateDefaultDatabaseStepData{
                     .databasePath = plan.databasePath,
-                    .configPath = try node_api.config_file.getConfigPath(allocator),
+                    .configPath = context.configPath,
 
                     // The user switched automatic import on and photos are about to start arriving
                     // in this database, so it is the one they should be looking at.

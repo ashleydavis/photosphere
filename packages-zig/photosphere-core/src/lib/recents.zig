@@ -1,6 +1,6 @@
 //
 // The recent-database messages: get-recent-databases, get-last-database and remove-recent-database-name. They read and write the
-// recents and the last database in state.yaml, checked against the records in databases.toml.
+// recents and the last database in state.json, checked against the records in databases.toml.
 //
 // Each is a task type, because they read and write a file, and the thread that handles the page's messages must not wait for that.
 //
@@ -27,9 +27,8 @@ const logExceptions = @import("log-exceptions.zig").logExceptions;
 fn getRecentDatabases(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = services;
     _ = timers;
-    _ = context;
     _ = data;
-    const recent = try databases_config.getRecentDatabases(allocator, io);
+    const recent = try databases_config.getRecentDatabases(allocator, io, context.state_path);
     return try json.stringify(allocator, recent);
 }
 
@@ -39,9 +38,8 @@ fn getRecentDatabases(services: TaskServices, timers: Timers, io: std.Io, alloca
 fn getLastDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = services;
     _ = timers;
-    _ = context;
     _ = data;
-    const last = try databases_config.getLastDatabase(allocator, io);
+    const last = try databases_config.getLastDatabase(allocator, io, context.state_path);
     return try json.stringify(allocator, last);
 }
 
@@ -51,12 +49,11 @@ fn getLastDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator
 fn removeRecentDatabaseName(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const log = services.log;
     _ = timers;
-    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The database needs a name.", .{});
     }
     const name = data.string;
-    try databases_config.removeRecentDatabaseName(allocator, io, name);
+    try databases_config.removeRecentDatabaseName(allocator, io, context.state_path, name);
     log.event(try std.fmt.allocPrint(allocator, "Recent database removed: {s}", .{name}));
     return try allocator.dupe(u8, "null");
 }

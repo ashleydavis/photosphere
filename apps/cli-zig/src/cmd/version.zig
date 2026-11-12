@@ -25,7 +25,7 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 // Command that displays version information for psi and its dependencies.
 // toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions are shown.
 //
-pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) !void {
+pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, config_path: []const u8, state_path: []const u8) !void {
 
     log.info("");
     log.info(try pc.bold(allocator, "📋 Version Information\n"));
@@ -61,6 +61,8 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolR
     log.info(try pc.bold(allocator, "Directories:"));
     const configDir = try getConfigDir(allocator);
     log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Config"), try pc.cyan(allocator, configDir) }));
+    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Config file"), try pc.cyan(allocator, config_path) }));
+    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "State file"), try pc.cyan(allocator, state_path) }));
     log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Temp"), try pc.cyan(allocator, try join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere" })) }));
     log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Log files"), try pc.cyan(allocator, try join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere", "logs" })) }));
     // Where this machine keeps what it has worked out about each database, the hash caches among

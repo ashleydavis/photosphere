@@ -302,7 +302,8 @@ By default the app reads and writes your real config at `~/.config/photosphere`,
 
 | Variable | Controls | Default |
 |---|---|---|
-| `PHOTOSPHERE_CONFIG_DIR` | Config dir (`config.yaml`, `databases.toml`) | `~/.config/photosphere` |
+| `PHOTOSPHERE_CONFIG_DIR` | Config dir (`config.toml`, `databases.toml`) | `~/.config/photosphere` |
+| `PHOTOSPHERE_STATE_DIR` | State dir (`state.json`) | `~/.local/state/photosphere` |
 | `PHOTOSPHERE_VAULT_DIR` | Secrets storage (plaintext mode only) | `~/.config/photosphere/vault` |
 | `PHOTOSPHERE_VAULT_TYPE` | Vault backend: `plaintext` or `keychain` | `keychain` |
 | `PHOTOSPHERE_LOG_DIR` | Log output | system temp |
@@ -316,6 +317,7 @@ TEST_DIR="/tmp/photosphere-isolated-$$"
 mkdir -p "$TEST_DIR"/{config,vault,logs}
 
 PHOTOSPHERE_CONFIG_DIR="$TEST_DIR/config" \
+PHOTOSPHERE_STATE_DIR="$TEST_DIR/state" \
 PHOTOSPHERE_VAULT_DIR="$TEST_DIR/vault" \
 PHOTOSPHERE_VAULT_TYPE=plaintext \
 PHOTOSPHERE_LOG_DIR="$TEST_DIR/logs" \
@@ -326,9 +328,10 @@ The same variables work for CLI tests. Set them in the shell before running `psi
 
 ```bash
 TEST_DIR="/tmp/photosphere-isolated-$$"
-mkdir -p "$TEST_DIR"/{config,vault,logs}
+mkdir -p "$TEST_DIR"/{config,state,vault,logs}
 
 export PHOTOSPHERE_CONFIG_DIR="$TEST_DIR/config"
+export PHOTOSPHERE_STATE_DIR="$TEST_DIR/state"
 export PHOTOSPHERE_VAULT_DIR="$TEST_DIR/vault"
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
@@ -342,7 +345,7 @@ Set state up from outside the app, before it launches. Do not add a command, an 
 The two helpers to reach for, both defined per platform in `apps/smoke-tests/lib/android.sh` and `apps/smoke-tests/lib/ios.sh`:
 
 - `"${PLATFORM}_reset_app_state"` - wipes everything the app has stored on the device: its storage sandbox, the WebView's localStorage and the keychain. Call it before `start_app`, so the app starts from a known state and nothing can write state back underneath it. On Android this is `pm clear`; on iOS it empties the app's data container and resets the simulator keychain.
-- `"${PLATFORM}_seed_databases_config" '<databases json>' '<recent names json>' '<last database path>'` - writes the app's `databases.toml` into its settings directory with the configured databases, and the `databases` section of its `state.yaml` with the recents and the database to reopen on launch. The third argument is optional; omitting it leaves `last_opened_path` out of `state.yaml`, so the app starts on the welcome screen. Both files are rendered on the host with `jq`, from outside the app and before it starts.
+- `"${PLATFORM}_seed_databases_config" '<databases json>' '<recent names json>' '<last database path>'` - writes the app's `databases.toml` into its settings directory with the configured databases, and the `databases` section of its `state.json` with the recents and the database to reopen on launch. The third argument is optional; omitting it leaves `last_opened_path` out of `state.json`, so the app starts on the welcome screen. Both files are rendered on the host with `jq`, from outside the app and before it starts.
 
 Alongside those, `"${PLATFORM}_seed_database"` copies a database fixture into the sandbox and `"${PLATFORM}_reset_path"` removes a path under it.
 

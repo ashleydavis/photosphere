@@ -15,6 +15,7 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-dbs-add-duplicate-fails
 mkdir -p /tmp/psi-cli-dbs-add-duplicate-fails/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-add-duplicate-fails/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-dbs-add-duplicate-fails/config
 psi dbs add --yes --name dup-db --path /tmp/psi-cli-dbs-add-duplicate-fails/dup-db-1
 ```
 

@@ -30,6 +30,7 @@ Run this in the same terminal. It keeps the test's settings, secrets, cache, log
 
 ```bash
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-news-notifications/config
+export PHOTOSPHERE_STATE_DIR=/tmp/psi-desktop-news-notifications/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-news-notifications/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-news-notifications/cache
@@ -68,7 +69,7 @@ Expected:
 
 Expected:
 - The toast disappears.
-- The app records the dismissal (the news state file, `/tmp/psi-desktop-news-notifications/config/state.yaml`, now contains `smoke-test-001`).
+- The app records the dismissal (the news state file, `/tmp/psi-desktop-news-notifications/config/state.json`, now contains `smoke-test-001`).
 
 ## Check
 
