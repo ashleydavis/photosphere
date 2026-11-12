@@ -197,6 +197,22 @@ jobs:
           platform: android
           build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
+      # The finished app, keyed on everything it is built from, so a commit that changes only the tests pays no build. An exact
+      # match only, so nothing is restored for a commit whose Zig code, page, libraries or native sources differ. Worked out once
+      # here and used to restore and to save alike: computing it in both places gave two keys, because hashFiles is not stable
+      # across a build.
+      - name: Work out the built-app cache key
+        id: built-key
+        shell: bash
+        run: echo "key=${{ runner.os }}-${{ runner.arch }}-test-built-app-android-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/android/**') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the built app
+        id: built
+        uses: actions/cache/restore@v4
+        with:
+          path: out/app
+          key: ${{ steps.built-key.outputs.key }}
+
       # The app build's Zig build cache, restored from the latest run that saved one for this platform, so the build
       # compiles only what changed instead of the whole app. Saved again after the build, as the CLI build does.
       - name: Restore the app build's Zig build cache
@@ -222,10 +238,18 @@ jobs:
       # The APK is copied to out/app/photosphere.apk, laid out as apps/photosphere-smoke-tests/run.md describes, which is where the
       # smoke tests take it from.
       - name: Build (Android)
+        if: steps.built.outputs.cache-hit != 'true'
         shell: bash
         # The page is minified as the release's is, so the release APKs are made from the Zig libraries built here rather
         # than compiling them again.
         run: bun run --filter=ziggy build:android -- --minify --output-dir "$PWD/out/app"
+
+      - name: Save the built app
+        if: steps.built.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: out/app
+          key: ${{ steps.built-key.outputs.key }}
 
       - name: Save the app build's Zig build cache
         if: always()
