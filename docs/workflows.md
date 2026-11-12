@@ -4,44 +4,68 @@ The jobs of the GitHub Actions workflows in `.github/workflows`, what each one n
 
 A third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) is built by its own build action in `.github/actions/build-<library>`, which caches it under a key made from the platform, the build arguments and the library's source, so the same library is built once whichever workflow asks for it. A job that needs the libraries restores them with the `third-party-libraries` action, which runs the same build actions and gets a cache hit.
 
-## CI (`ci.yml`)
+## Test (`test-<platform>.yml`)
 
-Runs on every push to a branch, every pull request into `main` and every manual run, on Linux only. It packages nothing and builds for no other platform: the release workflows do both.
+One workflow per platform: `linux`, `windows`, `macos-arm64`, `macos-x64`, `android` and `ios`. Each runs on every push to a branch and every manual run. Each is the release workflow for that platform with `package` and `create-release` taken out, so it runs the same tests over the same builds and libraries, and packages and publishes nothing. See [Releasing](releasing.md) for the release workflows.
 
 ```
-ci.yml  "CI"
+test-<platform>.yml
+├── prepare-tag
+│   │ needs:  none
+│   │ Resolves no tag on a test run: there is no tag to resolve and
+│   │ nothing is released.
+│   └── linux                     (ubuntu-latest)
 │
-│   Library jobs: one job per library, for Linux.
+│   Library jobs: one job per library, for this platform.
 │     needs:  none
-│     output → GitHub cache (one key per library)
-├── build-aws-sdk-linux                (ubuntu-latest)
-├── build-zlib-ng-linux                (ubuntu-latest)
-├── build-imagemagick-linux            (ubuntu-latest)
-├── build-ffmpeg-linux                 (ubuntu-latest)
+│     output → GitHub cache
+├── build-aws-sdk                      (<platform runner>)
+├── build-zlib-ng                      (<platform runner>)
+├── build-imagemagick                  (<platform runner>)
+├── build-ffmpeg                       (<platform runner>)
 │
-├── app-build-linux                    (ubuntu-latest)
-│     needs:  the 4 library jobs
-│     Builds the app. No packaging.
-│     input  ← libraries from GitHub cache
-│     output → none kept (it only proves the app builds)
-├── cli-build-linux                    (ubuntu-latest)
-│     needs:  the 4 library jobs
-│     Builds the CLI.
-│     input  ← libraries from GitHub cache
-│     output → Zig build cache to GitHub cache (zig-build-<sha>)
-├── typescript-compile                 (ubuntu-latest)
-│     needs:  none
-│     output → none
-├── typescript-unit-tests              (ubuntu-latest)
-│     needs:  none
-│     output → none
-└── zig-unit-tests-linux                     (ubuntu-latest)
-      needs:  the 4 library jobs, cli-build-linux
-      Runs zig build test.
-      input  ← libraries; its own Zig build cache; the cli-build-linux
-               Zig build cache (zig-build-<sha>), from GitHub cache
-      output → Zig build cache to GitHub cache, for its next run
+├── app-build
+│   │ needs:  prepare-tag, the 4 library jobs
+│   │ Builds the app.
+│   │ input  ← libraries from GitHub cache
+│   │ output → GitHub cache (photosphere-app-<platform>)
+│   └── <platform>                (<platform runner>)
+├── cli-build  (desktop only)
+│   │ needs:  prepare-tag, the 4 library jobs
+│   │ Builds the CLI.
+│   │ input  ← libraries and its Zig build cache from GitHub cache
+│   │ output → GitHub cache (photosphere-cli-<platform>, and its Zig
+│   │          build cache)
+│   └── <platform>                (<platform runner>)
+├── typescript-compile
+│   │ needs:  none
+│   │ output → none
+│   └── linux                     (ubuntu-latest)
+├── typescript-unit-tests
+│   │ needs:  none
+│   │ output → none
+│   └── linux                     (ubuntu-latest)
+├── zig-unit-tests
+│   │ needs:  the 4 library jobs; cli-build on desktop, app-build on mobile
+│   │ Runs zig build test.
+│   │ input  ← the runner's libraries; its own Zig build cache; the Zig
+│   │          build cache cli-build or app-build saved, from GitHub cache
+│   │ output → Zig build cache to GitHub cache, for its next run
+│   └── <platform>                (<platform runner>; ubuntu-latest for
+│                                   android, macos-15 for ios)
+├── cli-smoke-tests  (desktop only)
+│   │ needs:  cli-build
+│   │ input  ← photosphere-cli-<platform> from GitHub cache
+│   │ output → none
+│   └── <platform>                (<platform runner>)
+└── app-smoke-tests
+    │ needs:  app-build
+    │ input  ← photosphere-app-<platform> from GitHub cache
+    │ output → none
+    └── <platform>                (<platform runner>)
 ```
+
+The platform runner of each test workflow is the same as the release workflow's, given below.
 
 ## Release (`release-<platform>.yml`)
 
@@ -136,23 +160,30 @@ The Android library jobs build each library for the runner, Android x86_64 and A
 
 Each arrow points from a job to a job that needs it. A job with no arrow into it starts when the workflow starts.
 
-### `ci.yml`
+### `test-<platform>.yml`
+
+`cli-build` and `cli-smoke-tests` are in the desktop workflows only (Linux, Windows and macOS). `zig-unit-tests` runs on the workflow's own runner and needs `cli-build` in the desktop workflows and `app-build` in the Android and iOS ones. There is no `package` and no `create-release`.
 
 ```mermaid
 flowchart LR
-    build-aws-sdk-linux --> app-build-linux
-    build-zlib-ng-linux --> app-build-linux
-    build-imagemagick-linux --> app-build-linux
-    build-ffmpeg-linux --> app-build-linux
-    build-aws-sdk-linux --> cli-build-linux
-    build-zlib-ng-linux --> cli-build-linux
-    build-imagemagick-linux --> cli-build-linux
-    build-ffmpeg-linux --> cli-build-linux
-    build-aws-sdk-linux --> zig-unit-tests-linux
-    build-zlib-ng-linux --> zig-unit-tests-linux
-    build-imagemagick-linux --> zig-unit-tests-linux
-    build-ffmpeg-linux --> zig-unit-tests-linux
-    cli-build-linux --> zig-unit-tests-linux
+    prepare-tag --> app-build
+    lib-aws["build-aws-sdk"] --> app-build
+    lib-zlib["build-zlib-ng"] --> app-build
+    lib-im["build-imagemagick"] --> app-build
+    lib-ff["build-ffmpeg"] --> app-build
+    prepare-tag --> cli-build["cli-build (desktop)"]
+    lib-aws --> cli-build
+    lib-zlib --> cli-build
+    lib-im --> cli-build
+    lib-ff --> cli-build
+    cli-build --> cli-smoke-tests["cli-smoke-tests (desktop)"]
+    app-build --> app-smoke-tests
+    lib-aws --> zig-unit-tests
+    lib-zlib --> zig-unit-tests
+    lib-im --> zig-unit-tests
+    lib-ff --> zig-unit-tests
+    cli-build --> zig-unit-tests
+    app-build --> zig-unit-tests
     typescript-compile
     typescript-unit-tests
     linkStyle default stroke:#ffffff,stroke-width:2px

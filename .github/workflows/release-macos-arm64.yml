@@ -17,16 +17,10 @@ env:
   RELEASE_PLATFORM_NAME: "macOS arm64"
 
 on:
-  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run manually.
+  # A release runs when its tag is pushed, or when it is started by hand. Every push is tested by the test workflows.
   push:
-    branches:
-      - "*"
-  #   tags:
-  #     - 'macos-arm64-v*.*.*'
-
-  # pull_request:
-  #   branches:
-  #     - main
+    tags:
+      - 'macos-arm64-v*.*.*'
 
   workflow_dispatch:
     inputs:
