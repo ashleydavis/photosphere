@@ -743,12 +743,12 @@ jobs:
             echo ""
             echo "| Job | Result | Time |"
             echo "|---|---|---|"
-            jq -r '.jobs[] | select(.name != "report") | select(.started_at != null)
+            jq -r '.jobs[] | select(.name != "report") | select(.started_at != null and .completed_at != null)
               | ((.completed_at|fromdateiso8601) - (.started_at|fromdateiso8601)) as $d
               | "| \(.name) | \(.conclusion) | \($d/60|floor)m \($d%60)s |"' "$RUNNER_TEMP/jobs.json"
-            jq -r '.jobs[] | select(.name != "report") | select(.started_at != null)
+            jq -r '.jobs[] | select(.name != "report") | select(.started_at != null and .completed_at != null)
               | "\n### \(.name)\n\n| Step | Result | Time |\n|---|---|---|\n"
-                + ([.steps[] | select(.started_at != null)
+                + ([.steps[] | select(.started_at != null and .completed_at != null)
                     | ((.completed_at|fromdateiso8601) - (.started_at|fromdateiso8601)) as $d
                     | "| \(.name) | \(.conclusion) | \($d/60|floor)m \($d%60)s |"] | join("\n"))' "$RUNNER_TEMP/jobs.json"
           } >> "$GITHUB_STEP_SUMMARY"
