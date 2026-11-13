@@ -88,6 +88,11 @@ list_scenarios() {
         if [ -n "$SCENARIO_FILTER" ]; then
             ls -d "$SMOKE_DIR"/manual/[0-9]* 2>/dev/null
         fi
+        # These change the system's appearance, which on a desktop is the developer's own screen. They run in the workflow,
+        # and locally only when named with PHOTOSPHERE_SMOKE_SCENARIO or as the runner's second argument.
+        if [ -n "${CI:-}" ] || [ -n "$SCENARIO_FILTER" ]; then
+            ls -d "$SMOKE_DIR"/workflows-only/[0-9]* 2>/dev/null
+        fi
     } | while IFS= read -r directory; do
         printf '%s\t%s\n' "$(basename "$directory")" "$directory"
     done | sort -V | cut -f2

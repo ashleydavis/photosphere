@@ -8,7 +8,7 @@ iOS starts an app in the root directory whatever working directory it is given, 
 
 A device runs one copy of the app at a time, so a scenario claims the device under a lock for as long as it runs, and `photosphere_platform_device_limit` reports one.
 
-It implements the `photosphere_platform_*` functions `common.sh` lists and the `ios_*` helpers scenarios call as `${PLATFORM}_<name>`. No command changes a connected device's appearance, so `photosphere_platform_changes_appearance` returns non-zero and the system-theme scenario does not run there.
+It implements the `photosphere_platform_*` functions `common.sh` lists and the `ios_*` helpers scenarios call as `${PLATFORM}_<name>`. No command changes a connected device's appearance, so `photosphere_platform_changes_appearance` returns non-zero and the workflows-only system-theme scenario does not run there.
 
 ## Environment
 
