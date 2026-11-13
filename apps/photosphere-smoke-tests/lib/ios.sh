@@ -212,7 +212,7 @@ photosphere_platform_start() {
         SIMCTL_CHILD_PHOTOSPHERE_LOG_DIR="$log_dir" \
         SIMCTL_CHILD_PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         SIMCTL_CHILD_TEST_TMP_DIR="$test_dir" \
-        xcrun simctl launch --stdout="$test_dir/app-stdout-$generation.log" --stderr="$test_dir/app-stderr-$generation.log" "$udid" "$IOS_BUNDLE_ID" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL")" || return 1
+        xcrun simctl launch --stdout="$test_dir/app-stdout-$generation.log" --stderr="$test_dir/app-stderr-$generation.log" "$udid" "$IOS_BUNDLE_ID" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL" ${PHOTOSPHERE_SMOKE_THEME:+--theme "$PHOTOSPHERE_SMOKE_THEME"})" || return 1
     local pid="${launched##*: }"
     echo "$pid" > "$test_dir/$IOS_PID_FILE_NAME"
 

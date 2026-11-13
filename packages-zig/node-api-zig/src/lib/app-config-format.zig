@@ -4,8 +4,6 @@ const api = @import("api-zig");
 const config_format = @import("config-format.zig");
 const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
 const normaliseAutoImportSource = api.auto_import_settings.normaliseAutoImportSource;
-const IConfigTheme = config_format.IConfigTheme;
-const ALLOWED_THEMES = config_format.ALLOWED_THEMES;
 const IStoredAutoImportSource = config_format.IStoredAutoImportSource;
 const autoImportSourcesFromStored = config_format.autoImportSourcesFromStored;
 const autoImportSourcesToStored = config_format.autoImportSourcesToStored;
@@ -37,11 +35,6 @@ const config_state = @import("ziggy").config_state;
 // Every setting the user chooses, flattened into one namespace.
 //
 pub const IAppConfig = struct {
-    //
-    // The theme preference: 'light', 'dark', or 'system'.
-    //
-    theme: ?IConfigTheme = null,
-
     //
     // Whether developer mode is enabled (reveals developer tools in the UI). Defaults to false when unset.
     //
@@ -94,7 +87,6 @@ pub const IAppConfig = struct {
 // The key path each field of IAppConfig is stored at. The field names are the interface's names and the values are the file's keys.
 //
 pub const APP_CONFIG_PATHS = .{
-    .theme = "theme",
     .developerMode = "developer_mode",
     .showFpsIndicator = "show_fps_indicator",
     .savedSearches = "saved_searches",
@@ -133,7 +125,7 @@ pub fn setAppConfig(comptime field_name: []const u8, arena: std.mem.Allocator, i
 //
 // A value one of the flat config keys can hold.
 // (Zig: a tagged union with a case for each of the types a config value can be: boolean, number, string, list of strings
-// and list of auto-import sources. The theme is the `string` case, holding the theme's name.)
+// and list of auto-import sources.)
 //
 pub const IAppConfigValue = union(enum) {
     // A boolean setting.
@@ -166,11 +158,6 @@ fn fieldValue(comptime FieldType: type, field: FieldType) ?IAppConfigValue {
         return null;
     };
     const ValueType = @TypeOf(value);
-    if (ValueType == IConfigTheme) {
-        return .{
-            .string = @tagName(value),
-        };
-    }
     if (ValueType == bool) {
         return .{
             .boolean = value,
@@ -215,9 +202,9 @@ pub fn getAppConfigValue(config: IAppConfig, key: []const u8) ?IAppConfigValue {
 //
 // Writes one flat config key. null removes it, which is what IConfig.clear means.
 //
-// (Zig: a field has one type, so a value for a key that is not a config key, or a value of a type the key cannot hold
-// (including a theme that is not one of ALLOWED_THEMES), throws an error saying so instead of being stored where
-// nothing reads it. Clearing a key that is not a config key removes nothing, and is not an error.)
+// (Zig: a field has one type, so a value for a key that is not a config key, or a value of a type the key cannot hold,
+// throws an error saying so instead of being stored where nothing reads it. Clearing a key that is not a config key
+// removes nothing, and is not an error.)
 //
 pub fn setAppConfigValue(config: *IAppConfig, key: []const u8, value: ?IAppConfigValue) !void {
     inline for (std.meta.fields(IAppConfig)) |field| {
@@ -227,18 +214,6 @@ pub fn setAppConfigValue(config: *IAppConfig, key: []const u8, value: ?IAppConfi
                 return;
             };
             const FieldValueType = @typeInfo(field.type).optional.child;
-            if (FieldValueType == IConfigTheme) {
-                if (present != .string) {
-                    return errors.throwError("The config setting \"{s}\" holds a theme name, and was given a value that is not a string.", .{key});
-                }
-                for (ALLOWED_THEMES) |allowedTheme| {
-                    if (std.mem.eql(u8, present.string, @tagName(allowedTheme))) {
-                        @field(config, field.name) = allowedTheme;
-                        return;
-                    }
-                }
-                return errors.throwError("\"{s}\" is not a theme, so it cannot be stored as the config setting \"{s}\".", .{ present.string, key });
-            }
             if (FieldValueType == bool and present == .boolean) {
                 @field(config, field.name) = present.boolean;
                 return;

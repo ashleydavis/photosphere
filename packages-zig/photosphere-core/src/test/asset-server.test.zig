@@ -13,7 +13,7 @@ const io = std.testing.io;
 fn portOf(query: []const u8) !u16 {
     const prefix = "restApiUrl=http%3A%2F%2Flocalhost%3A";
     try std.testing.expect(std.mem.startsWith(u8, query, prefix));
-    const end = std.mem.indexOfScalar(u8, query[prefix.len..], '&') orelse return error.NoSeparator;
+    const end = std.mem.indexOfScalar(u8, query[prefix.len..], '&') orelse query.len - prefix.len;
     return try std.fmt.parseInt(u16, query[prefix.len .. prefix.len + end], 10);
 }
 

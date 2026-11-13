@@ -9,7 +9,6 @@ const app_config = node_api.app_config;
 const config_format = node_api.config_format;
 const app_config_format = node_api.app_config_format;
 const IAppConfig = app_config.IAppConfig;
-const IConfigTheme = node_api.config_format.IConfigTheme;
 const config_state = @import("ziggy").config_state;
 
 //
@@ -44,9 +43,6 @@ fn readConfig(allocator: std.mem.Allocator, io: std.Io, config_path: []const u8)
 //
 fn sampleValue(comptime field_name: []const u8) @FieldType(IAppConfig, field_name) {
     const T = @FieldType(IAppConfig, field_name);
-    if (T == ?IConfigTheme) {
-        return .light;
-    }
     if (T == ?bool) {
         return true;
     }
@@ -85,7 +81,6 @@ test "loadAppConfig reads every setting from config.toml" {
     const allocator = arena.allocator();
     const config_path = try freshConfigPath(allocator, std.testing.io, "app-config-load");
     try writeConfig(allocator, std.testing.io, config_path,
-        \\theme = "dark"
         \\developer_mode = true
         \\show_fps_indicator = true
         \\saved_searches = ["beach", "dogs"]
@@ -102,7 +97,6 @@ test "loadAppConfig reads every setting from config.toml" {
     );
 
     const config = try app_config.loadAppConfig(allocator, std.testing.io, log, config_path);
-    try std.testing.expectEqual(IConfigTheme.dark, config.theme.?);
     try std.testing.expect(config.developerMode.?);
     try std.testing.expect(config.showFpsIndicator.?);
     try std.testing.expectEqualStrings("beach", config.savedSearches.?[0]);
@@ -124,12 +118,12 @@ test "loadAppConfig gives one wrong-typed key its default and reads every other 
     const config_path = try freshConfigPath(allocator, std.testing.io, "app-config-wrong-type");
     try writeConfig(allocator, std.testing.io, config_path,
         \\developer_mode = "yes"
-        \\theme = "dark"
+        \\show_fps_indicator = true
     );
 
     const config = try app_config.loadAppConfig(allocator, std.testing.io, log, config_path);
     try std.testing.expect(config.developerMode == null);
-    try std.testing.expectEqual(IConfigTheme.dark, config.theme.?);
+    try std.testing.expect(config.showFpsIndicator.?);
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "developer_mode") != null);
 }
 
@@ -209,38 +203,6 @@ test "setAppConfigIn writes two fields inside one update" {
     try std.testing.expect(config.autoImportCleanupEnabled.?);
 }
 
-test "getTheme returns system when the theme is unset, missing or names nobody, and the stored value otherwise" {
-    const log = utils.mute_log.MuteLog.init();
-    const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit(log);
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const config_path = try freshConfigPath(allocator, std.testing.io, "app-config-theme");
-
-    try std.testing.expectEqual(IConfigTheme.system, try app_config.getTheme(allocator, std.testing.io, log, config_path));
-    try writeConfig(allocator, std.testing.io, config_path, "");
-    try std.testing.expectEqual(IConfigTheme.system, try app_config.getTheme(allocator, std.testing.io, log, config_path));
-    try writeConfig(allocator, std.testing.io, config_path, "theme = \"neon\"\n");
-    try std.testing.expectEqual(IConfigTheme.system, try app_config.getTheme(allocator, std.testing.io, log, config_path));
-    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "theme") != null);
-    try writeConfig(allocator, std.testing.io, config_path, "theme = \"dark\"\n");
-    try std.testing.expectEqual(IConfigTheme.dark, try app_config.getTheme(allocator, std.testing.io, log, config_path));
-}
-
-test "setTheme writes the theme" {
-    const log = utils.mute_log.MuteLog.init();
-    const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit(log);
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const config_path = try freshConfigPath(allocator, std.testing.io, "app-config-set-theme");
-
-    try app_config.setTheme(allocator, std.testing.io, config_path, .light);
-    try std.testing.expectEqual(IConfigTheme.light, try app_config.getTheme(allocator, std.testing.io, log, config_path));
-}
-
 test "loadAppConfig leaves a sync setting absent from the file null, so the UI applies its own default" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
@@ -249,7 +211,7 @@ test "loadAppConfig leaves a sync setting absent from the file null, so the UI a
     defer arena.deinit();
     const allocator = arena.allocator();
     const config_path = try freshConfigPath(allocator, std.testing.io, "app-config-sync-absent");
-    try writeConfig(allocator, std.testing.io, config_path, "theme = \"dark\"\n");
+    try writeConfig(allocator, std.testing.io, config_path, "");
 
     const config = try app_config.loadAppConfig(allocator, std.testing.io, log, config_path);
     try std.testing.expect(config.syncEnabled == null);

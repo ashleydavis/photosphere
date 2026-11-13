@@ -22,13 +22,13 @@ A **Back to app** link in the sidebar navigates back to `/`.
 
 ## Play on automatic
 
-The sidebar has a **▶ Play on automatic** button that walks every story in order, dwelling briefly on each, and reports how many passed or failed at the end. By default it shows each story in **light and then dark**; when `PHOTOSPHERE_THEME` forces a single theme (the screenshot passes) it walks only that theme. During playback the only control is **Cancel**; the completion screen has a **Back to browser** button. Under the hood this just sets the `?cycle=1` query param the cycle reads, so it works identically in the web build and the app.
+The sidebar has a **▶ Play on automatic** button that walks every story in order, dwelling briefly on each, and reports how many passed or failed at the end. It shows each story in **light and then dark**. During playback the only control is **Cancel**; the completion screen has a **Back to browser** button. Under the hood this just sets the `?cycle=1` query param the cycle reads, so it works identically in the web build and the app.
 
 ## Theming
 
 The browser has a **light/dark toggle button** (top-right, left of the dev-tools button) to switch theme while viewing stories; it uses MUI Joy's `setMode` and writes localStorage only, never the config file.
 
-The initial color mode is controlled by the `PHOTOSPHERE_THEME` build-time env var (`light`, `dark`, or `system`), the same mechanism used app-wide (see `docs/theme-override.md`). When set, it is applied on startup over the saved theme and is never written to the config file; when unset the stories page uses the system theme. There is no theme query param.
+The stories page starts in the web view's colour scheme, which is Ziggy's theme, and its own light/dark toggle changes it while it is open.
 
 ## Running the stories
 

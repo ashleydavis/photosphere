@@ -1,40 +1,29 @@
-# Forcing a theme with PHOTOSPHERE_THEME
+# Forcing a theme with --theme
 
-`PHOTOSPHERE_THEME` forces the color theme the app starts in. Set it to `light`, `dark`, or `system` in the environment when you build or run a frontend.
+`--theme light|dark|system` on the app's command line starts it in that theme for one run. On Android the Intent extra `ziggy.theme` does the same, because an Android app is started with an Intent, not a command line.
 
-- It **overrides the saved theme on startup** but is **never written back to persisted settings** (a config file on desktop, localStorage on web and mobile), so your saved theme is untouched.
-- You can still change the theme in the app afterwards (that change saves, as normal).
-- With the variable unset, the app starts from the saved theme (`system` by default).
+- The value is **never written to the config file**, so a forced run leaves the user's saved setting alone.
+- A theme chosen in the app while it runs is saved, as normal.
+- With no `--theme`, the app starts from the config file's `theme`, or `system` when the file has none.
+- A value that is not `light`, `dark` or `system` fails the start with `UnknownTheme`.
 
-It works the same on every platform because the value is baked into the frontend at build time (via each frontend's Vite `define`) and read by `packages/user-interface/src/lib/env-theme.ts`. Since `bun run` passes the environment through to the Vite build, prefixing the command is all that is needed. There is no theme query parameter.
+The theme is Ziggy's: the native app sets the web view's colour scheme before it loads the page, so a page follows it with `prefers-color-scheme`, and `getConfig("theme")` and `config-changed` report the setting. See Ziggy's [Theme](https://github.com/ashleydavis/ziggy/blob/main/docs/user-guide/theme.md) guide.
 
 ## Running the app in a theme
 
-Photosphere App desktop (use `linux`, `windows` or `macos` for the operating system you are on):
+Desktop (use `linux`, `windows` or `macos` for the operating system you are on):
 
 ```
-PHOTOSPHERE_THEME=dark bun run linux
+bun run linux -- --theme dark
 ```
 
-Mobile (the run scripts build the frontend, so the same variable applies):
-
-```
-# Android
-PHOTOSPHERE_THEME=dark bun run android
-# iOS
-PHOTOSPHERE_THEME=dark bun run ios
-```
-
-Because the theme is baked in at build time, changing `PHOTOSPHERE_THEME` requires a rebuild (re-run the command).
+Mobile: start the app with the `ziggy.theme` extra, or set `PHOTOSPHERE_SMOKE_THEME` for a smoke test.
 
 ## Running a smoke test in a theme
 
-The same variable works for the smoke tests:
-
 ```
-PHOTOSPHERE_THEME=dark bun run test:ziggy
-PHOTOSPHERE_THEME=light bun run test:ziggy:and
-PHOTOSPHERE_THEME=dark bun run stories:ziggy
+PHOTOSPHERE_SMOKE_THEME=dark bun run test:ziggy
+PHOTOSPHERE_SMOKE_THEME=light bun run test:ziggy:and
 ```
 
 The story player (`bun run stories:ziggy`) switches theme at runtime and captures every story in both light and dark, so it needs no theme override; see `packages/user-interface/src/stories/README.md`.

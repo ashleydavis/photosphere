@@ -121,6 +121,11 @@ pub const app = withNodeApiTasks(ziggy.core.App(.{
     },
     .menu = core.menu.menu,
     .actions = core.actions.actions,
+    // Joy's default background.body: white in the light theme and black in the dark one.
+    .backgrounds = .{
+        .light = 0xffffff,
+        .dark = 0x000000,
+    },
     .ui_files = &page.files,
     .ui_query = core.page_query.pageQuery,
     .describe_error = core.describe_error.describeError,

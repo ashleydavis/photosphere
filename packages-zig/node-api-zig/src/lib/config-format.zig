@@ -43,21 +43,6 @@ const config_state = @import("ziggy").config_state;
 //
 
 //
-// The theme the interface runs with. "system" follows the operating system.
-// (Zig: an enum, whose tag names are the strings.)
-//
-pub const IConfigTheme = enum {
-    // A light interface.
-    light,
-
-    // A dark interface.
-    dark,
-
-    // Follows the operating system.
-    system,
-};
-
-//
 // Everything config.toml holds, in memory, with camelCase fields.
 //
 // The auto-import and sync sections are the already-resolved types the rest of the app works with
@@ -65,11 +50,6 @@ pub const IConfigTheme = enum {
 // has values that have been through the normalisers.
 //
 pub const IConfigFile = struct {
-    //
-    // Which theme the interface uses.
-    //
-    theme: ?IConfigTheme = null,
-
     //
     // Whether developer mode is on, which reveals the developer tools in the interface.
     //
@@ -101,13 +81,6 @@ pub const IConfigFile = struct {
     //
     sync: ISyncFile,
 };
-
-//
-// The themes a config file is allowed to name. A file that says anything else is ignored rather
-// than passed through, because the value reaches the interface and picking a stylesheet by a name
-// nobody defined leaves a window with no styling at all.
-//
-pub const ALLOWED_THEMES = [_]IConfigTheme{ .light, .dark, .system };
 
 //
 // Gets the object of a value that is one, or null.

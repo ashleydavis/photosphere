@@ -10,7 +10,7 @@
 //
 //  - `navigate:<route>` goes to the page at the route.
 //  - `about` goes to the About page. The Help menu's About item has this name because two items cannot share `navigate:/about`.
-//  - `theme:<light|dark|system>` saves the theme and tells the page.
+//  - `theme:<light|dark|system>` saves the theme setting.
 //  - `open-log-directory` shows the folder the log files are in.
 //  - `help` opens the wiki in the system browser.
 //  - Anything else (new-database, add-database, import-assets, close-database, open-configuration and report-bug) is

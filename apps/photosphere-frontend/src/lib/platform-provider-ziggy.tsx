@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IConfigChangedEvent, type IPlatformContext, type IPlatformEvent, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, type ITaskResult } from "task-queue";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type ILogDetails } from "utils";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
@@ -122,9 +122,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     // Store callbacks for database-closed events
     const closedCallbacksRef = useRef<Set<() => void>>(new Set());
-
-    // Store callbacks for theme-changed events
-    const themeCallbacksRef = useRef<Set<(theme: 'light' | 'dark' | 'system') => void>>(new Set());
 
     // Store callbacks for menu actions
     const platformEventCallbacksRef = useRef<Set<(event: IPlatformEvent) => void>>(new Set());
@@ -357,24 +354,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         };
     }, [ziggy]);
 
-    // Set up message listener for theme-changed events
-    useEffect(() => {
-        const handleThemeChanged = (event: IAppEvent<'light' | 'dark' | 'system'>) => {
-            if (event.type === 'theme-changed') {
-                // Notify all subscribers
-                themeCallbacksRef.current.forEach(callback => {
-                    callback(event.data);
-                });
-            }
-        };
-
-        ziggy.onEvent(handleThemeChanged);
-
-        return () => {
-            ziggy.removeEventListener(handleThemeChanged);
-        };
-    }, [ziggy]);
-
     // Set up message listener for sync-started events
     useEffect(() => {
         const handleSyncStarted = (event: IAppEvent<null>) => {
@@ -527,8 +506,8 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
                 window.location.hash = effect.page;
                 return;
             case 'set-theme':
-                // The core announces the change with a theme-changed event, which reaches the theme subscribers.
-                await ziggy.invoke('set-config', { key: 'theme', value: effect.theme });
+                // The core announces the change with a config-changed event, which reaches the config subscribers.
+                await ziggy.setConfig('theme', effect.theme);
                 return;
             case 'open-log-directory': {
                 const logDetails = await ziggy.invoke<ILogDetails>('get-log-details', null);
@@ -618,12 +597,24 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         await ziggy.invoke('notify-database-closed', null);
     }, [ziggy]);
 
-    const onThemeChanged = useCallback((callback: (theme: 'light' | 'dark' | 'system') => void): (() => void) => {
-        themeCallbacksRef.current.add(callback);
+    const getConfig = useCallback(async (path: string): Promise<IJsonValue | undefined> => {
+        return ziggy.getConfig(path);
+    }, [ziggy]);
+
+    const setConfig = useCallback(async (path: string, value: IJsonValue): Promise<void> => {
+        await ziggy.setConfig(path, value);
+    }, [ziggy]);
+
+    const getSystemTheme = useCallback(async (): Promise<"light" | "dark"> => {
+        return ziggy.getSystemTheme();
+    }, [ziggy]);
+
+    const onConfigChanged = useCallback((callback: (event: IConfigChangedEvent) => void): (() => void) => {
+        ziggy.onConfigChanged(callback);
         return () => {
-            themeCallbacksRef.current.delete(callback);
+            ziggy.removeConfigChangedListener(callback);
         };
-    }, []);
+    }, [ziggy]);
 
     const notifyDatabaseEdited = useCallback((): void => {
         ziggy.send('notify-database-edited', null);
@@ -932,7 +923,10 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         onDatabaseClosed,
         notifyDatabaseOpened,
         notifyDatabaseClosed,
-        onThemeChanged,
+        getConfig,
+        setConfig,
+        getSystemTheme,
+        onConfigChanged,
         notifyDatabaseEdited,
         onSyncStarted,
         onSyncCompleted,

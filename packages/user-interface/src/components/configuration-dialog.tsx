@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import Stack from "@mui/joy/Stack/Stack";
 import Typography from "@mui/joy/Typography";
 import ToggleButtonGroup from "@mui/joy/ToggleButtonGroup/ToggleButtonGroup";
@@ -10,7 +9,7 @@ import ModalClose from "@mui/joy/ModalClose";
 import { ResponsiveDialog } from "./responsive-dialog";
 import DialogTitle from "@mui/joy/DialogTitle";
 import DialogContent from "@mui/joy/DialogContent";
-import { useConfigStore } from "../context/config-store-context";
+import { useThemeSetting } from "../lib/use-theme-setting";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useSync } from "../context/sync-context";
 import { createDialogKeyHandler } from "../lib/dialog-keys";
@@ -33,8 +32,7 @@ export interface IConfigurationDialogProps {
 // Modal dialog for configuring the Photosphere app.
 //
 export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps) {
-    const { mode, setMode } = useColorScheme();
-    const config = useConfigStore();
+    const [themeSetting, chooseTheme] = useThemeSetting();
     const { targetRowHeight, setTargetRowHeight } = useGalleryLayout();
     const { syncEnabled, toggleSyncEnabled, syncOnlyOnWifi, toggleSyncOnlyOnWifi } = useSync();
 
@@ -59,12 +57,11 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
                         <Stack>
                             <Typography level="body-xs">Theme</Typography>
                             <ToggleButtonGroup
-                                value={mode}
+                                value={themeSetting}
                                 onChange={async (_event, value) => {
                                     if (value) {
                                         const newTheme = value as 'light' | 'dark' | 'system';
-                                        setMode(newTheme);
-                                        await config.set("theme", newTheme);
+                                        await chooseTheme(newTheme);
                                     }
                                 }}
                                 sx={{ mt: 1 }}

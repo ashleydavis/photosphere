@@ -392,6 +392,9 @@ photosphere_platform_start() {
     if [ -n "${PHOTOSPHERE_NEWS_URL:-}" ]; then
         extras="$extras --es PHOTOSPHERE_NEWS_URL '$PHOTOSPHERE_NEWS_URL'"
     fi
+    if [ -n "${PHOTOSPHERE_SMOKE_THEME:-}" ]; then
+        extras="$extras --es ziggy.theme '$PHOTOSPHERE_SMOKE_THEME'"
+    fi
 
     photosphere_adb logcat -c
     # The device's log, where the app's own output, a crash and the system ending the app are written, kept for each start beside
@@ -1589,4 +1592,60 @@ android_auto_import_stopped_log() {
 #
 android_request_sync() {
     return 0
+}
+
+#
+# The device's appearance: "light" or "dark". Usage: photosphere_platform_system_theme <test_dir>
+#
+photosphere_platform_system_theme() {
+    local night
+    night="$(photosphere_adb shell cmd uimode night)" || return 1
+    night="${night#Night mode: }"
+    night="$(printf '%s' "$night" | tr -d '\r')"
+    if [ "$night" = "yes" ]; then
+        printf 'dark\n'
+    else
+        printf 'light\n'
+    fi
+}
+
+#
+# Android can change the device's appearance.
+#
+photosphere_platform_changes_appearance() {
+    return 0
+}
+
+#
+# Sets the device's appearance and keeps the one to put back in the scenario's directory.
+# Usage: photosphere_platform_set_system_theme <test_dir> <light|dark>
+#
+photosphere_platform_set_system_theme() {
+    local test_dir="$1"
+    local theme="$2"
+    if [ ! -f "$test_dir/system-appearance.txt" ]; then
+        local current
+        current="$(photosphere_adb shell cmd uimode night)" || return 1
+        current="${current#Night mode: }"
+        current="$(printf '%s' "$current" | tr -d '\r')"
+        printf '%s\n' "$current" > "$test_dir/system-appearance.txt"
+    fi
+    if [ "$theme" = "dark" ]; then
+        photosphere_adb shell cmd uimode night yes > /dev/null || return 1
+    else
+        photosphere_adb shell cmd uimode night no > /dev/null || return 1
+    fi
+}
+
+#
+# Puts the device's appearance back. Usage: photosphere_platform_restore_system_theme <test_dir>
+#
+photosphere_platform_restore_system_theme() {
+    local test_dir="$1"
+    local value
+    value="$(cat "$test_dir/system-appearance.txt")"
+    if ! photosphere_adb shell cmd uimode night "$value" > /dev/null; then
+        echo "could not set the device's appearance back to $value" >&2
+        return 1
+    fi
 }

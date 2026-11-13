@@ -2,7 +2,7 @@
 
 The Linux platform library of Photosphere's smoke tests. [common.sh](common.md) sources it when the platform is `linux`, and it is never run on its own. It takes no arguments.
 
-It implements the `photosphere_platform_*` functions `common.sh` lists, and the `linux_*` helpers scenarios call as `${PLATFORM}_<name>`.
+It implements the `photosphere_platform_*` functions `common.sh` lists, and the `linux_*` helpers scenarios call as `${PLATFORM}_<name>`. When `PHOTOSPHERE_SMOKE_THEME` is set, the app is started with `--theme <value>`. It also reads and changes the desktop's colour scheme with `gsettings` for the system-theme scenario, putting the value it found back.
 
 The app runs on a virtual display of its own, so a run shows no window and two runs never share a display. WebKitGTK's bubblewrap sandbox is switched off for these test processes only, through the environment WebKitGTK documents for it, because some Linux setups do not let an unprivileged program create it. The app is started in test mode with its settings, vault, cache, logs and databases inside the scenario's directory. It is started with `--remote-control` and the app port of the scenario's remote control server.
 

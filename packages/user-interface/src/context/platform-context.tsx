@@ -1,5 +1,10 @@
 import React, { ReactNode, createContext, useContext } from "react";
 import type { ISaveAssetItem } from "api";
+
+//
+// A value a config key can hold.
+//
+export type IJsonValue = string | number | boolean | null | IJsonValue[] | { [key: string]: IJsonValue };
 import type { IConflictResolution } from "../lib/lan-share";
 import type { NetworkConnectionType } from "../lib/sync-gate";
 
@@ -24,6 +29,17 @@ export interface INetworkStatus {
 // Unsubscribe function type for event listeners.
 //
 export type Unsubscribe = () => void;
+
+//
+// A change of a config value.
+//
+export interface IConfigChangedEvent {
+    // The dotted key path that changed.
+    path: string;
+
+    // The value written.
+    value: IJsonValue;
+}
 
 //
 // A named UI action pushed from the host (for example a native menu item on
@@ -328,10 +344,25 @@ export interface IPlatformContext {
     notifyDatabaseClosed: () => Promise<void>;
 
     //
-    // Subscribes to theme changed events.
+    // Reads a value from the config file by dotted key path.
+    //
+    getConfig: (path: string) => Promise<IJsonValue | undefined>;
+
+    //
+    // Writes a value to the config file by dotted key path.
+    //
+    setConfig: (path: string, value: IJsonValue) => Promise<void>;
+
+    //
+    // Reads the operating system's theme: "light" or "dark", whatever the app's theme setting is.
+    //
+    getSystemTheme: () => Promise<"light" | "dark">;
+
+    //
+    // Subscribes to config-changed events.
     // Returns an unsubscribe function.
     //
-    onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
+    onConfigChanged: (callback: (event: IConfigChangedEvent) => void) => Unsubscribe;
 
     //
     // Subscribes to platform events pushed from the host (menu actions,

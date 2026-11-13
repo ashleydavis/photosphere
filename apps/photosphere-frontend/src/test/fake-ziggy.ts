@@ -1,4 +1,4 @@
-import type { IActionHandler, IActionInfo, IAddTask, IConfigProblem, ICoreErrorEvent, IJsonObject, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskEvent, ITestCommandEvent, IToolOutput, IZiggyBridge, LogLevel } from "ziggy";
+import type { IActionHandler, IActionInfo, IAddTask, IConfigChangedEvent, IConfigProblem, ICoreErrorEvent, IJsonObject, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskEvent, ITestCommandEvent, IToolOutput, IZiggyBridge, LogLevel } from "ziggy";
 
 //
 // A message the page sent with send or invoke, or one of Ziggy's own calls that sends a message.
@@ -47,6 +47,9 @@ export class FakeZiggy implements IZiggyBridge {
     // The problem getConfigProblem resolves with, or undefined.
     configProblem: IConfigProblem | undefined = undefined;
 
+    // The operating system's theme getSystemTheme resolves with.
+    systemTheme: "light" | "dark" = "light";
+
     invoke<TResponse>(name: string, data: IJsonValue): Promise<TResponse> {
         this.invoked.push({
             name,
@@ -82,6 +85,10 @@ export class FakeZiggy implements IZiggyBridge {
         return Promise.resolve(this.configValues.get(path) as TValue | undefined);
     }
 
+    getSystemTheme(): Promise<"light" | "dark"> {
+        return Promise.resolve(this.systemTheme);
+    }
+
     setConfig(path: string, value: IJsonValue | undefined): Promise<void> {
         if (value === undefined) {
             this.configValues.delete(path);
@@ -108,6 +115,14 @@ export class FakeZiggy implements IZiggyBridge {
 
     getConfigProblem(): Promise<IConfigProblem | undefined> {
         return Promise.resolve(this.configProblem);
+    }
+
+    onConfigChanged(callback: IMessageCallback<IConfigChangedEvent>): void {
+        this.addListener("config-changed", callback);
+    }
+
+    removeConfigChangedListener(callback: IMessageCallback<IConfigChangedEvent>): void {
+        this.removeListener("config-changed", callback);
     }
 
     addTask(task: IAddTask): void {

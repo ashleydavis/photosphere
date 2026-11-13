@@ -3,6 +3,7 @@ package au.com.codecapers.photosphere.ziggy;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -109,6 +110,12 @@ public final class MainActivity extends Activity {
             return;
         }
         moveTaskToBack(true);
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        nativeApp.onConfigurationChanged(configuration);
     }
 
     @Override

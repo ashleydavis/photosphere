@@ -64,7 +64,6 @@ pub fn loadConfigFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, confi
         .sources = try readSetting(?[]const config_format.IStoredAutoImportSource, allocator, io, log, .{ .configPath = config_path, .keyPath = "auto_import.sources" }),
     };
     return .{
-        .theme = try readSetting(?config_format.IConfigTheme, allocator, io, log, .{ .configPath = config_path, .keyPath = "theme" }),
         .developerMode = try readSetting(?bool, allocator, io, log, .{ .configPath = config_path, .keyPath = "developer_mode" }),
         .showFpsIndicator = try readSetting(?bool, allocator, io, log, .{ .configPath = config_path, .keyPath = "show_fps_indicator" }),
         .savedSearches = try readSetting(?[]const []const u8, allocator, io, log, .{ .configPath = config_path, .keyPath = "saved_searches" }),
@@ -92,7 +91,6 @@ const SaveConfigChange = struct {
     // Writes every key.
     //
     pub fn run(self: *const @This(), arena: std.mem.Allocator, values: ziggy.config_state.config.Values) !void {
-        try values.set("theme", self.config.theme);
         try values.set("developer_mode", self.config.developerMode);
         try values.set("show_fps_indicator", self.config.showFpsIndicator);
         try values.set("saved_searches", self.config.savedSearches);

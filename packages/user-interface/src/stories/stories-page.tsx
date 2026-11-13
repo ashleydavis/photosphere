@@ -6,7 +6,11 @@ import { nextStoryIndex } from "../lib/story-navigation";
 import { usePlatform } from "../context/platform-context";
 import { stories } from "./index";
 import type { IStory, StoryCategory } from "./types";
-import { resolveInitialTheme, themeOverrideFromEnv, type ThemeMode } from "../lib/env-theme";
+
+//
+// The two colour schemes the stories cycle shows each story in.
+//
+type StoryTheme = "light" | "dark";
 
 //
 // Order in which categories are rendered as headers in the list.
@@ -25,14 +29,6 @@ export function StoriesPage(): JSX.Element {
     const [searchParams] = useSearchParams();
 
     //
-    // The stories page is mounted outside the app's provider stack with its own
-    // CssVarsProvider, so it resolves its own initial color mode: the
-    // PHOTOSPHERE_THEME build-time override when set (used by the screenshot
-    // passes), otherwise the system default.
-    //
-    const initialTheme = resolveInitialTheme(themeOverrideFromEnv(), "system");
-
-    //
     // Cycle mode is enabled by the smoke test via ?cycle=1. It renders a
     // dedicated component that walks the entire story registry instead of
     // the normal two-pane layout.
@@ -42,14 +38,14 @@ export function StoriesPage(): JSX.Element {
         const parsedDuration = durationParam ? parseInt(durationParam, 10) : NaN;
         const durationMs = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 1000;
         return (
-            <CssVarsProvider defaultMode={initialTheme}>
+            <CssVarsProvider defaultMode="system">
                 <StoriesCycle stories={stories} durationMs={durationMs} />
             </CssVarsProvider>
         );
     }
 
     return (
-        <CssVarsProvider defaultMode={initialTheme}>
+        <CssVarsProvider defaultMode="system">
             <StoriesBrowser />
         </CssVarsProvider>
     );
@@ -359,7 +355,7 @@ interface IStoriesCycleProps {
 //
 interface ICycleStep {
     // Color mode to apply while this story is shown.
-    theme: ThemeMode;
+    theme: StoryTheme;
 
     // The story to render.
     story: IStory;
@@ -367,16 +363,14 @@ interface ICycleStep {
 
 function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps): JSX.Element {
     //
-    // Steps to walk: every story in each theme. When PHOTOSPHERE_THEME forces a
-    // single theme (the screenshot passes) only that theme is walked; otherwise
-    // "Play on automatic" shows every story in light and then dark.
+    // Steps to walk: every story in each theme.
     //
     const steps: ICycleStep[] = useMemo(() => {
         //
         // Show every story in light and then dark, back to back, so each one can
         // be compared across both themes as the cycle plays.
         //
-        const themes: ThemeMode[] = ["light", "dark"];
+        const themes: StoryTheme[] = ["light", "dark"];
         return cycleStories.flatMap(story => themes.map(theme => ({ theme, story })));
     }, [cycleStories]);
 

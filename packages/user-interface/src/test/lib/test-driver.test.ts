@@ -644,6 +644,20 @@ describe("installTestDriver", () => {
         expect(value).toBe("xyz");
     });
 
+    test("routes a get-attribute command to the element's attribute and to the document element's when no data-id is given", async () => {
+        document.documentElement.setAttribute("data-joy-color-scheme", "dark");
+        document.body.innerHTML = `<div data-id="panel" data-state="open"></div>`;
+        try {
+            const { transport, invoke } = makeTransport();
+            installTestDriver(transport);
+            expect(await invoke("get-attribute", { dataId: "panel", attribute: "data-state" })).toBe("open");
+            expect(await invoke("get-attribute", { dataId: "", attribute: "data-joy-color-scheme" })).toBe("dark");
+        }
+        finally {
+            document.documentElement.removeAttribute("data-joy-color-scheme");
+        }
+    });
+
     test("routes a pick-files command to the pick-files window event", async () => {
         const received: string[][] = [];
         const listener = (event: Event) => {

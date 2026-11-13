@@ -4,7 +4,6 @@ const config_file = @import("config-file.zig");
 const app_config_format = @import("app-config-format.zig");
 const config_format = @import("config-format.zig");
 const fs = node_utils.fs;
-const IConfigTheme = config_format.IConfigTheme;
 
 //
 // The config store the shared UI reads and writes through, backed by config.toml.
@@ -68,17 +67,3 @@ pub fn setAppConfigIn(comptime field_name: []const u8, values: config_state.conf
     try values.set(path, value);
 }
 
-//
-// Gets the theme preference. A string naming a theme nobody defined is logged and gives the system theme, as a missing setting does.
-//
-pub fn getTheme(allocator: std.mem.Allocator, io: std.Io, log: ILog, config_path: []const u8) !IConfigTheme {
-    const theme = try config_file.readSetting(?IConfigTheme, allocator, io, log, .{ .configPath = config_path, .keyPath = "theme" });
-    return theme orelse .system;
-}
-
-//
-// Sets the theme preference.
-//
-pub fn setTheme(allocator: std.mem.Allocator, io: std.Io, config_path: []const u8, theme: IConfigTheme) !void {
-    try config_state.config.set(allocator, io, config_path, "theme", theme);
-}

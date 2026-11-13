@@ -95,7 +95,7 @@ photosphere_platform_start() {
         PHOTOSPHERE_LOG_DIR="$(windows_native_path "$test_dir")" \
         PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         TEST_TMP_DIR="$(windows_native_path "$test_dir")" \
-        "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL") || return 1
+        "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL" ${PHOTOSPHERE_SMOKE_THEME:+--theme "$PHOTOSPHERE_SMOKE_THEME"}) || return 1
     echo "$pid" > "$test_dir/app.pid"
     echo "$pgid" > "$test_dir/$WINDOWS_PGID_FILE_NAME"
     # Windows tools take the Windows pid, which is not the shell's pid of a native program. Until the shell has handed over to the
@@ -197,3 +197,55 @@ for linux_helper in $(declare -F | sed -n 's/^declare -f linux_//p'); do
     eval "windows_${linux_helper}() { linux_${linux_helper} \"\$@\"; }"
 done
 unset linux_helper
+
+#
+# The desktop's appearance: "light" or "dark". Usage: photosphere_platform_system_theme <test_dir>
+#
+photosphere_platform_system_theme() {
+    local value
+    value="$(reg query 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme 2>/dev/null | grep -o '0x[0-9a-fA-F]*' | tail -1)"
+    if [ "$value" = "0x0" ]; then
+        printf 'dark\n'
+    else
+        printf 'light\n'
+    fi
+}
+
+#
+# Succeeds when the desktop's appearance can be read and set in the registry.
+#
+photosphere_platform_changes_appearance() {
+    reg query 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme > /dev/null 2>&1
+}
+
+#
+# Sets the desktop's appearance and keeps the one to put back in the scenario's directory.
+# Usage: photosphere_platform_set_system_theme <test_dir> <light|dark>
+#
+photosphere_platform_set_system_theme() {
+    local test_dir="$1"
+    local theme="$2"
+    if [ ! -f "$test_dir/system-appearance.txt" ]; then
+        local current
+        current="$(reg query 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme 2>/dev/null | grep -o '0x[0-9a-fA-F]*' | tail -1)" || return 1
+        printf '%s\n' "$current" > "$test_dir/system-appearance.txt"
+    fi
+    if [ "$theme" = "dark" ]; then
+        reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d 0 /f > /dev/null || return 1
+    else
+        reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d 1 /f > /dev/null || return 1
+    fi
+}
+
+#
+# Puts the desktop's appearance back. Usage: photosphere_platform_restore_system_theme <test_dir>
+#
+photosphere_platform_restore_system_theme() {
+    local test_dir="$1"
+    local value
+    value="$(cat "$test_dir/system-appearance.txt")"
+    if ! reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d "$((value))" /f > /dev/null; then
+        echo "could not set the desktop's appearance back to $value" >&2
+        return 1
+    fi
+}

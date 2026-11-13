@@ -1,5 +1,4 @@
 import React from "react";
-import { useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import IconButton from "@mui/joy/IconButton";
 import Dropdown from "@mui/joy/Dropdown";
 import Menu from "@mui/joy/Menu";
@@ -10,12 +9,12 @@ import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import SettingsBrightness from "@mui/icons-material/SettingsBrightness";
 import Check from "@mui/icons-material/Check";
-import { useConfigStore } from "../context/config-store-context";
+import { ThemeSetting, useThemeSetting } from "../lib/use-theme-setting";
 
 //
 // The set of theme modes the user can choose between.
 //
-type ThemeMode = 'light' | 'dark' | 'system';
+type ThemeMode = ThemeSetting;
 
 //
 // Renders the icon that best represents the currently selected theme mode.
@@ -42,21 +41,7 @@ function renderModeIcon(mode: ThemeMode): React.ReactNode {
 // so it survives restarts. "System" follows the OS `prefers-color-scheme` and updates automatically.
 //
 export function ThemeToggle() {
-    const { mode, setMode } = useColorScheme();
-    const config = useConfigStore();
-
-    //
-    // The currently selected mode, defaulting to "system" until the color scheme has hydrated.
-    //
-    const selectedMode: ThemeMode = (mode as ThemeMode) || 'system';
-
-    //
-    // Applies the chosen theme mode live and persists it to the app config.
-    //
-    async function chooseMode(newMode: ThemeMode): Promise<void> {
-        setMode(newMode);
-        await config.set("theme", newMode);
-    }
+    const [selectedMode, chooseMode] = useThemeSetting();
 
     return (
         <Dropdown>

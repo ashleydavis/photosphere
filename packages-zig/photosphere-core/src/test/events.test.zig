@@ -80,18 +80,10 @@ test "the events with no payload carry null" {
     try expectEvent(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-completed\",\"data\":null}}");
 }
 
-test "theme-changed and navigate carry a string" {
+test "navigate carries a string" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try sendOnMain(&app, struct {
-        fn send(services: HandlerServices, io: std.Io, arena: std.mem.Allocator) anyerror!void {
-            try events.sendThemeChanged(services, io, arena, std.json.Value{
-                .string = "dark",
-            });
-        }
-    }.send);
-    try expectEvent(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\",\"data\":\"dark\"}}");
     try sendOnMain(&app, struct {
         fn send(services: HandlerServices, io: std.Io, arena: std.mem.Allocator) anyerror!void {
             try events.sendNavigate(services, io, arena, "/gallery");
@@ -163,20 +155,6 @@ test "platform-event carries the dev tools state" {
         }
     }.send);
     try expectEvent(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"platform-event\",\"data\":{\"type\":\"devtools-state\",\"open\":true}}}");
-}
-
-test "theme-changed carries the value written to the setting, whatever it is" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try sendOnMain(&app, struct {
-        fn send(services: HandlerServices, io: std.Io, arena: std.mem.Allocator) anyerror!void {
-            try events.sendThemeChanged(services, io, arena, std.json.Value{
-                .bool = true,
-            });
-        }
-    }.send);
-    try expectEvent(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\",\"data\":true}}");
 }
 
 test "show-notification carries a duration that is not a whole number as it is" {

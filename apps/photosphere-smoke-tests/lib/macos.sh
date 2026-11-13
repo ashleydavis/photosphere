@@ -62,7 +62,7 @@ photosphere_platform_start() {
         PHOTOSPHERE_LOG_DIR="$test_dir" \
         PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         TEST_TMP_DIR="$test_dir" \
-        "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL") || return 1
+        "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL" ${PHOTOSPHERE_SMOKE_THEME:+--theme "$PHOTOSPHERE_SMOKE_THEME"}) || return 1
     echo "$pid" > "$test_dir/app.pid"
     echo "$pgid" > "$test_dir/$MACOS_PGID_FILE_NAME"
 }
@@ -583,4 +583,61 @@ macos_seed_databases_config() {
         return 1
     fi
     seed_databases_state "$recent_json" "$last_database"
+}
+
+#
+# The desktop's appearance: "light" or "dark". Usage: photosphere_platform_system_theme <test_dir>
+#
+photosphere_platform_system_theme() {
+    if [ "$(defaults read -g AppleInterfaceStyle 2>/dev/null)" = "Dark" ]; then
+        printf 'dark\n'
+    else
+        printf 'light\n'
+    fi
+}
+
+#
+# Succeeds when the desktop's appearance can be set with System Events.
+#
+photosphere_platform_changes_appearance() {
+    command -v osascript > /dev/null 2>&1
+}
+
+#
+# Sets the desktop's appearance and keeps the one to put back in the scenario's directory.
+# Usage: photosphere_platform_set_system_theme <test_dir> <light|dark>
+#
+photosphere_platform_set_system_theme() {
+    local test_dir="$1"
+    local theme="$2"
+    if [ ! -f "$test_dir/system-appearance.txt" ]; then
+        local current
+        current="$(defaults read -g AppleInterfaceStyle 2>/dev/null || true)"
+        printf '%s\n' "${current:-light}" > "$test_dir/system-appearance.txt"
+    fi
+    if [ "$theme" = "dark" ]; then
+        osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' > /dev/null || return 1
+    else
+        osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to false' > /dev/null || return 1
+    fi
+}
+
+#
+# Puts the desktop's appearance back. Usage: photosphere_platform_restore_system_theme <test_dir>
+#
+photosphere_platform_restore_system_theme() {
+    local test_dir="$1"
+    local value
+    value="$(cat "$test_dir/system-appearance.txt")"
+    if [ "$value" = "Dark" ]; then
+        if ! osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' > /dev/null; then
+            echo "could not set the desktop's appearance back to dark" >&2
+            return 1
+        fi
+    else
+        if ! osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to false' > /dev/null; then
+            echo "could not set the desktop's appearance back to light" >&2
+            return 1
+        fi
+    fi
 }

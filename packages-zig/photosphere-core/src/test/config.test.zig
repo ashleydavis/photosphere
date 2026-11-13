@@ -70,7 +70,7 @@ test "get-config replies null for a setting nothing is stored under" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try expectReply(&app, "get-config", "\"theme\"", "null");
+    try expectReply(&app, "get-config", "\"developerMode\"", "null");
 }
 
 test "set-config with a null value removes the setting" {
@@ -80,25 +80,6 @@ test "set-config with a null value removes the setting" {
     try expectReply(&app, "set-config", "{\"key\":\"developerMode\",\"value\":true}", "null");
     try expectReply(&app, "set-config", "{\"key\":\"developerMode\",\"value\":null}", "null");
     try expectReply(&app, "get-config", "\"developerMode\"", "null");
-}
-
-test "set-config of the theme tells the page, so the menu bar can follow" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":\"dark\"}", "null");
-    try expectReply(&app, "get-config", "\"theme\"", "\"dark\"");
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\",\"data\":\"dark\"}}");
-}
-
-test "set-config of a theme that does not exist is an error reply and stores nothing" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    const reply = try app.requestError("set-config", "{\"key\":\"theme\",\"value\":\"neon\"}");
-    defer std.testing.allocator.free(reply);
-    try std.testing.expect(std.mem.indexOf(u8, reply, "\"neon\" is not a theme") != null);
-    try expectReply(&app, "get-config", "\"theme\"", "null");
 }
 
 test "set-config of the places to watch keeps each folder with whether it is searched below" {
@@ -226,17 +207,6 @@ test "switching automatic import on reports a default database that could not be
     try std.testing.expect(!auto_import.starting);
 }
 
-test "set-config of the theme with no value removes it and tells the page, with no theme in the event" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":\"dark\"}", "null");
-    try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":null}", "null");
-    try expectReply(&app, "get-config", "\"theme\"", "null");
-    // A removed theme has no value to send, so the event carries no data.
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\"}}");
-}
-
 test "a failing config request logs the error with the message of its handler" {
     var app: TestApp = undefined;
     try app.start();
@@ -252,7 +222,7 @@ test "config requests that succeed log nothing to the error output" {
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    allocator.free(try app.requestOk("get-config", "\"theme\""));
+    allocator.free(try app.requestOk("get-config", "\"developerMode\""));
     try std.testing.expectEqual(@as(usize, 0), (try app.consoleErr()).len);
 }
 
@@ -274,7 +244,7 @@ test "reset-app-storage on desktop empties the settings and cache directories an
     });
     const config_path = try app.configPath(allocator);
     defer allocator.free(config_path);
-    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = config_path, .data = "theme = \"dark\"\n" });
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = config_path, .data = "developer_mode = true\n" });
     const state_path = try app.statePath(allocator);
     defer allocator.free(state_path);
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = state_path, .data = "{\"desktop\":{\"last_folder\":\"/p\"}}" });

@@ -12,7 +12,7 @@ const io = std.testing.io;
 fn portOf(query: []const u8) !u16 {
     const prefix = "restApiUrl=http%3A%2F%2Flocalhost%3A";
     try std.testing.expect(std.mem.startsWith(u8, query, prefix));
-    const end = std.mem.indexOfScalar(u8, query[prefix.len..], '&') orelse return error.NoSeparator;
+    const end = std.mem.indexOfScalar(u8, query[prefix.len..], '&') orelse query.len - prefix.len;
     return try std.fmt.parseInt(u16, query[prefix.len .. prefix.len + end], 10);
 }
 
@@ -36,7 +36,7 @@ fn assetServerStatus(allocator: std.mem.Allocator, port: u16) !std.http.Status {
     return result.status;
 }
 
-test "the page's query holds the address of a running asset server and the theme" {
+test "the page's query holds the address of a running asset server" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -49,7 +49,6 @@ test "the page's query holds the address of a running asset server and the theme
 
     const port = try portOf(query);
     try std.testing.expect(port > 0);
-    try std.testing.expect(std.mem.endsWith(u8, query, "&theme=system"));
     try std.testing.expectEqual(std.http.Status.bad_request, try assetServerStatus(allocator, port));
 }
 
@@ -68,27 +67,16 @@ test "asking for the query again does not start another asset server" {
     try std.testing.expectEqual(first_port, try portOf(second));
 }
 
-test "the query says the saved theme" {
-    var app: TestApp = undefined;
-    try app.startWithTasksAndConfigFile(&.{}, "theme = \"dark\"\n");
-    defer app.stop();
-
-    const query = try app.native_app.uiQuery(std.testing.allocator);
-    defer std.testing.allocator.free(query);
-
-    try std.testing.expect(std.mem.endsWith(u8, query, "&theme=dark"));
-}
-
 test "test mode adds testMode=1 to the query" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const without = try page_query.buildQuery(allocator, 4321, "system", false);
-    const with = try page_query.buildQuery(allocator, 4321, "system", true);
+    const without = try page_query.buildQuery(allocator, 4321, false);
+    const with = try page_query.buildQuery(allocator, 4321, true);
 
-    try std.testing.expectEqualStrings("restApiUrl=http%3A%2F%2Flocalhost%3A4321&theme=system", without);
-    try std.testing.expectEqualStrings("restApiUrl=http%3A%2F%2Flocalhost%3A4321&theme=system&testMode=1", with);
+    try std.testing.expectEqualStrings("restApiUrl=http%3A%2F%2Flocalhost%3A4321", without);
+    try std.testing.expectEqualStrings("restApiUrl=http%3A%2F%2Flocalhost%3A4321&testMode=1", with);
 }
 
 test "a value of the query is written as encodeURIComponent writes it" {

@@ -545,6 +545,41 @@ wait_for_value() {
 }
 
 #
+# Reads an attribute of the document element, or of the element with the data-id when one is given.
+# Usage: read_attribute <port> <data-id or ""> <attribute>
+#
+read_attribute() {
+    local port="$1"
+    local data_id="$2"
+    local attribute="$3"
+    local answer
+    answer="$(control_command "$port" "$(jq -cn --arg dataId "$data_id" --arg attribute "$attribute" '{command: "get-attribute", dataId: $dataId, attribute: $attribute}')" || true)"
+    printf '%s' "$answer" | jq -r '.value // empty' 2>/dev/null
+}
+
+#
+# Polls an attribute of the document element until it is the expected value. Fails the test on timeout.
+# Usage: wait_for_attribute <port> <attribute> <expected> [timeout]
+#
+wait_for_attribute() {
+    local port="$1"
+    local attribute="$2"
+    local expected="$3"
+    local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
+    local response=""
+    local deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        response="$(read_attribute "$port" "" "$attribute")"
+        if [ "$response" = "$expected" ]; then
+            return 0
+        fi
+        sleep "$WAIT_POLL_INTERVAL"
+    done
+    log_error "Timed out waiting for the document's $attribute to be '$expected' (last value: $response)"
+    exit 1
+}
+
+#
 # Polls the element's value until it matches the extended regular expression. For a value where a substring would also match a wrong
 # one, such as "1 photos" inside "11 photos". Fails the test on timeout.
 # Usage: wait_for_value_matching <port> <data-id> <ere> [timeout]

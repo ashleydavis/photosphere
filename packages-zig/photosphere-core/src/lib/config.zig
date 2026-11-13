@@ -23,7 +23,6 @@ const json = ziggy.json;
 const app_state = node_api.app_state;
 const app_config = node_api.app_config;
 const auto_import_settings = @import("api-zig").auto_import_settings;
-const events = @import("events.zig");
 const main_state = @import("main-state.zig");
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
@@ -122,8 +121,7 @@ const SetConfigChange = struct {
 
 //
 // set-config: the payload is {key, value}. Writes the setting to config.toml, or removes it when the value is null or left out. A change
-// of theme is announced to the page (the `theme-changed` event), so the menu bar can follow, and a change to a setting that decides what
-// automatic import does takes effect now rather than at the next start. The reply is null.
+// to a setting that decides what automatic import does takes effect now rather than at the next start. The reply is null.
 //
 fn setConfig(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const arena = allocator;
@@ -137,10 +135,6 @@ fn setConfig(services: TaskServices, timers: Timers, io: std.Io, allocator: std.
     var checked: app_config.IAppConfig = .{};
     try app_config.setAppConfigValue(&checked, key, value);
     try ziggy.config_state.config.update(arena, io, context.config_path, SetConfigChange{ .key = key, .config = checked });
-    // Keep the theme-changed event so the menu bar can react to theme changes.
-    if (std.mem.eql(u8, key, "theme")) {
-        try events.sendThemeChanged(services, io, arena, json_value);
-    }
     // Switching automatic import on or off, or changing what it watches, takes effect now rather than at the next restart: the check
     // runs as a child of this task, and the main thread does what it found when it ends (see main-process.zig). A check that fails
     // fails this request, as TypeScript's awaited ensureAutoImport rejects it.

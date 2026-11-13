@@ -222,7 +222,6 @@ The files below are the ones the app and the CLI write that refer to a database.
 
 - On a phone the page asks for `config.toml` and the core points that at the settings directory, so every platform uses the one file there.
 - What the user chose:
-  - `theme`: `light`, `dark` or `system`.
   - `developer_mode`, `show_fps_indicator`: developer settings.
   - `saved_searches`: searches saved from the sidebar.
   - `auto_import.enabled`, `auto_import.sources`, `auto_import.pause_between_runs_ms`, `auto_import.cleanup_enabled`: automatic import. A source is `type: folder` with `path` and `recurse`, or `type: device-album` with `album_id`.

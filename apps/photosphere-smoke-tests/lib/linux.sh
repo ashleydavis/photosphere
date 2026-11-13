@@ -74,7 +74,7 @@ photosphere_platform_start() {
         PHOTOSPHERE_LOG_DIR="$test_dir" \
         PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         TEST_TMP_DIR="$test_dir" \
-        "${wrapper[@]}" "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL") || return 1
+        "${wrapper[@]}" "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL" ${PHOTOSPHERE_SMOKE_THEME:+--theme "$PHOTOSPHERE_SMOKE_THEME"}) || return 1
     echo "$pid" > "$test_dir/app.pid"
     echo "$pgid" > "$test_dir/$LINUX_PGID_FILE_NAME"
 }
@@ -612,4 +612,74 @@ linux_auto_import_stopped_log() {
 #
 linux_request_sync() {
     send_command "$1" notify-database-edited '{}'
+}
+
+#
+# The desktop's appearance: "light" or "dark". Usage: photosphere_platform_system_theme <test_dir>
+#
+photosphere_platform_system_theme() {
+    local scheme
+    scheme="$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")"
+    case "$scheme" in
+        prefer-dark)
+            printf 'dark\n'
+            return 0
+            ;;
+        prefer-light|default)
+            printf 'light\n'
+            return 0
+            ;;
+    esac
+    local portal
+    portal="$(gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.ReadOne org.freedesktop.appearance color-scheme 2>/dev/null)"
+    case "$portal" in
+        *"uint32 1"*)
+            printf 'dark\n'
+            return 0
+            ;;
+        *"uint32 0"*)
+            printf 'light\n'
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+#
+# Succeeds when the desktop's appearance can be read and set.
+#
+photosphere_platform_changes_appearance() {
+    command -v gsettings > /dev/null 2>&1 && gsettings get org.gnome.desktop.interface color-scheme > /dev/null 2>&1
+}
+
+#
+# Sets the desktop's appearance and keeps the one to put back in the scenario's directory.
+# Usage: photosphere_platform_set_system_theme <test_dir> <light|dark>
+#
+photosphere_platform_set_system_theme() {
+    local test_dir="$1"
+    local theme="$2"
+    if [ ! -f "$test_dir/system-appearance.txt" ]; then
+        local current
+        current="$(gsettings get org.gnome.desktop.interface color-scheme)" || return 1
+        printf '%s\n' "$current" > "$test_dir/system-appearance.txt"
+    fi
+    if [ "$theme" = "dark" ]; then
+        gsettings set org.gnome.desktop.interface color-scheme prefer-dark || return 1
+    else
+        gsettings set org.gnome.desktop.interface color-scheme prefer-light || return 1
+    fi
+}
+
+#
+# Puts the desktop's appearance back. Usage: photosphere_platform_restore_system_theme <test_dir>
+#
+photosphere_platform_restore_system_theme() {
+    local test_dir="$1"
+    local value
+    value="$(cat "$test_dir/system-appearance.txt")"
+    if ! gsettings set org.gnome.desktop.interface color-scheme "$value"; then
+        echo "could not set the desktop's appearance back to $value" >&2
+        return 1
+    fi
 }

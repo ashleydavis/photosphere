@@ -6,7 +6,7 @@ const errors = @import("utils-zig").errors;
 // The on-disk contents of state.json and the conversions between it and the in-memory type.
 //
 // This is the sibling of config-format.zig, and the split between them is what each file is for.
-// config.toml holds what the user chose: the theme, what automatic import watches, whether syncing
+// config.toml holds what the user chose: what automatic import watches, whether syncing
 // runs. state.json holds what the app remembers on its own so the interface comes back the way it was
 // left: the folder a dialog last opened at, which sidebar sections are collapsed, how the gallery was
 // sorted, which news has already been shown, which databases were opened lately and which to reopen.

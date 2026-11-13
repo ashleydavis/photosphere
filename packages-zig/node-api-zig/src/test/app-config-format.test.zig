@@ -58,15 +58,10 @@ fn flatten(allocator: std.mem.Allocator, text: []const u8) !IAppConfig {
 test "reading and writing one config setting by name: a key is read from and written to its own field" {
     var config: IAppConfig = .{};
 
-    try app_config_format.setAppConfigValue(&config, "theme", .{
-        .string = "dark",
-    });
     try app_config_format.setAppConfigValue(&config, "developerMode", .{
         .boolean = true,
     });
 
-    try std.testing.expectEqual(node_api.config_format.IConfigTheme.dark, config.theme.?);
-    try std.testing.expectEqualStrings("dark", app_config_format.getAppConfigValue(config, "theme").?.string);
     try std.testing.expect(app_config_format.getAppConfigValue(config, "developerMode").?.boolean);
 }
 
@@ -98,19 +93,19 @@ test "reading and writing one config setting by name: every kind of value is sto
 }
 
 test "reading and writing one config setting by name: a key nothing has been stored under reads as nothing" {
-    try std.testing.expect(app_config_format.getAppConfigValue(.{}, "theme") == null);
+    try std.testing.expect(app_config_format.getAppConfigValue(.{}, "developerMode") == null);
     try std.testing.expect(app_config_format.getAppConfigValue(.{}, "not-a-setting") == null);
 }
 
 test "reading and writing one config setting by name: writing nothing removes a key rather than leaving it as it was" {
     var config: IAppConfig = .{
-        .theme = .dark,
+        .developerMode = true,
     };
 
-    try app_config_format.setAppConfigValue(&config, "theme", null);
+    try app_config_format.setAppConfigValue(&config, "developerMode", null);
 
-    try std.testing.expect(config.theme == null);
-    try std.testing.expect(app_config_format.getAppConfigValue(config, "theme") == null);
+    try std.testing.expect(config.developerMode == null);
+    try std.testing.expect(app_config_format.getAppConfigValue(config, "developerMode") == null);
 }
 
 test "reading and writing one config setting by name: every setting that has a value is listed together under its own name" {
@@ -119,14 +114,14 @@ test "reading and writing one config setting by name: every setting that has a v
     const allocator = arena.allocator();
 
     const settings = try app_config_format.appConfigSettings(allocator, .{
-        .theme = .dark,
+        .developerMode = true,
         .showFpsIndicator = true,
     });
 
     try std.testing.expectEqual(@as(usize, 2), settings.count());
-    try std.testing.expectEqualStrings("dark", settings.get("theme").?.string);
+    try std.testing.expect(settings.get("developerMode").?.boolean);
     try std.testing.expect(settings.get("showFpsIndicator").?.boolean);
-    try std.testing.expectEqualStrings("theme", settings.keys()[0]);
+    try std.testing.expectEqualStrings("developerMode", settings.keys()[0]);
     try std.testing.expectEqualStrings("showFpsIndicator", settings.keys()[1]);
 }
 
@@ -177,23 +172,6 @@ test "setAppConfigValue: a value of a type the key cannot hold throws an error n
         .boolean = true,
     }));
     try std.testing.expectEqualStrings("The config setting \"savedSearches\" cannot hold a value of that type.", errors.lastErrorMessage());
-}
-
-test "setAppConfigValue: a theme that is not one of the themes throws an error naming it" {
-    var config: IAppConfig = .{
-        .theme = .light,
-    };
-
-    try std.testing.expectError(error.Thrown, app_config_format.setAppConfigValue(&config, "theme", .{
-        .string = "neon",
-    }));
-    try std.testing.expectEqualStrings("\"neon\" is not a theme, so it cannot be stored as the config setting \"theme\".", errors.lastErrorMessage());
-    try std.testing.expectEqual(node_api.config_format.IConfigTheme.light, config.theme.?);
-
-    try std.testing.expectError(error.Thrown, app_config_format.setAppConfigValue(&config, "theme", .{
-        .boolean = true,
-    }));
-    try std.testing.expectEqualStrings("The config setting \"theme\" holds a theme name, and was given a value that is not a string.", errors.lastErrorMessage());
 }
 
 test "IAppConfigValue is the type the settings listing holds" {

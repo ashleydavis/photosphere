@@ -13,7 +13,6 @@ import {
     ApiContextProvider,
     axiosApi,
     StoriesPage,
-    resolveInitialTheme, themeOverrideFromEnv,
 } from "user-interface";
 import { ZiggyQueueBackend } from "./lib/ziggy-queue-backend";
 import { setQueueBackend } from "task-queue";
@@ -48,10 +47,6 @@ export function App({ ziggy, platform }: IAppProps) {
     if (!restApiUrl) {
         throw new Error('restApiUrl query parameter is required but was not provided.');
     }
-    // Startup theme: PHOTOSPHERE_THEME env override if set, otherwise the saved theme. See user-interface env-theme.ts.
-    const savedTheme = (urlParams.get('theme') as 'light' | 'dark' | 'system') || 'system';
-    const initialTheme = resolveInitialTheme(themeOverrideFromEnv(), savedTheme);
-
     const queueBackend = new ZiggyQueueBackend(ziggy);
     setQueueBackend(queueBackend);
 
@@ -84,7 +79,7 @@ export function App({ ziggy, platform }: IAppProps) {
                                                         {platform.platformKind === "desktop" && <PreviewBanner />}
                                                         <DeveloperContextProvider>
                                                             <SyncContextProvider>
-                                                                <Main initialTheme={initialTheme} />
+                                                                <Main />
                                                             </SyncContextProvider>
                                                         </DeveloperContextProvider>
                                                     </GalleryLayoutContextProvider>

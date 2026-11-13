@@ -1,7 +1,7 @@
 //
 // The events Photosphere's core sends to the page (including those of the
 // worker pool it forwards from): database-opened, database-closed, databases-changed, sync-started, sync-completed,
-// theme-changed, navigate, show-notification, update-available and platform-event. The page's side of each is in
+// navigate, show-notification, update-available and platform-event. The page's side of each is in
 // the platform provider of the page. task-event and task-completed are Ziggy's own events (system events, {"kind":"system","name",...}).
 //
 // Each function sends one event of the type of that name with the payload the page's handler takes, the payload being null
@@ -105,13 +105,6 @@ pub fn sendSyncStarted(sink: anytype, io: std.Io, arena: std.mem.Allocator) !voi
 //
 pub fn sendSyncCompleted(sink: anytype, io: std.Io, arena: std.mem.Allocator) !void {
     try sendEvent(sink, io, arena, "sync-completed", null);
-}
-
-//
-// Tells the page the theme changed: the value written to the theme setting ("light", "dark" or "system"), or null when the setting was removed, which leaves the event without data as an undefined theme did (`theme-changed`).
-//
-pub fn sendThemeChanged(sink: anytype, io: std.Io, arena: std.mem.Allocator, theme: ?std.json.Value) !void {
-    try sendEvent(sink, io, arena, "theme-changed", theme);
 }
 
 //

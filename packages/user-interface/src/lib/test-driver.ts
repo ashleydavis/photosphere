@@ -41,6 +41,9 @@ export interface ITestCommandPayload {
     // value is or is not present in WebView localStorage (for example that no plaintext secret lingers).
     storageKey?: string;
 
+    // The attribute to read (get-attribute command). With no dataId the document element is read.
+    attribute?: string;
+
     // Outcome to stage for the next mobile asset export (stage-export command).
     exportOutcome?: "shared" | "cancelled";
 
@@ -428,6 +431,18 @@ export function doStagePickFolder(result: string | null): void {
 // reading the nested input first reported "on" for any panel or row with a switch in it. A test
 // waiting for that container's text then waited for something that could never be returned.
 //
+//
+// Reads an attribute of the element with the data-id, or of the document element when none is given. A missing element or
+// attribute reads as the empty string.
+//
+export function getAttribute(dataId: string | undefined, attribute: string): string {
+    const element = dataId ? findElement(dataId, 0) : document.documentElement;
+    if (!element) {
+        return '';
+    }
+    return element.getAttribute(attribute) ?? '';
+}
+
 export function getValue(dataId: string): string {
     // The visible one: on mobile a closed drawer keeps its content in the DOM, so reading the first
     // raw match could report a stale value from a dialog that is not on screen.
@@ -547,8 +562,9 @@ export function doCycleAdvance(): void {
 //
 // Installs the shared DOM test driver onto the given transport. Each command received over
 // the transport is dispatched to the matching DOM action; get-value returns the element's
-// value, the rest resolve undefined. Unknown commands reject with a clear message so a
-// shell that has not yet implemented a capability reports it rather than silently passing.
+// value and get-attribute its attribute, the rest resolve undefined. Unknown commands reject
+// with a clear message so a shell that has not yet implemented a capability reports it rather
+// than silently passing.
 //
 export function installTestDriver(transport: ITestTransport): void {
     transport.onCommand(async (command: string, payload: ITestCommandPayload): Promise<string | undefined> => {
@@ -585,6 +601,8 @@ export function installTestDriver(transport: ITestTransport): void {
                 return undefined;
             case 'get-value':
                 return getValue(payload.dataId!);
+            case 'get-attribute':
+                return getAttribute(payload.dataId, payload.attribute!);
             case 'get-storage':
                 return window.localStorage.getItem(payload.storageKey!) ?? '';
             case 'navigate':

@@ -1,5 +1,4 @@
 import React from "react";
-import { useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import Box from "@mui/joy/Box";
 import Stack from "@mui/joy/Stack/Stack";
 import Typography from "@mui/joy/Typography/Typography";
@@ -8,7 +7,7 @@ import Button from "@mui/joy/Button/Button";
 import Slider from "@mui/joy/Slider/Slider";
 import Card from "@mui/joy/Card";
 import { DarkMode, LightMode, SettingsBrightness, PhotoSizeSelectLarge } from "@mui/icons-material";
-import { useConfigStore } from "../context/config-store-context";
+import { useThemeSetting } from "../lib/use-theme-setting";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { AutoImportSettings } from "../components/auto-import-settings";
@@ -21,8 +20,7 @@ import { AutoImportSettings } from "../components/auto-import-settings";
 // the photo size. The desktop layout keeps its narrow, compact column.
 //
 export function ConfigurationPage() {
-    const { mode, setMode } = useColorScheme();
-    const config = useConfigStore();
+    const [themeSetting, chooseTheme] = useThemeSetting();
     const { targetRowHeight, setTargetRowHeight } = useGalleryLayout();
     const isMobile = useIsMobile();
 
@@ -30,8 +28,7 @@ export function ConfigurationPage() {
     // Applies the chosen theme and saves it to the config file.
     //
     async function applyTheme(newTheme: 'light' | 'dark' | 'system'): Promise<void> {
-        setMode(newTheme);
-        await config.set("theme", newTheme);
+        await chooseTheme(newTheme);
     }
 
     return (
@@ -57,7 +54,7 @@ export function ConfigurationPage() {
                     >
                     <Typography level="title-md">Theme</Typography>
                     <ToggleButtonGroup
-                        value={mode}
+                        value={themeSetting}
                         size={isMobile ? 'lg' : 'md'}
                         onChange={async (_event, value) => {
                             if (value) {

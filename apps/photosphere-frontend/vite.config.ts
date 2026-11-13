@@ -31,10 +31,6 @@ export default defineConfig({
     },
   },
   base: './',
-  define: {
-    // Bakes the PHOTOSPHERE_THEME env override into the build (read by user-interface env-theme.ts).
-    '__PHOTOSPHERE_THEME__': JSON.stringify(process.env.PHOTOSPHERE_THEME || ''),
-  },
   build: {
     sourcemap: false, // The page is embedded in the app, so there is nowhere to serve a source map from
     minify: false, // Disable minification for better error messages

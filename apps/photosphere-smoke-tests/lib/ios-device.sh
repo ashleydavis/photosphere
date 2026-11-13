@@ -272,7 +272,7 @@ photosphere_platform_start() {
         "PHOTOSPHERE_VAULT_DIR=$scenario_dir/vault" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \
         "PHOTOSPHERE_LOG_DIR=$scenario_dir" \
-        "${news_environment[@]+"${news_environment[@]}"}" -- --remote-control "$PHOTOSPHERE_REMOTE_CONTROL") || return 1
+        "${news_environment[@]+"${news_environment[@]}"}" -- --remote-control "$PHOTOSPHERE_REMOTE_CONTROL" ${PHOTOSPHERE_SMOKE_THEME:+--theme "$PHOTOSPHERE_SMOKE_THEME"}) || return 1
     echo "$pgid" > "$test_dir/launch.pgid"
     photosphere_ios_device_wait_file "$test_dir/launch.json" "$pid" "The device helper's launch" || {
         cat "$test_dir/launch.log" >&2
@@ -558,4 +558,11 @@ ios_dump_background_diagnostics() {
 #
 ios_cancel_next_download() {
     send_command "$1" stage-export '{"exportOutcome":"cancelled"}'
+}
+
+#
+# A connected iPhone or iPad cannot have its appearance changed from the host, so the scenarios that change it do not run there.
+#
+photosphere_platform_changes_appearance() {
+    return 1
 }

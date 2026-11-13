@@ -105,7 +105,7 @@ flowchart TD
 ## App
 
 - `App` is the only place the providers are stacked. It is the composition root.
-- It reads `restApiUrl` and the saved theme from the page's query string, sets the renderer log and sets the task queue backend.
+- It reads `restApiUrl` and `testMode` from the page's query string, sets the renderer log and sets the task queue backend.
 - `/stories` gets the platform provider and the stories browser only. Every other path gets the full stack.
 - `McpToolHandler` and `PreviewBanner` are mounted on desktop only.
 
@@ -134,6 +134,6 @@ flowchart TD
 - `Main` is a wrapper whose only job is the MUI `CssVarsProvider`, so `__Main` can call `useColorScheme()` inside it.
 - `__Main` is the app shell:
   - Owns the open/closed state of the sidebars, dialogs and modals.
-  - Subscribes to platform events: menu actions, task messages, notifications (shown as toasts) and theme changes.
+  - Subscribes to platform events: menu actions, task messages and notifications (shown as toasts). The theme controls read and set the setting with `getConfig` and `setConfig`.
   - Opens the last database on first mount.
   - Renders the page routes inside `#content`. `/` redirects to `/gallery`.

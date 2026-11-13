@@ -677,8 +677,8 @@ pub const MainState = struct {
 
     //
     // Does what is needed once the main window has been created: logs that the main window was created, makes
-    // automatic import match the config, and starts the check that keeps it running. The page's query starts the asset server
-    // and reads the theme, so it calls this when it has built the query. Only the
+    // automatic import match the config, and starts the check that keeps it running. The page's query starts the asset server,
+    // so it calls this when it has built the query. Only the
     // first call does anything, because these steps run once and a window made again later does not repeat them.
     //
     pub fn mainWindowCreated(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) !void {

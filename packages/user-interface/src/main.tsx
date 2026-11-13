@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { log } from "utils";
 import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
@@ -33,18 +33,12 @@ import { OpenDatabaseModal } from "./components/open-database-modal";
 import { CreateDatabaseModal } from "./components/create-database-modal";
 import { AddDatabaseModal } from "./components/add-database-modal";
 import { openBugReport } from "./lib/bug-report";
-
-export interface IMainProps {
-    //
-    // Initial theme mode to use before loading from platform.
-    //
-    initialTheme: 'light' | 'dark' | 'system';
-}
+import { useThemeSetting } from "./lib/use-theme-setting";
 
 //
 // The main page of the Photosphere app.
 //
-function __Main({ initialTheme }: IMainProps) {
+function __Main() {
     const {
         isWorking,
         databasePath,
@@ -104,15 +98,39 @@ function __Main({ initialTheme }: IMainProps) {
 
     const theme = useTheme();
 
-    const { mode, setMode } = useColorScheme();
+    const { setMode } = useColorScheme();
+    const [themeSetting] = useThemeSetting();
+    const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light");
 
     //
-    // Set initial theme mode synchronously on first render only.
+    // The operating system's theme, which the system setting resolves to, re-read whenever the web view reports the scheme changed.
     //
-    useLayoutEffect(() => {
-        setMode(initialTheme);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Only run once on mount - don't reset when mode changes
+    useEffect(() => {
+        const mediaTheme = window.matchMedia("(prefers-color-scheme: dark)");
+        const readSystemTheme = (): void => {
+            platform.getSystemTheme().then(setSystemTheme).catch((error: Error) => {
+                console.error(`Could not read the system theme: ${error.message}`);
+            });
+        };
+        readSystemTheme();
+        mediaTheme.addEventListener("change", readSystemTheme);
+        const unsubscribe = platform.onConfigChanged(event => {
+            if (event.path === "theme") {
+                readSystemTheme();
+            }
+        });
+        return () => {
+            mediaTheme.removeEventListener("change", readSystemTheme);
+            unsubscribe();
+        };
+    }, [platform]);
+
+    //
+    // Joy follows the theme setting: "system" uses the operating system's theme, and a light or dark setting is applied directly.
+    //
+    useEffect(() => {
+        setMode(themeSetting === "system" ? systemTheme : themeSetting);
+    }, [themeSetting, systemTheme, setMode]);
 
     const { addToast } = useToast();
     const navigate = useNavigate();
@@ -186,18 +204,6 @@ function __Main({ initialTheme }: IMainProps) {
         });
         return unsubscribe;
     }, [platform, addToast]);
-
-    //
-    // Listen for theme changes from menu.
-    //
-    useEffect(() => {
-        // Subscribe to theme changes
-        const unsubscribe = platform.onThemeChanged((theme) => {
-            setMode(theme);
-        });
-
-        return unsubscribe;
-    }, [platform, setMode]);
 
     //
     // Open the right sidebar when the navbar's job indicator is clicked, which is where the jobs are
@@ -483,10 +489,10 @@ function __Main({ initialTheme }: IMainProps) {
 //
 // Wrapped/exported version of Main that ties in the MUI theme.
 //
-export function Main({ initialTheme }: IMainProps) {
+export function Main() {
     return (
-        <CssVarsProvider defaultMode={initialTheme}>
-            <__Main initialTheme={initialTheme} />
+        <CssVarsProvider defaultMode="system">
+            <__Main />
         </CssVarsProvider>
     );
 }

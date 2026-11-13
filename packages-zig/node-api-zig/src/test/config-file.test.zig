@@ -48,7 +48,6 @@ test "loadConfigFile returns the defaults when the config file does not exist" {
     try std.testing.expect(!config.autoImport.settings.enabled);
     try std.testing.expect(!config.sync.settings.enabled);
     try std.testing.expect(config.sync.settings.onlyOnWifi);
-    try std.testing.expect(config.theme == null);
     try std.testing.expect(!test_files.fileExists(io, config_path));
 }
 
@@ -64,7 +63,6 @@ test "loadConfigFile returns the defaults for an empty config file" {
 
     const config = try config_file.loadConfigFile(allocator, std.testing.io, log, config_path);
     try std.testing.expect(!config.autoImport.settings.enabled);
-    try std.testing.expect(config.theme == null);
 }
 
 test "loadConfigFile reads every key of config.toml" {
@@ -76,7 +74,6 @@ test "loadConfigFile reads every key of config.toml" {
     const allocator = arena.allocator();
     const config_path = try freshConfigPath(allocator, std.testing.io, "config-file-sections");
     try writeConfig(std.testing.io, config_path,
-        \\theme = "dark"
         \\saved_searches = ["beach"]
         \\
         \\[auto_import]
@@ -98,7 +95,6 @@ test "loadConfigFile reads every key of config.toml" {
     );
 
     const config = try config_file.loadConfigFile(allocator, std.testing.io, log, config_path);
-    try std.testing.expectEqual(config_format.IConfigTheme.dark, config.theme.?);
     try std.testing.expectEqualStrings("beach", config.savedSearches.?[0]);
     try std.testing.expect(config.autoImport.settings.enabled);
     try std.testing.expectEqualStrings("/photos", config.autoImport.defaultDatabasePath.?);
@@ -122,12 +118,12 @@ test "one wrong-typed key gives only its own setting its default, and the log na
     const config_path = try freshConfigPath(allocator, std.testing.io, "config-file-wrong-type");
     try writeConfig(std.testing.io, config_path,
         \\developer_mode = "yes"
-        \\theme = "dark"
+        \\show_fps_indicator = true
     );
 
     const config = try config_file.loadConfigFile(allocator, std.testing.io, log, config_path);
     try std.testing.expect(config.developerMode == null);
-    try std.testing.expectEqual(config_format.IConfigTheme.dark, config.theme.?);
+    try std.testing.expect(config.showFpsIndicator.?);
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "developer_mode") != null);
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "bool") != null);
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "a string") != null);
@@ -141,15 +137,15 @@ test "a config file with a bad line gives every setting its default and is left 
     defer arena.deinit();
     const allocator = arena.allocator();
     const config_path = try freshConfigPath(allocator, std.testing.io, "config-file-bad-line");
-    const bad = "theme = \"dark\"\noops = = 1\n";
+    const bad = "developer_mode = true\noops = = 1\n";
     try writeConfig(std.testing.io, config_path, bad);
 
     const config = try config_file.loadConfigFile(allocator, std.testing.io, log, config_path);
-    try std.testing.expect(config.theme == null);
+    try std.testing.expect(config.developerMode == null);
     try std.testing.expectEqualStrings(bad, try readConfig(allocator, std.testing.io, config_path));
 }
 
-test "saveConfigFile round-trips the theme" {
+test "saveConfigFile round-trips the settings" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -159,19 +155,19 @@ test "saveConfigFile round-trips the theme" {
     const config_path = try freshConfigPath(allocator, std.testing.io, "config-file-save-theme");
 
     var config = try config_file.defaultConfigFile(allocator);
-    config.theme = .light;
+    config.developerMode = true;
     config.sync.settings.enabled = true;
     config.sync.databasePath = "/db";
     try config_file.saveConfigFile(allocator, std.testing.io, config_path, config);
 
     const text = try readConfig(allocator, std.testing.io, config_path);
-    try std.testing.expect(std.mem.indexOf(u8, text, "theme = \"light\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "developer_mode = true") != null);
     // A whole pause is written as an integer, not a float.
     try std.testing.expect(std.mem.indexOf(u8, text, "pause_between_runs_ms = 300000") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "300000.0") == null);
 
     const loaded = try config_file.loadConfigFile(allocator, std.testing.io, log, config_path);
-    try std.testing.expectEqual(config_format.IConfigTheme.light, loaded.theme.?);
+    try std.testing.expect(loaded.developerMode.?);
     try std.testing.expect(loaded.sync.settings.enabled);
     try std.testing.expectEqualStrings("/db", loaded.sync.databasePath.?);
 }

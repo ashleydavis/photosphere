@@ -713,12 +713,12 @@ test "the settings the interface names: a setting the format declares is written
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(log, 
-        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"dark"}]}
+    try sandbox.writeConfig(log,
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode","value":true}]}
     );
 
-    try expectString("dark", try sandbox.readConfigDocument(), "theme");
-    try expectString("dark", try sandbox.readConfig(log, CONFIG_PATH), "settings.theme");
+    try expectBool(true, try sandbox.readConfigDocument(), "developer_mode");
+    try expectBool(true, try sandbox.readConfig(log, CONFIG_PATH), "settings.developerMode");
 }
 
 test "the settings the interface names: the searches the user saved are written at the top level and read back by name" {
@@ -739,15 +739,15 @@ test "the settings the interface names: an entry with no value clears the settin
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(log, 
-        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"dark"}]}
+    try sandbox.writeConfig(log,
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode","value":true}]}
     );
-    try sandbox.writeConfig(log, 
-        \\{"configPath":"config.toml","entries":[{"key":"theme"}]}
+    try sandbox.writeConfig(log,
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode"}]}
     );
 
-    try expectMissing(try sandbox.readConfigDocument(), "theme");
-    try expectMissing(try sandbox.readConfig(log, CONFIG_PATH), "settings.theme");
+    try expectMissing(try sandbox.readConfigDocument(), "developer_mode");
+    try expectMissing(try sandbox.readConfig(log, CONFIG_PATH), "settings.developerMode");
 }
 
 test "the settings the interface names: writing a setting leaves a feature's settings exactly as they were" {
@@ -759,8 +759,8 @@ test "the settings the interface names: writing a setting leaves a feature's set
         \\{"configPath":"config.toml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"the-database","pauseBetweenRunsMs":90000}}
     );
 
-    try sandbox.writeConfig(log, 
-        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"light"}]}
+    try sandbox.writeConfig(log,
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode","value":true}]}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -768,7 +768,7 @@ test "the settings the interface names: writing a setting leaves a feature's set
     try expectBool(false, result, "sync.settings.onlyOnWifi");
     try expectString("the-database", result, "sync.databasePath");
     try expectInteger(90000, result, "sync.pauseBetweenRunsMs");
-    try expectString("light", result, "settings.theme");
+    try expectBool(true, result, "settings.developerMode");
 }
 
 // A fresh install seeds syncing on, and only skips that when the file says syncing has been chosen already. An empty sync
@@ -779,8 +779,8 @@ test "the settings the interface names: writing a setting does not make it look 
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(log, 
-        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"light"}]}
+    try sandbox.writeConfig(log,
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode","value":true}]}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -796,8 +796,8 @@ test "the settings the interface names: a setting the state file holds is not an
     const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(log, 
-        \\{"configPath":"config.toml","entries":[{"key":"theme","value":"dark"}]}
+    try sandbox.writeConfig(log,
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode","value":true}]}
     );
 
     const result = try sandbox.readConfig(log, CONFIG_PATH);
@@ -860,8 +860,8 @@ test "bad input to the handlers: a value no setting can hold fails rather than b
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"theme\" cannot hold that kind of value.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
-        \\{"configPath":"config.toml","entries":[{"key":"theme","value":{"name":"dark"}}]}
+    try expectThrown("The config setting \"developerMode\" cannot hold that kind of value.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
+        \\{"configPath":"config.toml","entries":[{"key":"developerMode","value":{"name":"dark"}}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 

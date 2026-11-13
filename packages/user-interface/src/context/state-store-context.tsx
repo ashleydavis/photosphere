@@ -11,7 +11,7 @@ import type { IConfig } from "./config-store-context";
 //
 // The sibling of the config store, which holds what the user chose. They are separate contexts rather
 // than one store that works out where each key belongs, because the caller always knows which of the
-// two it wants: a collapsible section is storing state, and the theme toggle is storing a setting.
+// two it wants: a collapsible section is storing state, and the automatic import settings are storing a setting.
 // Nothing has to decide at run time, and nothing has to keep a list of which key is which.
 //
 // The operations are the same as the config store's, so the interface is the same one. What differs is

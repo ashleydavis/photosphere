@@ -12,7 +12,7 @@ The shared interface is unchanged. This package supplies what it asks of its pla
 - `src/lib/ziggy-test-transport.ts`: in test mode, carries the shared test driver's commands over Ziggy's `test-command` events (`window.ziggy.onTestCommand`) and answers with `window.ziggy.sendTestResult`.
 - `src/lib/mcp-tool-handler.tsx` and `src/lib/preview-banner.tsx`: parts of the desktop app only. They are rendered only when the platform is a desktop.
 
-`src/main.tsx` asks the core for the platform, installs the page's error forwarding (and, in test mode, console forwarding and the test driver), and renders `src/app.tsx`. The page reads `restApiUrl`, `theme` and `testMode` from its query string, which the core supplies.
+`src/main.tsx` asks the core for the platform, installs the page's error forwarding (and, in test mode, console forwarding and the test driver), and renders `src/app.tsx`. The page reads `restApiUrl` and `testMode` from its query string, which the core supplies.
 
 ## Commands
 
