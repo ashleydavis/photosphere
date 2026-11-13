@@ -1,0 +1,40 @@
+name: Install Homebrew tools
+description: >
+  Installs ImageMagick, FFmpeg and whatever else a macOS job needs with Homebrew, over a cache of Homebrew's own downloads, so a
+  job that installs the same formulae again unpacks them locally instead of downloading them. Homebrew only runs on macOS, so this
+  refuses to run anywhere else.
+
+inputs:
+  packages:
+    description: The Homebrew formulae to install, space separated, such as "imagemagick ffmpeg tree".
+    required: true
+
+  verify:
+    description: The commands to check afterwards, as the retry-install action takes them. Left empty, none is checked.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Refuse to run anywhere but macOS
+      shell: bash
+      run: |
+          if [ "$RUNNER_OS" != "macOS" ]; then
+              echo "::error::install-brew-tools is for macOS only, and this runner is $RUNNER_OS. Use install-apt-packages on Linux and the Windows action on Windows."
+              exit 1
+          fi
+
+    - name: Cache Homebrew's downloads
+      uses: actions/cache@v4
+      with:
+        path: ~/Library/Caches/Homebrew
+        key: ${{ runner.os }}-${{ runner.arch }}-brew-downloads-v1
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-brew-downloads-
+
+    - name: Install with Homebrew
+      uses: ./.github/actions/retry-install
+      with:
+        run: brew install ${{ inputs.packages }}
+        verify: ${{ inputs.verify }}

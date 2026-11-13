@@ -246,9 +246,9 @@ jobs:
 
       # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
       - name: Install media processing tools
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-brew-tools
         with:
-          run: brew install imagemagick ffmpeg tree rsync
+          packages: imagemagick ffmpeg tree rsync
           verify: magick|convert ffmpeg ffprobe
 
       - name: Check the iOS toolchain
@@ -402,9 +402,9 @@ jobs:
           run: bun install
 
       - name: Install media processing tools (macOS)
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-brew-tools
         with:
-          run: brew install imagemagick ffmpeg tree
+          packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       # The libraries for the runner, which the tests build for, restored from their artifacts.

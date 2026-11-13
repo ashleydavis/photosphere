@@ -324,9 +324,9 @@ jobs:
         with:
           run: bun install
       - name: Install media processing tools (macOS)
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-brew-tools
         with:
-          run: brew install imagemagick ffmpeg tree
+          packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
@@ -432,9 +432,9 @@ jobs:
 
       # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
       - name: Install media processing tools (macOS)
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-brew-tools
         with:
-          run: brew install imagemagick ffmpeg tree
+          packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       - name: Restore the Photosphere App build
@@ -600,9 +600,9 @@ jobs:
           run: bun install
 
       - name: Install media processing tools (macOS)
-        uses: ./.github/actions/retry-install
+        uses: ./.github/actions/install-brew-tools
         with:
-          run: brew install imagemagick ffmpeg tree
+          packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       # The libraries for the runner, which the tests build for, restored from their artifacts.
