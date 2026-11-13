@@ -171,7 +171,7 @@ jobs:
         shell: bash
         # The release build, minified and stripped, so the smoke tests run what ships
         # rather than compiling the app again.
-        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app" --minify --strip
+        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app" --optimize Debug --minify --strip
 
       - name: Save the built app
         if: steps.built.outputs.cache-hit != 'true'
@@ -258,7 +258,7 @@ jobs:
 
       - name: Build the Zig CLI natively for Linux x64
         working-directory: .
-        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/linux --prefix-exe-dir .
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix apps/cli-zig/bin/x64/linux --prefix-exe-dir .
 
       - name: Check the binary was produced
         working-directory: ./apps/cli-zig
@@ -663,7 +663,7 @@ jobs:
       - name: Run the Zig unit tests
         timeout-minutes: 40
         shell: bash
-        run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
+        run: zig build test -Dcpu=baseline -Doptimize=Debug --summary all --test-timeout 20m
 
   # Writes every job's and every step's timing to the run's summary page, so a run can be read without opening each job. The figures
   # are each job's and step's own start to finish: time spent queued for a runner is not in them, which is what makes two runs

@@ -242,7 +242,7 @@ jobs:
         shell: bash
         # The page is minified as the release's is, so the release APKs are made from the Zig libraries built here rather
         # than compiling them again.
-        run: bun run --filter=ziggy build:android -- --minify --output-dir "$PWD/out/app"
+        run: bun run --filter=ziggy build:android -- --optimize Debug --minify --output-dir "$PWD/out/app"
 
       - name: Save the built app
         if: steps.built.outputs.cache-hit != 'true'
@@ -583,7 +583,7 @@ jobs:
       - name: Run the Zig unit tests
         timeout-minutes: 40
         shell: bash
-        run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
+        run: zig build test -Dcpu=baseline -Doptimize=Debug --summary all --test-timeout 20m
 
 
   # Writes every job's and every step's timing to the run's summary page, so a run can be read without opening each job. The figures
