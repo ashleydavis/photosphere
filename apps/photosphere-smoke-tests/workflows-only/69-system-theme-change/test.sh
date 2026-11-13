@@ -3,7 +3,7 @@
 # With the setting system, a change of the system's appearance reaches the page while the app runs. It changes the system's
 # appearance, which on a desktop is the developer's own screen, so it runs only in the workflow or when named.
 
-source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib/common.sh"
 
 #
 # Puts the system's appearance back, then stops the app.

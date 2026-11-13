@@ -34,12 +34,12 @@ PHOTOSPHERE_SMOKE_SCENARIO=69-system-theme-change bun run test:ziggy
 To run every scenario, including the `workflows-only` ones, set `CI`, which is how the workflow runs them. This changes the desktop's appearance while the run lasts and puts it back at the end:
 
 ```
-CI=1 bun run test:ziggy
+CI=true bun run test:ziggy
 ```
 
 The Android and iOS suites take the same `CI`:
 
 ```
-CI=1 bun run test:ziggy:and
-CI=1 bun run test:ziggy:ios
+CI=true bun run test:ziggy:and
+CI=true bun run test:ziggy:ios
 ```
