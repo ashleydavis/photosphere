@@ -672,3 +672,34 @@ jobs:
         timeout-minutes: 40
         shell: bash
         run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
+
+  # Writes every job's and every step's timing to the run's summary page, so a run can be read without opening each job. The figures
+  # are each job's and step's own start to finish: time spent queued for a runner is not in them, which is what makes two runs
+  # comparable.
+  report:
+    if: always()
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, app-build, cli-build, cli-smoke-tests, app-smoke-tests, typescript-compile, typescript-unit-tests, zig-unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the timings
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" --paginate > "$RUNNER_TEMP/jobs.json"
+          {
+            echo "## Job timings"
+            echo ""
+            echo "Each job's and each step's own start to finish. Queueing is not included."
+            echo ""
+            echo "| Job | Result | Time |"
+            echo "|---|---|---|"
+            jq -r '.jobs[] | select(.name != "report") | select(.started_at != null)
+              | ((.completed_at|fromdateiso8601) - (.started_at|fromdateiso8601)) as $d
+              | "| \(.name) | \(.conclusion) | \($d/60|floor)m \($d%60)s |"' "$RUNNER_TEMP/jobs.json"
+            jq -r '.jobs[] | select(.name != "report") | select(.started_at != null)
+              | "\n### \(.name)\n\n| Step | Result | Time |\n|---|---|---|\n"
+                + ([.steps[] | select(.started_at != null)
+                    | ((.completed_at|fromdateiso8601) - (.started_at|fromdateiso8601)) as $d
+                    | "| \(.name) | \(.conclusion) | \($d/60|floor)m \($d%60)s |"] | join("\n"))' "$RUNNER_TEMP/jobs.json"
+          } >> "$GITHUB_STEP_SUMMARY"
