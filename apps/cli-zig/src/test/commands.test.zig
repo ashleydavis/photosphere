@@ -5,10 +5,13 @@ const helpers = @import("test-helpers.zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_path = @import("node-utils-zig").path;
+const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
 const cli = @import("cli-zig");
 const media_tools = @import("media-tools-zig");
+const bdb = @import("bdb-zig");
+const serialization_zig = @import("serialization-zig");
 
 //
 // The expected output of these tests is written out here: the report text of each command, the "No database found"
@@ -266,6 +269,7 @@ const list_v6_report =
     \\  Date: 5/27/2025 | Size: Unknown | Type: image/jpeg | 2560×1920
     \\  Encryption: {encryption}
     \\  Path: ../../test
+    \\  Coordinates: 152.18946666666668, -29.019044444444443
     \\
     \\
     \\End of results. Displayed 1 files total.
@@ -308,6 +312,53 @@ test "list prints the report" {
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ db, "asset", "89171cd9-a652-4047-b869-1154bf2c95a1" }), .data = &header });
     const encrypted = try std.mem.replaceOwned(u8, allocator, list_v6_report, "{encryption}", "encrypted (key: abababababababababababababababababababababababababababababababab)");
     try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), encrypted, "", 0);
+}
+
+test "list shows the size and location of an asset that has them" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const log = utils.mute_log.MuteLog.init();
+    const root = try setup(allocator, "cmd-list-size-location");
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+
+    // The fixture's asset already has coordinates. Give it a file size and a location, which is
+    // what an import writes for a photo that has both.
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, "", db, null, null);
+    var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
+    var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
+    const database = try bdb.database.BsonDatabase.init(allocator, created.storage, ".db/bson", uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
+    const collection = try database.collection("metadata");
+    var properties: serialization_zig.bson.BsonDocument = .empty;
+    try properties.put(allocator, "fileSize", .{ .number = 1024 });
+    var updates: serialization_zig.bson.BsonDocument = .empty;
+    try updates.put(allocator, "properties", .{ .document = properties });
+    try updates.put(allocator, "location", .{ .string = "Sydney, Australia" });
+    try std.testing.expect(try collection.updateOne(io, log, "89171cd9-a652-4047-b869-1154bf2c95a1", updates, .{}));
+    try database.commit(io, log);
+
+    const expected =
+        \\
+        \\📁 Database Files
+        \\
+        \\Files are sorted by date (newest first).
+        \\
+        \\--- Page 1 ---
+        \\89171cd9-a652-4047-b869-1154bf2c95a1 test.jpg
+        \\  Date: 5/27/2025 | Size: 1 KiB | Type: image/jpeg | 2560×1920
+        \\  Encryption: unencrypted
+        \\  Path: ../../test
+        \\  Coordinates: 152.18946666666668, -29.019044444444443
+        \\  Location: Sydney, Australia
+        \\
+        \\
+        \\End of results. Displayed 1 files total.
+        \\
+    ;
+    try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), expected, "", 0);
 }
 
 //
@@ -1608,7 +1659,7 @@ const init_report =
     \\Creating a new media file database...
     \\
     \\✓  Created new media file database in <db>
-    \\⚠️ Important: Never modify database files manually - always use the psi tool!
+    \\⚠️ Important: Never modify database files manually - always use the psi CLI tool, desktop app or mobile app!
     \\
     \\
     \\Add media files:
@@ -1706,7 +1757,7 @@ const init_encrypted_report =
     \\Creating a new media file database...
     \\
     \\✓  Created new media file database in <db>
-    \\⚠️ Important: Never modify database files manually - always use the psi tool!
+    \\⚠️ Important: Never modify database files manually - always use the psi CLI tool, desktop app or mobile app!
     \\
     \\✓  Encryption key "zig-key" stored.
     \\⚠️ Keep this key safe! You will need it to access your encrypted database.

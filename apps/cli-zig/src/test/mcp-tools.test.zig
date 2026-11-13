@@ -469,8 +469,8 @@ test "import_media_files imports files into the open database, or previews the i
         \\  "filesIgnored": 0,
         \\  "filesFailed": 0,
         \\  "filesProcessed": 1,
-        \\  "totalSize": 0,
-        \\  "averageSize": 0
+        \\  "totalSize": 1317,
+        \\  "averageSize": 1317
         \\}
     ;
     try environment.expectText("import_media_files", "{\"paths\":[\"../../test/test.png\"],\"dryRun\":true}", added);

@@ -12,7 +12,7 @@
 {"result":{"content":[{"type":"text","text":"[]"}]},"jsonrpc":"2.0","id":12}
 {"result":{"content":[{"type":"text","text":"Wrote 130591 bytes to <ROOT>/out/thumb.jpg"}]},"jsonrpc":"2.0","id":13}
 {"result":{"content":[{"type":"text","text":"{\n  \"databaseFiles\": {\n    \"totalFiles\": 8,\n    \"totalSize\": 363161,\n    \"validFiles\": 8,\n    \"invalidFiles\": [],\n    \"errors\": []\n  },\n  \"assets\": {\n    \"totalImports\": 1,\n    \"totalFiles\": 4,\n    \"totalSize\": 2877318,\n    \"numUnmodified\": 4,\n    \"numFailures\": 0,\n    \"modified\": [],\n    \"new\": [],\n    \"removed\": [],\n    \"filesProcessed\": 4,\n    \"nodesProcessed\": 7,\n    \"recordMismatches\": []\n  }\n}"}]},"jsonrpc":"2.0","id":14}
-{"result":{"content":[{"type":"text","text":"{\n  \"filesAdded\": 1,\n  \"filesAlreadyAdded\": 0,\n  \"filesIgnored\": 0,\n  \"filesFailed\": 0,\n  \"filesProcessed\": 1,\n  \"totalSize\": 0,\n  \"averageSize\": 0\n}"}]},"jsonrpc":"2.0","id":15}
+{"result":{"content":[{"type":"text","text":"{\n  \"filesAdded\": 1,\n  \"filesAlreadyAdded\": 0,\n  \"filesIgnored\": 0,\n  \"filesFailed\": 0,\n  \"filesProcessed\": 1,\n  \"totalSize\": 1317,\n  \"averageSize\": 1317\n}"}]},"jsonrpc":"2.0","id":15}
 {"result":{"content":[{"type":"text","text":"Closed database at <ROOT>/db"}]},"jsonrpc":"2.0","id":16}
 {"result":{"content":[{"type":"text","text":"No database is currently open."}]},"jsonrpc":"2.0","id":17}
 {"result":{"content":[{"type":"text","text":"MCP error -32602: Tool delete_everything not found"}],"isError":true},"jsonrpc":"2.0","id":18}

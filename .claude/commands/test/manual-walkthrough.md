@@ -8,14 +8,16 @@ Take the human through `docs/testing/e2e/CHECKLIST.md`, one test at a time and o
 
 ## Before you start
 
-- Read `docs/testing/e2e/CHECKLIST.md` and `docs/testing/e2e/CHECKLIST-NOTES.md`.
+- Read `docs/testing/e2e/CHECKLIST.md` from the repo root. Read `docs/testing/e2e/CHECKLIST-NOTES.md` only when you start a test (step 3) and when you append a note (step 5).
+- Every test's link in the checklist resolves against the checklist's own directory, `docs/testing/e2e/`, so a link such as `cli/import/add-and-verify.md` is the file `docs/testing/e2e/cli/import/add-and-verify.md`.
+- A test is an entry that links a test file. An entry that links no file is not a test.
 - If arguments were given (`$ARGUMENTS`), start at the section or test they name. Otherwise start at the first unticked test.
 - Take the human only through untested tests, marked `- [ ]`. Skip tests marked `- [x]` (passed) or `- [-]` (failed), unless the arguments ask for them.
-- An entry that links no test file (the Platforms entries) has no steps to walk. Say what it checks and ask the human whether it passed, then mark it `- [x]` or `- [-]`.
+- An entry that links no file is not a test: never open the walkthrough with one and never walk one as a test. Handle it only after the tests, or when the arguments name it: say what the check is, ask the human whether it passed, then mark it `- [x]` or `- [-]`.
 
 ## For each test
 
-1. Read the test's markdown file, linked from the checklist. If it is not already laid out as `## Prep` (prerequisites and setup or cleanup commands, in one code block), `## Test` (the commands being tested) and `## Check` (the commands that check the results against what was expected), rewrite it that way before you start the test. Keep every command, every expectation and the order of the steps; only the layout and wording change. Fix anything else in it that does not make sense as you go.
+1. Read the test's markdown file, resolved from the checklist's link (`docs/testing/e2e/<link>`). If it is not already laid out as `## Prep` (prerequisites and setup or cleanup commands, in one code block), `## Test` (the commands being tested) and `## Check` (the commands that check the results against what was expected), rewrite it that way before you start the test. Keep every command, every expectation and the order of the steps; only the layout and wording change. Fix anything else in it that does not make sense as you go.
 2. Say which test it is, its position in its section, and what it checks, in one line.
 3. If `CHECKLIST-NOTES.md` has **revist and confirm** notes under this test, list them and ask the human, for each one, whether it still holds. Once they answer, take the marker off a note that still holds and delete a note they say no longer holds.
 4. Give the prep first as one step: the prerequisites and every step before the first one under test that only sets up or cleans up (such as changing directory or removing a previous run's files), all commands together in one code block in the order the test writes them. Then give each remaining step, ONE command per message:

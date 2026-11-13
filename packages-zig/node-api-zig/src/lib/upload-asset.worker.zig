@@ -712,6 +712,12 @@ fn uploadAndDescribe(
     if (assetDetails != null and assetDetails.?.metadata != null) {
         try properties.put(allocator, "metadata", assetDetails.?.metadata.?);
     }
+    // The byte size of the original file, so anything that reads only the asset record can report
+    // it without asking storage. The record is what `psi list` and the apps read, and they have no
+    // other way to know the size.
+    try properties.put(allocator, "fileSize", .{
+        .number = @floatFromInt(fileStat.length),
+    });
 
     if (context.isCancelled(io, allocator)) {
         return null;

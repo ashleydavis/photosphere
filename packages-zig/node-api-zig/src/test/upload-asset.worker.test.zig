@@ -293,6 +293,20 @@ test "returns correct assetRecord hash" {
     try std.testing.expectEqualStrings("aabbcc", (try context.record(result)).get("hash").?.string);
 }
 
+test "the asset record carries the size of the original file" {
+    const log = utils.mute_log.MuteLog.init();
+    var context: UploadTest = undefined;
+    try context.init();
+    defer context.deinit(log);
+    var data = context.makeUploadAssetData();
+    data.dryRun = true;
+
+    const result = try context.run(log, data);
+
+    const properties = (try context.record(result)).get("properties").?.document;
+    try std.testing.expectEqual(@as(f64, @floatFromInt(data.fileStat.length)), properties.get("fileSize").?.number);
+}
+
 test "in non-dry-run mode, storage.writeStream is called for the asset, thumbnail, and display file" {
     const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;

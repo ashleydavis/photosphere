@@ -10,7 +10,9 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 
 ## Before you start
 
-- Read `docs/testing/e2e/CHECKLIST.md` and `docs/testing/e2e/CHECKLIST-NOTES.md`.
+- Read `docs/testing/e2e/CHECKLIST.md` from the repo root. Read `docs/testing/e2e/CHECKLIST-NOTES.md` when you write results and notes at the end.
+- Every test's link in the checklist resolves against the checklist's own directory, `docs/testing/e2e/`, so a link such as `cli/import/add-and-verify.md` is the file `docs/testing/e2e/cli/import/add-and-verify.md`.
+- Only an entry that links a test file is a test. An entry that links no file has no steps: skip it and leave it unticked.
 - Build the desktop app once, before any subagent starts: `bun run --filter=ziggy bundle:ui`, then `zig build photosphere-linux -p tmp/desktop-hooks/test`.
 - Run `bun run emu:and:pool:status -- --quiet` to decide whether the Android tests can run, at the moment you start them.
 - Split the tests into as many groups as there are subagents, keeping each `###` group whole, and give each subagent one group list. Each subagent runs its tests one after another; the groups run in parallel.
@@ -40,6 +42,7 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 ## Checklist and notes
 
 - Subagents never edit `CHECKLIST.md` or `CHECKLIST-NOTES.md`. Each one reports back, per test: passed or failed, and for a failure, the step that failed with what was expected and what happened, in a sentence or two, plus any test file it fixed and why.
+- Read the notes before writing them, so you keep the **revist and confirm** notes and update the `### General` notes correctly.
 - You alone write both files, after every subagent has reported.
 - Tick a passed test (`- [x]`) and mark a failed one `- [-]`.
 - For a failed test, replace its old failure notes with what happened in this run. For a passed test, delete its failure notes.

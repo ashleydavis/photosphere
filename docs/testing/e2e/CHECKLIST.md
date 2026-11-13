@@ -8,6 +8,8 @@
 
 Work through these manual tests and check them off as they pass.
 
+**Only an entry that links a test file is a test.** An entry that links no file has no steps: it is checked by hand and ticked, never walked like a test.
+
 Upcoming version: 0.0.9
 
 ## Platforms
@@ -44,7 +46,7 @@ Run the story player and check every story cycles through without failures, then
 ## CLI
 
 ### Import
-- [ ] [add-and-verify](cli/import/add-and-verify.md)
+- [x] [add-and-verify](cli/import/add-and-verify.md)
 - [ ] [add-duplicate-content](cli/import/add-duplicate-content.md)
 - [ ] [add-mp4](cli/import/add-mp4.md)
 - [ ] [add-multiple-files](cli/import/add-multiple-files.md)

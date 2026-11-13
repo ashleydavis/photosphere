@@ -60,6 +60,12 @@ const AddPathsState = struct {
         if (std.mem.eql(u8, messageType, "import-success")) {
             self.summary.filesAdded += 1;
             self.summary.filesProcessed += 1;
+            const fileSize = message.get("fileSize") orelse std.json.Value.null;
+            self.summary.totalSize += switch (fileSize) {
+                .integer => |integer| @floatFromInt(integer),
+                .float => |float| float,
+                else => std.math.nan(f64),
+            };
         }
         else if (std.mem.eql(u8, messageType, "import-skipped")) {
             self.summary.filesAlreadyAdded += 1;

@@ -796,6 +796,11 @@ const ImportRun = struct {
             try arrival.put(allocator, "assetId", .{
                 .string = assetData.assetId,
             });
+            // The size of the file, so whoever counts the imports can add it up without reading
+            // the record itself.
+            try arrival.put(allocator, "fileSize", .{
+                .integer = @intCast(recordFileSize(assetRecord)),
+            });
             try arrival.put(allocator, "logicalPath", .{
                 .string = logicalPath,
             });
@@ -1353,6 +1358,27 @@ fn jsNumber(value: BsonValue) f64 {
         .boolean => |boolean| if (boolean) 1 else 0,
         else => std.math.nan(f64),
     };
+}
+
+//
+// The byte size of the original file, from the record's properties, or zero when it has none.
+//
+fn recordFileSize(assetRecord: BsonDocument) u64 {
+    const properties = assetRecord.get("properties") orelse {
+        return 0;
+    };
+    const document = switch (properties) {
+        .document => |document| document,
+        else => return 0,
+    };
+    const fileSize = document.get("fileSize") orelse {
+        return 0;
+    };
+    const number = jsNumber(fileSize);
+    if (std.math.isNan(number) or number < 0) {
+        return 0;
+    }
+    return @intFromFloat(number);
 }
 
 //

@@ -444,10 +444,21 @@ fn hashOutputs(allocator: std.mem.Allocator, hash: []const u8) ![]const u8 {
 //
 fn uploadOutputs(allocator: std.mem.Allocator, data: std.json.Value) ![]const u8 {
     const assetId = data.object.get("assetId").?.string;
-    const assetRecord = try BsonDocument.fromFields(allocator, &.{.{
-        .key = "_id",
-        .value = .{ .string = assetId },
-    }});
+    // The size of the file the import scanned, as the real upload worker records it.
+    var properties: BsonDocument = .empty;
+    try properties.put(allocator, "fileSize", .{
+        .number = @floatFromInt(data.object.get("fileStat").?.object.get("length").?.integer),
+    });
+    const assetRecord = try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "_id",
+            .value = .{ .string = assetId },
+        },
+        .{
+            .key = "properties",
+            .value = .{ .document = properties },
+        },
+    });
     return try utils.json.stringify(allocator, .{
         .assetData = .{
             .assetId = assetId,
@@ -1625,6 +1636,25 @@ test "sends the arrival's asset as the record itself, which the gallery lays out
     const asset = arrivals[0].get("asset").?;
     try std.testing.expect(asset == .object);
     try std.testing.expectEqualStrings(arrivals[0].get("assetId").?.string, asset.object.get("_id").?.string);
+}
+
+test "the arrival carries the size of the file that arrived" {
+    const log = utils.mute_log.MuteLog.init();
+    var context: ImportTest = undefined;
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
+    const fileName = "img1.jpg";
+    _ = try context.writePhoto(fileName);
+
+    _ = try context.run(log, try context.makeData(false));
+
+    // The writePhoto helper writes the file name as the file's content, so the size is its length.
+    const arrivals = try context.messages.ofType(context.arena.allocator(), "import-success");
+    try std.testing.expectEqual(@as(usize, 1), arrivals.len);
+    const fileSize = arrivals[0].get("fileSize").?;
+    try std.testing.expectEqual(@as(i64, fileName.len), fileSize.integer);
+    const properties = arrivals[0].get("asset").?.object.get("properties").?.object;
+    try std.testing.expectEqual(@as(i64, fileName.len), properties.get("fileSize").?.integer);
 }
 
 test "writes fewer assets than a batch holds rather than stranding them" {

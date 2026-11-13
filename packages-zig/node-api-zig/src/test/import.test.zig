@@ -75,6 +75,9 @@ test "addPaths imports a file into a new database, then finds it already there" 
     try std.testing.expectEqual(@as(f64, 1), summary.filesAdded);
     try std.testing.expectEqual(@as(f64, 1), summary.filesProcessed);
     try std.testing.expectEqual(summary.totalSize, summary.averageSize);
+    const photoPath = try std.fs.path.join(allocator, &.{ photosDir, "photo.jpg" });
+    const photoStat = try std.Io.Dir.cwd().statFile(io, photoPath, .{});
+    try std.testing.expectEqual(@as(f64, @floatFromInt(photoStat.size)), summary.totalSize);
     try std.testing.expect(progressLog.calls > 0);
     try std.testing.expectEqual(@as(f64, 1), progressLog.lastFilesAdded);
 

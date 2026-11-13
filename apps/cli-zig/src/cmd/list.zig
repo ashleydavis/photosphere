@@ -235,6 +235,22 @@ fn displayPage(log: ILog, allocator: std.mem.Allocator, records: []const IAsset,
             log.info(try std.fmt.allocPrint(allocator, "  Path: {s}", .{try js_value.toString(allocator, origPath.?)}));
         }
 
+        const coordinates = record.get("coordinates");
+        if (coordinates) |coordinateValue| {
+            if (coordinateValue == .document) {
+                const latitude = coordinateValue.document.get("lat") orelse BsonValue.undefined;
+                const longitude = coordinateValue.document.get("lng") orelse BsonValue.undefined;
+                if (isTruthy(latitude) and isTruthy(longitude)) {
+                    log.info(try std.fmt.allocPrint(allocator, "  Coordinates: {s}, {s}", .{ try js_value.toString(allocator, longitude), try js_value.toString(allocator, latitude) }));
+                }
+            }
+        }
+
+        const location = record.get("location");
+        if (isTruthy(location)) {
+            log.info(try std.fmt.allocPrint(allocator, "  Location: {s}", .{try js_value.toString(allocator, location.?)}));
+        }
+
         log.info("");
     }
 }

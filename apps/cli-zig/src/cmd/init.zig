@@ -40,7 +40,7 @@ pub fn initCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
 
     log.info("");
     log.info(try pc.green(allocator, try text(allocator, "\u{2713}  Created new media file database in {s}", .{displayPath})));
-    log.info(try pc.yellow(allocator, "\u{26A0}\u{FE0F} Important: Never modify database files manually - always use the psi tool!"));
+    log.info(try pc.yellow(allocator, "\u{26A0}\u{FE0F} Important: Never modify database files manually - always use the psi CLI tool, desktop app or mobile app!"));
 
     const hasKey = options.base.key != null and options.base.key.?.len > 0;
     if ((options.generateKey orelse false) and hasKey) {
