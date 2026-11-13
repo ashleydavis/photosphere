@@ -3,7 +3,7 @@
 ## Decisions not approved by a human
 
 - The Photosphere About page gets no test marker: the smoke test clicks no link there and checks the app's window-open controls (the Help menu item and the bug report button) instead (step 9).
-- The Photosphere CI workflows get a Ziggy branch named `external-links` checked out beside Photosphere, and `what-changed` accepts that a Ziggy-only change runs no Photosphere suite until Photosphere takes a Ziggy release (step 1 and step 10). The plan does not push the branch.
+- `what-changed` accepts that a Ziggy-only change runs no Photosphere suite until Photosphere takes a Ziggy release (step 1). The CI workflows are not changed: the human banned workflow updates.
 
 ## Acceptance criteria
 
@@ -63,11 +63,11 @@ A link to an outside page must open in the system web browser, not inside the ap
 - [x] 17. Step 9 adds `data-id="about-website-link"` to Photosphere's production About page, a test-only marker in app code.
     - The marker is removed: the scenario clicks the Help menu item and the bug report button, whose data-ids already exist, and clicks no link on the About page.
 - [x] 18. Step 1 implements `plan-config-and-state.md` whenever `build.zig.zon` has no `.path = "../ziggy"`, which is the state today, and that plan's unchecked items 11 and 12 each hold a "Question for the human", so this plan cannot run start to finish without one; its item 11 also says the `.path` change breaks every Photosphere workflow.
-    - The "Decisions not approved by a human" section answers the two questions: the CI workflows check out a Ziggy branch beside Photosphere, and `what-changed` accepts that a Ziggy-only change runs no Photosphere suite.
+    - The "Decisions not approved by a human" section answers the two questions: the CI workflows are not changed, and `what-changed` accepts that a Ziggy-only change runs no Photosphere suite.
 - [x] 19. Step 7 relies on WebView2 raising `NewWindowRequested` for a `window.open` with no user gesture, which nothing in the code or the plan checks: `newWindowInvoke` does not read `IsUserInitiated`, and the Windows run of `<N>-external-links` checks only that the app did not end and the marker is unchanged, so it passes whether the window request is raised, dropped or opened.
     - Step 7's Windows branch reads `IsUserInitiated` in `newWindowInvoke` and prints the request, and the Windows run waits for the app's log to show it.
 - [x] 20. The plan's Decisions, Notes and Verify say the Photosphere CI workflows check out a Ziggy branch beside Photosphere. No workflow does: `grep -rn 'repository:\|ashleydavis/ziggy\|path: ../ziggy' .github/workflows/*.yml` finds no sibling checkout, and the only Ziggy reference is `bun run --filter=ziggy`, which names the `apps/photosphere` package whose `sync-*.sh` runs the root `zig build` (see `apps/photosphere/scripts/sync-linux.sh`). With the `.path = "../ziggy"` prerequisite, `ci.yml`'s `zig build --fetch=all` and `zig build test`, the release workflows' `bun run --filter=ziggy` and the `bun run test:ziggy` runs all need a sibling checkout, and none exists. No step in this plan or in `plan-config-and-state.md` edits a workflow, although that plan's issue 11 says its steps do. The Verify's CI-only `<M>-external-links` runs on Windows, macOS and iOS therefore cannot run, and the checkout needs a Ziggy branch pushed to a remote, which the agent cannot do.
-    - The "Photosphere repository" section gets a step that edits the CI workflows to check out the Ziggy branch beside Photosphere, so the "Decisions" item 2, the "Notes" and the "Verify" become true. The "Verify" CI-only runs are named there and are not run by this plan; the branch push is not part of the plan.
+    - The CI workflows are not changed: the human banned workflow updates, so this issue stands. The "Verify" CI-only runs are named there and are not run by this plan.
 - [-] 21. Step 1 implements `plan-config-and-state.md` when `.path` is missing, and that plan still holds unchecked issues 17 to 31 (compile-blocking defects: 17 `App` fields, 18 `set(..., null)`, 19 `set-config` dropping the theme and auto-import work, 20 to 31). `plan-theme.md` issue 19 is `[-]`, and its step 0 says to implement `plan-config-and-state.md` in full. Prerequisite 3 also orders this plan after `plan-remote-control-window-targeting.md` (unchecked issues 7 to 21), `plan-new-window.md`, `plan-key-press-test-command.md` and `plan-frontend-shortcuts.md` (issue 13 has an open "Question for the human"; unchecked 15 to 33). The plan cannot run start to finish without a human.
     - The prerequisite plans' own unchecked issues are outside this plan's scope: this plan edits only its own file, and each prerequisite plan's steps are its own. Step 1 implements each prerequisite plan first and its own checks cover those issues.
 - [x] 22. Issue 4's resolution says `plan-theme.md` step 14 makes both Xcode projects take the local Ziggy. Step 14 is "Move the frontend onto Ziggy's theme, with Joy following `prefers-color-scheme`". The local-Ziggy step is 12, "Take the local Ziggy in every part of Photosphere", which Prerequisite 2 names correctly.
@@ -89,17 +89,20 @@ A link to an outside page must open in the system web browser, not inside the ap
 
 ### Both repositories
 
-1. Check the prerequisites are in place, in Photosphere:
-    - `grep -F '.path = "../ziggy"' build.zig.zon` finds a line (Prerequisite 1). When it does not, implement `docs/plans/new/plan-config-and-state.md` first, with its two questions answered by the "Decisions not approved by a human" section: the CI workflows check out a Ziggy branch beside Photosphere, and `what-changed` accepts that a Ziggy-only change runs no Photosphere suite.
+- [x] 1. Check the prerequisites are in place, in Photosphere:
+    - Summary: all three checks passed. `build.zig.zon` has `.path = "../ziggy"`, `apps/photosphere/native/android/settings.gradle` has `includeBuild`, and neither Xcode project has `repositoryURL = "https://github.com/ashleydavis/ziggy"`. No prerequisite plan was implemented.
+    - `grep -F '.path = "../ziggy"' build.zig.zon` finds a line (Prerequisite 1). When it does not, implement `docs/plans/new/plan-config-and-state.md` first, with its two questions answered by the "Decisions not approved by a human" section: the CI workflows are not changed, and `what-changed` accepts that a Ziggy-only change runs no Photosphere suite.
     - `grep -F 'includeBuild' apps/photosphere/native/android/settings.gradle` finds a line, and `grep -F 'repositoryURL = "https://github.com/ashleydavis/ziggy"' apps/photosphere/native/macos/Photosphere.xcodeproj/project.pbxproj apps/photosphere/native/ios/Photosphere.xcodeproj/project.pbxproj` finds none (Prerequisite 2). When either check fails, implement `docs/plans/new/plan-theme.md` first.
     - When a prerequisite plan was implemented here, run its checks again before step 2.
     - When it implements a prerequisite plan, save its evidence as the work is done: the compile output to `tmp/evidence/compile`, the test output to `tmp/evidence/tests` and the acceptance evidence to `tmp/evidence/acceptance`.
 
 ### Ziggy repository (`../ziggy` from Photosphere)
 
-2. Check the pre-commit hook is installed, as Ziggy's `CLAUDE.md` requires: `$(git -C ../ziggy rev-parse --path-format=absolute --git-common-dir)/hooks/pre-commit` links to `.githooks/pre-commit` (the `--path-format=absolute` makes the path Ziggy's own, not one relative to Photosphere); when it does not, run `mise exec -C ../ziggy -- bun run install-hooks`.
+- [x] 2. Check the pre-commit hook is installed, as Ziggy's `CLAUDE.md` requires: `$(git -C ../ziggy rev-parse --path-format=absolute --git-common-dir)/hooks/pre-commit` links to `.githooks/pre-commit` (the `--path-format=absolute` makes the path Ziggy's own, not one relative to Photosphere); when it does not, run `mise exec -C ../ziggy -- bun run install-hooks`.
+    - Summary: Ziggy's `.git/hooks/pre-commit` links to `.githooks/pre-commit`, so `install-hooks` did not run.
 
-3. Add the external links to the test app's frontend.
+- [x] 3. Add the external links to the test app's frontend.
+    - Summary: added the External links section to `apps/ziggy-test-app/frontend/index.html` and `startExternalLinks` to `src/main.ts`, with the comment on why a 6 s timer is the case that reaches the popup blocker. `bun run compile` and `bun run test` pass. A screenshot of the section is in `tmp/evidence/acceptance`.
     - `apps/ziggy-test-app/frontend/index.html`: add a `<section>` with the heading "External links" holding:
         - an input `data-id="external-link-marker"`, which the scenario types a marker into; a reload or a navigation away and back would clear it;
         - `<a data-id="link-plain" href="https://plain.example.com/ziggy-external-link">A plain link</a>`;
@@ -111,7 +114,8 @@ A link to an outside page must open in the system web browser, not inside the ap
     - `mise exec -C ../ziggy -- bun run compile` and `mise exec -C ../ziggy -- bun run test` pass.
     - Save its evidence as the work is done: the compile output to `tmp/evidence/compile`, the test output to `tmp/evidence/tests` and the acceptance evidence (a screenshot of the test app's External links section) to `tmp/evidence/acceptance`.
 
-4. Let the smoke tests see a link reach the system, from outside the app.
+- [x] 4. Let the smoke tests see a link reach the system, from outside the app.
+    - Summary: added `smoke-tests/lib/record-opened-url.sh` (mode 755) and its `.md`; added `XDG_CONFIG_HOME` and the optional `XDG_DATA_DIRS`/`DBUS_SESSION_BUS_ADDRESS` to `ziggy_platform_start`, `ziggy_platform_hide_url_handlers`, `ziggy_platform_watch_opened_urls`, `ziggy_platform_opened_urls` and `ziggy_platform_wait_app_log` to `linux.sh`, the log wait to `windows.sh`, `ziggy_platform_opened_urls` to `android.sh` and `wait_for_opened_url` to `common.sh`, with the four `.md` files updated. `bash -n` passes.
     - Pick the Ziggy scenario's number: the next unused scenario number at implementation time, across `smoke-tests` and every subdirectory of it. It is written `<N>` below.
     - New `smoke-tests/lib/record-opened-url.sh`, executable, `#!/usr/bin/env bash`, then a comment block stating its one job (the URL handler a Linux smoke scenario installs in place of a browser: it records each address the system was asked to open), then `set -eu`, printing `Usage: record-opened-url.sh <record file> <address>` to standard error and exiting 2 when it is not given two arguments: it appends the address as one line to the record file. Set its executable bit with `chmod 755`. Add `smoke-tests/lib/record-opened-url.md` beside it covering what it is for (the Linux URL handler of the `<N>-external-links` scenario), how it is invoked and each argument. Run `bash -n` over it.
     - `smoke-tests/lib/linux.sh`:
@@ -129,7 +133,8 @@ A link to an outside page must open in the system web browser, not inside the ap
     - Run `bash -n` over every edited script.
     - Save its evidence as the work is done: the `bash -n` output to `tmp/evidence/compile`, the test output to `tmp/evidence/tests` and the acceptance evidence to `tmp/evidence/acceptance`.
 
-5. Add the scenario `smoke-tests/native-only/<N>-external-links/test.sh`, which `run.sh`'s `list_scenarios` already runs on all five platforms, in the form of `native-only/24-ui-address/test.sh` (which sources `"$(dirname "${BASH_SOURCE[0]}")/../../lib/common.sh"`), with a comment at the top giving its goal and method per platform, and `test.md` beside it saying what the scenario checks on each platform and that the runner starts it with no arguments.
+- [x] 5. Add the scenario `smoke-tests/native-only/<N>-external-links/test.sh`, which `run.sh`'s `list_scenarios` already runs on all five platforms, in the form of `native-only/24-ui-address/test.sh` (which sources `"$(dirname "${BASH_SOURCE[0]}")/../../lib/common.sh"`), with a comment at the top giving its goal and method per platform, and `test.md` beside it saying what the scenario checks on each platform and that the runner starts it with no arguments.
+    - Summary: `<N>` is 32, the next unused number. Added `smoke-tests/native-only/32-external-links/test.sh` and `test.md` and listed the scenario in `smoke-tests/run.md`. `bash -n` passes.
     - On Linux (`$ZIGGY_SMOKE_PLATFORM`), first check a failed open is reported: `ziggy_platform_hide_url_handlers "$ZIGGY_TEST_DIR"`, `start_test_app`, `click link-plain`, `ziggy_platform_wait_app_log "$ZIGGY_TEST_DIR" "ziggy native app: could not open https://plain.example.com in the system browser"`, then `ziggy_platform_watch_opened_urls "$ZIGGY_TEST_DIR"` and `restart_test_app`, which starts the app again with the scenario's URL handler. On every other platform, `start_test_app`.
     - Then `type_into external-link-marker "still here"`.
     - For each of `link-plain` (`plain.example.com`), `new-window-later` (`new-window.example.com`) and `open-window-later` (`window-open.example.com`), in that order:
@@ -142,7 +147,8 @@ A link to an outside page must open in the system web browser, not inside the ap
     - Run `bash -n` over the new script.
     - Save its evidence as the work is done: the `bash -n` output to `tmp/evidence/compile`, the test output to `tmp/evidence/tests` and the acceptance evidence (a screenshot of the test app's External links section) to `tmp/evidence/acceptance`.
 
-6. Report a failed open on Linux, and see the scenario fail where the popup blocker drops the open.
+- [x] 6. Report a failed open on Linux, and see the scenario fail where the popup blocker drops the open.
+    - Summary: added `address-for-log.zig` with its eight unit tests and imported them in `tests.zig`; `onDecidePolicy` now prints the shortened scheme and host on a failed open and frees the error. `zig build` and `zig build test` pass (23 native Linux tests). Before the fix the scenario passed the app-log check and `link-plain` and failed at `new-window-later` on Linux and Android with "the system was never asked to open new-window.example.com", as required.
     - New `packages/ziggy/native/linux/src/lib/address-for-log.zig` with `pub fn addressForLog(uri: []const u8, buffer: []u8) []const u8`, a comment block saying it gives the part of an address that is safe to log (an address can carry personal details, such as the log details in Photosphere's bug report address): when `uri` holds `://`, the scheme and the host, dropping the user name and password and the port: the scheme and the host after the authority, with the user name and password removed and the host kept; otherwise the text up to and including the first `:` (`mailto:`), or the whole of `uri` when there is none. It writes the result into `buffer` and returns a slice of `buffer`, allocating nothing, or returns `uri` when no shortening is needed. It returns an empty slice when `buffer` is too small, and the caller checks the length.
     - New `packages/ziggy/native/linux/src/test/address-for-log.test.zig`, in the form of `menu-keys.test.zig`, with a description at the top, each test calling `addressForLog(uri, &buffer)` with a local buffer and comparing the returned slice, testing: `https://plain.example.com/ziggy-external-link` gives `https://plain.example.com`; `https://example.com?x=1` gives `https://example.com`; `https://example.com#top` gives `https://example.com`; `https://example.com` gives itself; `https://user:password@example.com/path` gives `https://example.com`; `https://example.com:8443/path` gives `https://example.com`; `mailto:someone@example.com` gives `mailto:`; `nothing` gives itself. Import it in `packages/ziggy/native/linux/src/tests.zig` beside the other two.
     - `packages/ziggy/native/linux/src/lib/native-app.zig`, `onDecidePolicy` (line 330): import `address-for-log.zig` beside `menu-keys.zig`. Replace `_ = c.gtk_show_uri_on_window(null, uri.ptr, c.GDK_CURRENT_TIME, null);` (line 346) with a `var open_error: ?*c.GError = null;` passed as `&open_error`. When the call returns 0, call `std.debug.print("ziggy native app: could not open {s} in the system browser\n", .{ address_for_log.addressForLog(uri) })`, and free the error with `c.g_error_free(open_error.?)`.
@@ -151,7 +157,8 @@ A link to an outside page must open in the system web browser, not inside the ap
     - Run `adb devices`. When a serial reads `device`, run `mise exec -C ../ziggy -- bun run test:smoke:android -- <N>`. It must pass `link-plain` and fail at `new-window-later` in the same way, with the same rule when it does not.
     - Save its evidence as the work is done: the compile output to `tmp/evidence/compile`, the test output to `tmp/evidence/tests` and the acceptance evidence to `tmp/evidence/acceptance`.
 
-7. Let the frontend open windows without a user gesture.
+- [x] 7. Let the frontend open windows without a user gesture.
+    - Summary: turned on automatic window opening on Linux (`javascript-can-open-windows-automatically`), macOS and iOS (`javaScriptCanOpenWindowsAutomatically`) and Android (`setJavaScriptCanOpenWindowsAutomatically`), and made Windows print whether a new window request was user initiated. Decision made while implementing: WebKitGTK sends a `window.open` to the `create` signal, not `decide-policy`, so `onCreate` was added to open the address with the system's opener and never create a view, and the failure report moved into `openExternally`, shared with `onDecidePolicy`. Scenario 32 passes on Linux and Android; the Windows, macOS and iOS runs are CI-only.
     - Linux, `packages/ziggy/native/linux/src/lib/gtk.zig`: declare `pub extern fn webkit_settings_set_javascript_can_open_windows_automatically(settings: *WebKitSettings, enabled: gboolean) void;` beside `webkit_settings_set_enable_developer_extras` (line 157).
     - Linux, `packages/ziggy/native/linux/src/lib/native-app.zig`: after the `c.webkit_settings_set_enable_developer_extras(c.webkit_web_view_get_settings(web_view), 1);` line (line 242) call the new function with `1` on `c.webkit_web_view_get_settings(web_view)`, with a comment saying why: the popup blocker drops a `window.open` or a `target="_blank"` that no click of the user's ran, and `onDecidePolicy` decides every new window and opens it with the system's opener or drops it.
     - Windows: no change to the setting. WebView2 raises `NewWindowRequested` for every `window.open` whatever started it, so it needs no setting, and `openExternally` already ends the app with `fatal` when ShellExecute fails. In `newWindowInvoke` (`packages/ziggy/native/windows/src/lib/native-app.zig`, line 1921), read `args.*.lpVtbl.*.get_IsUserInitiated` and print `ziggy native app: a new window was requested, user initiated: <yes or no>` to standard error, so the Windows run can see the request was raised.
@@ -166,11 +173,13 @@ A link to an outside page must open in the system web browser, not inside the ap
 
 ### Example repositories (`ziggy-example-vite` and `ziggy-example-rsbuild`)
 
-8. No change. Their native apps are Ziggy's, taken from a Ziggy version tag, and their own code never opens a link; they get this behaviour when they move to the Ziggy release that holds steps 3 to 7.
+- [x] 8. No change. Their native apps are Ziggy's, taken from a Ziggy version tag, and their own code never opens a link; they get this behaviour when they move to the Ziggy release that holds steps 3 to 7.
+    - Summary: no change, as the step says.
 
 ### Photosphere repository
 
-9. Add the Photosphere scenario.
+- [x] 9. Add the Photosphere scenario.
+    - Summary: `<M>` is 70, the next unused number. Added `70-external-links` with its `test.md`, `record-opened-url.sh` and `.md`, `XDG_CONFIG_HOME` and the two opened-url helpers in `linux.sh`, `photosphere_platform_opened_urls` in `android.sh` and `wait_for_opened_url` in `common.sh`, with the three `.md` files updated. `bash -n` passes, `bun run test:ziggy -- 70` passes on Linux, and `bun run tev` exits 0. The About page screenshot is in `tmp/evidence/acceptance`.
     - Pick the Photosphere scenario's number: the next unused scenario number in `apps/photosphere-smoke-tests` at implementation time. It is written `<M>` below.
     - No change to `packages/user-interface/src/pages/about.tsx`: the scenario clicks no link on the About page, so no test marker is added.
     - New `apps/photosphere-smoke-tests/lib/record-opened-url.sh` with its `.md`, the same as Ziggy's in step 4, executable bit included (a script of this repository's own, since Photosphere never runs Ziggy's scripts), naming `<M>-external-links` as its user.
@@ -192,26 +201,23 @@ A link to an outside page must open in the system web browser, not inside the ap
     - The Windows, macOS and iOS runs are CI-only: `bun run test:ziggy` runs in `.github/workflows/release-windows.yml`, `release-macos-arm64.yml` and `release-macos-x64.yml`, and `bun run test:ziggy:ios` in `release-ios.yml`.
     - Save its evidence as the work is done: the compile output to `tmp/evidence/compile`, the test output to `tmp/evidence/tests` and the acceptance evidence (a screenshot of the Photosphere app's About page) to `tmp/evidence/acceptance`.
 
-10. Edit the Photosphere CI workflows so each run that needs a Ziggy sibling finds one.
-    - The workflows that need a sibling checkout are `ci.yml` and `release-linux.yml`, `release-windows.yml`, `release-macos-arm64.yml`, `release-macos-x64.yml`, `release-ios.yml` and `release-android.yml`: `ci.yml` runs `zig build --fetch=all` and `zig build test`, and each release workflow runs `bun run --filter=ziggy` or `bun run test:ziggy`. `bun run --filter=ziggy` names the `apps/photosphere` package, whose `sync-*.sh` scripts run the root `zig build` (`apps/photosphere/scripts/sync-linux.sh`).
-    - In each job that runs one of those commands, set `ZIGGY_BRANCH` in the workflow's `env` to `external-links` (the "Decisions not approved by a human" section records the decision), and add a `run` step beside the Photosphere checkout: `git clone --branch "$ZIGGY_BRANCH" --depth 1 https://github.com/ashleydavis/ziggy.git ../ziggy`. A `run` step is used rather than `actions/checkout`, whose `path` is a relative path under the workspace, and `../ziggy` is outside it. The workflow runs on GitHub's runners with no SSH key, so HTTPS is the only option. The plan does not push the branch.
-    - `what-changed` accepts that a Ziggy-only change runs no Photosphere suite until Photosphere takes a Ziggy release: that change is made when step 1 implements `plan-config-and-state.md`; this step only adds the checkout.
-    - The repository has no workflow lint, so read each edited YAML file and check each new step is indented as its file's other steps are.
-
 ### Documentation
 
-11. Write the documentation.
+- [x] 11. Write the documentation.
+    - Summary: added "Links to other pages" to Ziggy's architecture guide, the `32-external-links` paragraph to its testing guide, and "**Links to other pages:**" to Photosphere's `docs/photosphere-on-ziggy.md`.
     - Ziggy `docs/development/architecture.md`, after "The bundled frontend": a section "Links to other pages" saying that each native app asks the core's origin check about every navigation and every request for a new window; the app's own frontend loads, an `http`, `https` or `mailto` address opens with the platform's opener (named per platform) and anything else is blocked; a request for a new window is opened with the opener or dropped; `window.open` and `target="_blank"` work with or without a click of the user's, because each native app lets the frontend open windows automatically; an address the system cannot open is written to standard error on Linux (scheme and host only), macOS and iOS, written to the device log on Android and ends the app on Windows. Name the smoke scenario `<N>-external-links`.
     - Ziggy `docs/user-guide/testing.md`, under "The remote control connection": one paragraph saying how `<N>-external-links` sees an address reach the system on Linux (a URL handler of the scenario's own, through `XDG_CONFIG_HOME` and `XDG_DATA_HOME`, after a run with every handler hidden through `XDG_DATA_DIRS` that checks a failed open reaches the app's log) and on Android (the device log), that two of its links open 6 s after the click so no user gesture is behind them, and that on Windows, macOS and iOS, where no hook reports the open, it checks that the app is still running five seconds after each open and, on Windows and macOS, that the frontend still holds its marker.
     - Photosphere `docs/photosphere-on-ziggy.md`, in "Where Photosphere lives" after the "**Messages:**" paragraph: a paragraph in the same form, "**Links to other pages:**", one sentence saying that the Help menu, the About page's links, the bug report button and every other link to an outside page open in the system browser through Ziggy's native apps, which Photosphere's frontend reaches with ordinary links and `window.open`.
 
 ### Verify
 
-12. Run the "Verify" section. Save its evidence as the work is done: the compile output to `tmp/evidence/compile`, the test output to `tmp/evidence/tests` and the acceptance evidence (screenshots of the GUI apps' windows) to `tmp/evidence/acceptance`. Every check must pass.
+- [x] 12. Run the "Verify" section. Save its evidence as the work is done: the compile output to `tmp/evidence/compile`, the test output to `tmp/evidence/tests` and the acceptance evidence (screenshots of the GUI apps' windows) to `tmp/evidence/acceptance`. Every check must pass.
+    - Summary: Ziggy's `zig build`, `zig build test`, `bun run compile`, `bun run test` and `bun run test:android-shell` exit 0; the full Linux smoke suite passes 31 of 31 with `32-external-links`; `bun run test:smoke:android -- 32` passes; Photosphere's `bun run tev` passes all 6 scripts it selected, `70-external-links` included on Linux and Android; `bash -n` passes over every edited script; the documentation matches the code. Evidence is in `tmp/evidence`. The Windows, macOS and iOS runs are CI-only and were not run here.
 
 ### Self Review
 
-13. Check the evidence the earlier steps collected and every "Review" checklist item in the "## Review" section. This step does not collect evidence. Tick a checklist item only when the evidence confirms it. Uncheck an earlier step that is incomplete and add a step for anything missed, placed before "Verify". When a check fails, restart implementing from the first unchecked step.
+- [x] 13. Check the evidence the earlier steps collected and every "Review" checklist item in the "## Review" section. This step does not collect evidence. Tick a checklist item only when the evidence confirms it. Uncheck an earlier step that is incomplete and add a step for anything missed, placed before "Verify". When a check fails, restart implementing from the first unchecked step.
+    - Summary: checked the evidence and every Review item. The code compiles, every test that ran passed, the acceptance criteria are met with screenshots, the documentation matches the code, and the local and global rules were followed. No earlier step needed unchecking and nothing was missed. The workflow step was removed from the plan and the workflow files were left unchanged on the human's order.
 
 ## Unit Tests
 
@@ -237,18 +243,18 @@ The plan's Verify step runs these checks and saves the evidence to `tmp/evidence
 - Photosphere: `mise exec -C . -- bun run tev` exits 0, `<M>-external-links` included on Linux and Android.
 - `bash -n` passes over every new or edited shell script.
 - The documentation in step 11 matches the code: the new setting, the Linux failure message and the smoke scenarios.
-- CI-only, once the branch is pushed: Ziggy's macOS and iOS native apps compile with the new setting (Ziggy's CI builds on macOS); `<N>-external-links` on Windows, macOS and iOS (Ziggy's `ci.yml`), and on Android when no device is attached here; `<M>-external-links` on Windows, macOS and iOS (Photosphere's `release-windows.yml`, `release-macos-arm64.yml`, `release-macos-x64.yml` and `release-ios.yml`, whose jobs step 10 gives a Ziggy sibling checkout).
+- CI-only, once the Ziggy branch is pushed: Ziggy's macOS and iOS native apps compile with the new setting (Ziggy's CI builds on macOS); `<N>-external-links` on Windows, macOS and iOS (Ziggy's `ci.yml`), and on Android when no device is attached here; `<M>-external-links` on Windows, macOS and iOS (Photosphere's `release-windows.yml`, `release-macos-arm64.yml`, `release-macos-x64.yml` and `release-ios.yml`).
 
 ## Review
 
 The Self Review step fills this checklist from the evidence the earlier steps collected. It does not collect evidence.
 
-- [ ] The code compiles (evidence in `tmp/evidence/compile`).
-- [ ] All tests have passed (evidence in `tmp/evidence/tests`).
-- [ ] Acceptance criteria has been met (evidence in `tmp/evidence/acceptance`, including screenshots for GUI apps).
-- [ ] The documentation is updated and accurate to the code. When the plan had a documentation review stop and the human approved the documentation, the code conforms to the approved documentation. Otherwise the documentation conforms to the code. Check the documentation against the rules too.
-- [ ] Local project rules have been followed.
-- [ ] Global rules have been followed.
+- [x] The code compiles (evidence in `tmp/evidence/compile`).
+- [x] All tests have passed (evidence in `tmp/evidence/tests`).
+- [x] Acceptance criteria has been met (evidence in `tmp/evidence/acceptance`, including screenshots for GUI apps).
+- [x] The documentation is updated and accurate to the code. When the plan had a documentation review stop and the human approved the documentation, the code conforms to the approved documentation. Otherwise the documentation conforms to the code. Check the documentation against the rules too.
+- [x] Local project rules have been followed.
+- [x] Global rules have been followed.
 
 ## Reviewed
 
@@ -281,7 +287,7 @@ None.
 - On Android a link's browser covers the app, and Android 10 and later refuse an activity start from an app in the background, so the Ziggy scenario restarts the app (`restart_test_app`, which force-stops it and clears the device log) before each later link, and neither scenario reads the page on Android after a link has opened. Whether the web view answers remote control commands while covered was not checked, and the scenarios do not depend on it.
 - Step 2's hook check is required by Ziggy's `CLAUDE.md` before anything in that repository changes, with `install-hooks` run "without asking" when the hook is missing, so it cannot move to a last step. When the plan was fixed, Ziggy's `.git/hooks/pre-commit` already linked to `.githooks/pre-commit`, so `install-hooks` does not run.
 - Photosphere's Android run goes through `bun run tev`, Photosphere's canonical check, which runs the Android suite when the paths it watches changed; the plan does not check for attached devices itself.
-- Photosphere's CI workflows check out the `external-links` Ziggy branch beside Photosphere (step 10; the plan does not push it), so the `.path` change from the prerequisite plan does not break them. `what-changed` accepts that a Ziggy-only change runs no Photosphere suite until Photosphere takes a Ziggy release.
+- The CI workflows are not changed: the human banned workflow updates, so the `.path` change from the prerequisite plan is not carried into them. `what-changed` accepts that a Ziggy-only change runs no Photosphere suite until Photosphere takes a Ziggy release.
 - Commands the implementing agent runs itself are run as they are, with no `tee` and no log file: the global `CLAUDE.md` says so for commands the agent runs, and it takes precedence over `rules/testing.md`'s "capture test output to a file".
 - The Ziggy template and its smoke tests are not changed: its frontend has no external link, and the behaviour is Ziggy's, covered by the test app's scenario.
 - The example repositories get no change from this plan: their native apps are Ziggy's from a version tag, and they receive this when they move to the Ziggy release that holds it.
