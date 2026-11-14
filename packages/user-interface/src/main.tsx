@@ -238,6 +238,17 @@ function __Main() {
     }, [platform]);
 
     //
+    // Opens another window of the app when the Ziggy action new-window runs, from the File menu or its shortcut.
+    //
+    useEffect(() => {
+        return platform.registerAction("new-window", () => {
+            platform.newWindow().catch((error: Error) => {
+                console.error(`The new window did not open: ${error.message}`);
+            });
+        });
+    }, [platform]);
+
+    //
     // Listen to the host: menu actions it dispatches by name, and messages from the tasks it runs.
     //
     // A task message is how a task reaches the interface on every platform, the Electron main process

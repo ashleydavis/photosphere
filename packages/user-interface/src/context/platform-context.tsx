@@ -614,6 +614,11 @@ export interface IPlatformContext {
     // Runs one of the app's Ziggy actions by its name, through the handler registered for it.
     //
     runAction: (name: string) => Promise<void>;
+
+    //
+    // Opens another window of the app, and resolves once its process has started.
+    //
+    newWindow: () => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

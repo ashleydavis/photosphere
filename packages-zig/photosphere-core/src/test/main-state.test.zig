@@ -80,6 +80,7 @@ const CountedServices = struct {
         .quit = quit,
         .menuAction = menuAction,
         .runAction = runAction,
+        .new_window = new_window,
         .dataDir = dataDir,
         .configPath = configPath,
         .statePath = statePath,
@@ -130,6 +131,10 @@ const CountedServices = struct {
 
     fn runAction(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) anyerror!void {
         unexpected("runAction");
+    }
+
+    fn new_window(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const []const u8) anyerror!void {
+        unexpected("new_window");
     }
 
     fn dataDir(_: *anyopaque) []const u8 {

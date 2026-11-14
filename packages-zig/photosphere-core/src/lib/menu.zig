@@ -33,6 +33,12 @@ pub const menu: []const ziggy.menu.Menu = &.{
     .{
         .label = "File",
         .items = &.{
+            // Runs the app's action New Window, whose label and shortcut the item shows.
+            .{
+                .run = .{
+                    .action = "new-window",
+                },
+            },
             .{
                 .label = "New Database...",
                 .name = "new-database",

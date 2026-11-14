@@ -340,7 +340,7 @@ photosphere_ios_device_pump_log() {
                 photosphere_ios_device_unlock "$test_dir"
                 return 1
             }
-            log_name="$(printf '%s\n' "$listing" | tr '|' '\n' | grep -E '^photosphere-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}\.log$' | head -n 1 || true)"
+            log_name="$(printf '%s\n' "$listing" | tr '|' '\n' | grep -E '^photosphere-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]+\.log$' | head -n 1 || true)"
         fi
         if [ -n "$log_name" ]; then
             length="$(photosphere_ios_device_evaluate "$test_dir" "[@([[NSData dataWithContentsOfFile:@\"$logs_dir/$log_name\"] length]) stringValue]")" || {

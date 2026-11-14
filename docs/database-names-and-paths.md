@@ -333,8 +333,8 @@ App id `au.com.codecapers.photosphere`.
     ├── single-instance.signal    Running copy and brings its
     │                             window forward
     ├── logs/                     App logs:
-    │                             photosphere-<start time>.log,
-    │                             photosphere-<start time>-errors.log
+    │                             photosphere-<start time>-<pid>.log,
+    │                             photosphere-<start time>-<pid>-errors.log
     └── dbs/                      The app's own databases
         ├── photosphere-default/  Default database
         └── <name>/               A database given by
@@ -424,8 +424,8 @@ The CLI shares the desktop app's settings, vault, cache and data dir on the same
 
 <tmp>/
 └── photosphere/logs/             CLI logs
-    ├── psi-<start time>.log
-    └── psi-<start time>-errors.log
+    ├── psi-<start time>-<pid>.log
+    └── psi-<start time>-<pid>-errors.log
 
 <any absolute path>/              Any other database
 ```
