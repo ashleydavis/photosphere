@@ -36,8 +36,8 @@ pub const ILogOptions = struct {
 };
 
 //
-// Makes the CLI's log and returns it, for main to pass down: Ziggy's file log, writing psi-<start time>.log and
-// psi-<start time>-errors.log under <process tmp dir>/photosphere/logs, or with file logging disabled Ziggy's console log. The options
+// Makes the CLI's log and returns it, for main to pass down: Ziggy's file log, writing psi-<start time>-<pid>.log and
+// psi-<start time>-<pid>-errors.log under <process tmp dir>/photosphere/logs, or with file logging disabled Ziggy's console log. The options
 // decide what the console shows; the log file always gets every line. The file log is closed, writing its footers, when the process
 // ends, by a termination callback.
 // consoleLog is the console log the program starts with, which finding the header writes to. toolRunner runs the ImageMagick and FFmpeg

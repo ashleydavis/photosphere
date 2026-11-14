@@ -16,4 +16,10 @@ pub const actions: []const ziggy.action.Action = &.{
         .label = "Open Database...",
         .shortcut = "CmdOrCtrl+O",
     },
+    // Opens another window of the app.
+    .{
+        .name = "new-window",
+        .label = "New Window",
+        .shortcut = "CmdOrCtrl+Shift+N",
+    },
 };

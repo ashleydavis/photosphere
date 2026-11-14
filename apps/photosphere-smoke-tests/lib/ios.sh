@@ -220,7 +220,7 @@ photosphere_platform_start() {
     local log_files=()
     local waited=0
     while true; do
-        log_files=("$log_dir"/logs/photosphere-????-??-??T??-??-??.log)
+        log_files=("$log_dir"/logs/photosphere-????-??-??T??-??-??-*[0-9].log)
         if [ -f "${log_files[0]}" ]; then
             break
         fi

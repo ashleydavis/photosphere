@@ -409,7 +409,7 @@ photosphere_platform_start() {
     }
 
     # The log file appears when the core is created. The glob matches the main log and not the errors log beside it.
-    local log_glob="$log_dir/logs/photosphere-????-??-??T??-??-??.log"
+    local log_glob="$log_dir/logs/photosphere-????-??-??T??-??-??-*[0-9].log"
     local waited=0
     while ! photosphere_adb exec-out "run-as $ANDROID_APP_ID sh -c 'ls $log_glob'" 2>/dev/null | grep -q "^$log_dir/logs/photosphere-"; do
         if [ -z "$(photosphere_adb shell pidof "$ANDROID_APP_ID" | tr -d '\r')" ]; then

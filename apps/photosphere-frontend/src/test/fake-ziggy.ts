@@ -235,6 +235,11 @@ export class FakeZiggy implements IZiggyBridge {
         return Promise.resolve(this.actionList);
     }
 
+    // Photosphere opens no new window, so the frontend never calls this. A test that does gets a failure naming the arguments.
+    async newWindow(args: string[]): Promise<void> {
+        throw new Error(`FakeZiggy: Photosphere opens no new window, so newWindow was not expected (arguments ${args.join(" ")}).`);
+    }
+
     // Plays one of Ziggy's own events from the core to the callbacks registered for it, or with the name "event", an event of the app's own.
     emit(name: string, data: IJsonValue): void {
         for (const callback of this.listeners.get(name) ?? []) {

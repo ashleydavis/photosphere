@@ -35,13 +35,14 @@ fail() {
 
 #
 # Prints the newest log file name that matches the chosen kind (main or errors) from a listing of
-# the log folder on stdin. The names carry their start time, so the last one in sorted order is the
-# newest. Prints nothing when none matches.
+# the log folder on stdin. The names carry their start time and then their process id, so the last
+# one in sorted order is the newest: a later start time sorts last, and two windows started in the
+# same second sort by their process id. Prints no name when none matches.
 #
 newest_log_name() {
-    local pattern='^photosphere-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}\.log$'
+    local pattern='^photosphere-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]+\.log$'
     if [ "$errors" = "true" ]; then
-        pattern='^photosphere-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}-errors\.log$'
+        pattern='^photosphere-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]+-errors\.log$'
     fi
     tr -d '\r' | grep -E "$pattern" | sort | tail -n 1 || true
 }

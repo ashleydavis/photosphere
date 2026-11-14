@@ -683,6 +683,10 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         return ziggy.runAction(name);
     }, [ziggy]);
 
+    const newWindow = useCallback(async (): Promise<void> => {
+        await ziggy.newWindow([]);
+    }, [ziggy]);
+
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
         taskEventCallbacksRef.current.add(handler);
         return () => {
@@ -940,6 +944,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         getPathForFile,
         registerAction,
         runAction,
+        newWindow,
         platformKind: platform.platformKind,
         onTaskMessage,
         onTaskComplete,

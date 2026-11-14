@@ -6,7 +6,7 @@ Invoke: `bun run app:log -- --platform <linux|macos|windows|android|ios> [--targ
 
 - `--platform <p>`: where the app runs: `linux`, `macos`, `windows`, `android` or `ios`.
 - `--target <t>`: the adb serial of the Android device, or the udid of the iOS simulator. Without it, the script uses the only Android device `adb devices` lists, or the only booted simulator, and fails with a list of them when there is none or more than one.
-- `--errors`: read the errors log (`photosphere-<start time>-errors.log`) instead of the main log (`photosphere-<start time>.log`).
+- `--errors`: read the errors log (`photosphere-<start time>-<pid>-errors.log`) instead of the main log (`photosphere-<start time>-<pid>.log`).
 - `--from-line <n>`: print the file from line `n` onward, where `n` is a positive whole number. Without it, the whole file is printed.
 - `--path`: print the chosen file's path and nothing else. A new path means the app has restarted and started a new log file.
 

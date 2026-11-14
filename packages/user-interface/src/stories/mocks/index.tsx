@@ -221,6 +221,7 @@ export function mockPlatform(): IPlatformContext {
         runAction: () => {
             throw new Error("The stories browser runs no Ziggy actions.");
         },
+        newWindow: async () => {},
     };
 }
 
