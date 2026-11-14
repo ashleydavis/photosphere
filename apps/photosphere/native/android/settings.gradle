@@ -4,6 +4,6 @@
 rootProject.name = 'photosphere-android'
 
 include ':app'
-includeBuild('../../../../../ziggy/packages/ziggy/native/android') {
+includeBuild('../../../../../../../../ziggy/.claude/worktrees/splash-screens/packages/ziggy/native/android') {
     name = 'ziggy-native-android'
 }

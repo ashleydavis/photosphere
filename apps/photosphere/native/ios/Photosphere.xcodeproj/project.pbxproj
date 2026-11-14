@@ -41,7 +41,7 @@
 		B2000000000000000000000D /* PhotosphereNativeCalls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosphereNativeCalls.swift; sourceTree = "<group>"; };
 		B2000000000000000000000E /* BackgroundPasses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPasses.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A20000000000000000000006 /* ios */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ios; path = "../../../../../ziggy/packages/ziggy/native/ios"; sourceTree = "<group>"; };
+		A20000000000000000000006 /* ios */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ios; path = "../../../../../../../../ziggy/.claude/worktrees/splash-screens/packages/ziggy/native/ios"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

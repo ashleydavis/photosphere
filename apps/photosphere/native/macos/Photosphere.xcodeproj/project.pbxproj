@@ -19,7 +19,7 @@
 		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000005 /* Photosphere.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Photosphere.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A20000000000000000000006 /* macos */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = macos; path = "../../../../../ziggy/packages/ziggy/native/macos"; sourceTree = "<group>"; };
+		A20000000000000000000006 /* macos */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = macos; path = "../../../../../../../../ziggy/.claude/worktrees/splash-screens/packages/ziggy/native/macos"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

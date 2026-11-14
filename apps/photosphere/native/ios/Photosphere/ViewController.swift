@@ -50,7 +50,7 @@ final class ViewController: UIViewController {
         newBridge.keepRunningChanged = { [weak self] keepRunning in
             self?.backgroundPasses.loopsRunningChanged(keepRunning)
         }
-        view = newBridge.webView
+        view = newBridge.view
     }
 
     // Starts Ziggy once the web view is the controller's view.

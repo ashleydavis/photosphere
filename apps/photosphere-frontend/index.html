@@ -11,7 +11,7 @@
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
       })();
     </script>
-    <style>html { background: #FFF; } @media (prefers-color-scheme: dark) { html { background: #000; } }</style>
+    <style>html { background: #FFF; } @media (prefers-color-scheme: dark) { html { background: #000; } } /* The splash overlay does not cover the scrollbar gutter, so the page's scrollbar is hidden while it is present. */ html:has([data-id="ziggy-splash"]), html:has([data-id="ziggy-splash"]) * { overflow: hidden !important; }</style>
   </head>
   <body>
     <div id="root"></div>

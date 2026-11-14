@@ -1,0 +1,11 @@
+{
+    "name": "Photosphere",
+    "prefix": "photosphere",
+    "icon": "photosphere-icon.svg",
+    "foreground": "photosphere-icon-foreground.svg",
+    "portrait": "splash-portrait.svg",
+    "landscape": "splash-landscape.svg",
+    "background": "#140A24",
+    "macosTarget": "Photosphere",
+    "iosTarget": "Photosphere"
+}

@@ -189,6 +189,14 @@ export class FakeZiggy implements IZiggyBridge {
         });
     }
 
+    // Records the call as the "frontend-ready" system message.
+    frontendReady(): void {
+        this.sent.push({
+            name: "frontend-ready",
+            data: null,
+        });
+    }
+
     // Records the line as the "log" message, with the error text and the tool output only when they were given.
     log(level: LogLevel, message: string, errorText?: string, toolOutput?: IToolOutput): void {
         const data: IJsonObject = {

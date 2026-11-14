@@ -37,12 +37,28 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-# The page is bundled into a directory of this build's own and embedded from there, so a build of another platform running at the
-# same moment cannot replace it mid-build. Removed afterwards.
+# The page is bundled into a directory of its own per platform and embedded from there, so a build of another platform
+# running at the same moment cannot replace it mid-build. The directory is kept, so a run whose frontend sources have not
+# changed reuses the last bundle and the build's cache.
 FRONTEND_DIR="$(cd "$APP_DIR/../photosphere-frontend" && pwd)"
-PAGE_DIR="$(mktemp -d "$FRONTEND_DIR/page.XXXXXX")"
-trap 'find "$PAGE_DIR" -type f -delete; find "$PAGE_DIR" -depth -type d -empty -delete' EXIT
-(cd "$APP_DIR" && bun run bundle:ui --out-dir "$PAGE_DIR" "${BUNDLE_ARGUMENTS[@]+"${BUNDLE_ARGUMENTS[@]}"}")
+PAGE_DIR="$FRONTEND_DIR/page.linux"
+ARGUMENTS_STAMP="$PAGE_DIR/.bundle-arguments"
+mkdir -p "$PAGE_DIR"
+BUNDLE_ARGUMENTS_TEXT="${BUNDLE_ARGUMENTS[*]-}"
+REBUILD_PAGE="false"
+if [ ! -f "$PAGE_DIR/index.html" ]; then
+    REBUILD_PAGE="true"
+fi
+if [ "$(cat "$ARGUMENTS_STAMP" 2>/dev/null)" != "$BUNDLE_ARGUMENTS_TEXT" ]; then
+    REBUILD_PAGE="true"
+fi
+if [ -n "$(find "$FRONTEND_DIR/src" "$FRONTEND_DIR/index.html" "$FRONTEND_DIR/vite.config.ts" "$FRONTEND_DIR/package.json" -newer "$PAGE_DIR/index.html" -print -quit 2>/dev/null)" ]; then
+    REBUILD_PAGE="true"
+fi
+if [ "$REBUILD_PAGE" = "true" ]; then
+    (cd "$APP_DIR" && bun run bundle:ui --out-dir "$PAGE_DIR" "${BUNDLE_ARGUMENTS[@]+"${BUNDLE_ARGUMENTS[@]}"}")
+    printf '%s' "$BUNDLE_ARGUMENTS_TEXT" > "$ARGUMENTS_STAMP"
+fi
 # For the baseline CPU, as the other platforms are by naming their target. Built for the machine's own CPU, the release workflow's
 # app ran on a smoke test runner with an older CPU and every scenario ended with "Illegal instruction (core dumped)", and a
 # package of such a build runs only on CPUs as new as the one it was built on.

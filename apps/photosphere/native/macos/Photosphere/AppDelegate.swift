@@ -25,7 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Lets toggle-fullscreen take the window full screen.
         newWindow.collectionBehavior.insert(.fullScreenPrimary)
         let newBridge = ZiggyBridge(frame: frame)
-        newWindow.contentView = newBridge.webView
+        newWindow.contentView = newBridge.view
         newWindow.center()
         newWindow.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
