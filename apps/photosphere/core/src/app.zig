@@ -9,7 +9,7 @@ const core = @import("photosphere-core");
 const page = @import("ui-files");
 
 //
-// Photosphere, registered with Ziggy's core. A message whose work waits on something slow (the keychain, a file, a dialog, the phone)
+// Photosphere, registered with Ziggy's core. A message whose work waits on something slow (the keychain, a file, a dialog, the mobile)
 // is answered by a task, so it never holds up the thread that handles the page's messages.
 //
 pub const app = withNodeApiTasks(ziggy.core.App(.{

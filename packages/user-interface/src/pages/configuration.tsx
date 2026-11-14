@@ -15,7 +15,7 @@ import { AutoImportSettings } from "../components/auto-import-settings";
 //
 // The configuration page for the Photosphere app.
 //
-// On a phone the settings are grouped into cards, each with a heading and a control sized for a
+// On a mobile the settings are grouped into cards, each with a heading and a control sized for a
 // thumb: a full-width segmented control for the theme, and a slider with large touch handles for
 // the photo size. The desktop layout keeps its narrow, compact column.
 //
@@ -61,7 +61,7 @@ export function ConfigurationPage() {
                                 await applyTheme(value as 'light' | 'dark' | 'system');
                             }
                         }}
-                        // Each option takes an equal share of the full width on a phone, so all
+                        // Each option takes an equal share of the full width on a mobile, so all
                         // three are the same large, easy target.
                         sx={{ width: '100%', '& > button': { flex: 1, minHeight: isMobile ? 48 : undefined } }}
                         >

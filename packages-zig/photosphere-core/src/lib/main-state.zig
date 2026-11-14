@@ -152,7 +152,7 @@ pub const MainState = struct {
     asset_server: ?*node_api.asset_server.AssetServer,
     // The MCP server while it runs, or null before it starts, when it could not start and after the app stops.
     mcp_server: ?*mcp_server.RunningMcpServer,
-    // The lock this copy holds so that no other copy runs, or null when the rule does not apply to it (a build with no version, a test or a phone).
+    // The lock this copy holds so that no other copy runs, or null when the rule does not apply to it (a build with no version, a test or a mobile).
     single_instance: ?single_instance.SingleInstance,
     // The timer that looks for the signal of a second copy, or null when this copy holds no lock.
     single_instance_timer: ?TimerId,
@@ -580,7 +580,7 @@ pub const MainState = struct {
 
     //
     // Takes the lock that keeps a second copy of the packaged app from running, or, when another copy holds it, logs that this one is quitting
-    // and asks the native app to quit. The rule does not apply to a build with no version, a test or a phone, which all log that the lock
+    // and asks the native app to quit. The rule does not apply to a build with no version, a test or a mobile, which all log that the lock
     // was acquired.
     //
     pub fn applySingleInstanceRule(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) !void {
@@ -695,7 +695,7 @@ pub const MainState = struct {
         // Automatic import picks up where it left off, so a machine that was backing photos up before it was shut down carries on
         // without the user having to open anything.
         try self.enqueueEnsureAutoImportTask(services, io, allocator, false);
-        // A phone has no MCP server. A server that cannot start is not worth stopping the app for, so the app carries on without it.
+        // A mobile has no MCP server. A server that cannot start is not worth stopping the app for, so the app carries on without it.
         if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
             self.startMcpServer(services, io, allocator) catch |err| {
                 log.exception("MCP server failed to start, continuing without it", err);
@@ -705,7 +705,7 @@ pub const MainState = struct {
 
     //
     // Does what is needed once the page has loaded and is listening for events: queues the check for a newer release (on a desktop, as
-    // a phone is updated by its store) and the check of the news feed, which announce what they find to the page as events. Only the
+    // a mobile is updated by its store) and the check of the news feed, which announce what they find to the page as events. Only the
     // first call does anything, because the checks run once however many times the page loads.
     //
     pub fn pageLoaded(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !void {
@@ -863,7 +863,7 @@ pub fn current() *MainState {
 
 //
 // Registers, on a task's thread before the task runs, the builders of the media sources automatic import reads: a folder's everywhere,
-// and on a phone, whose native app is the one that reaches the platform (the task's context can reach it), the photo library's too.
+// and on a mobile, whose native app is the one that reaches the platform (the task's context can reach it), the photo library's too.
 //
 pub fn registerMediaSources(context: ziggy.task_queue.types.ITaskContext) anyerror!void {
     try node_api.task_handlers.registerMediaSourceBuilders();

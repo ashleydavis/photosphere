@@ -4,7 +4,7 @@
 # tag as databases, so this covers the secret half of the same cancel-and-restart behaviour that 29 covers for databases.
 #
 # The sender is the app under test on every platform. The receiver of the restarted share is a second copy of the app on a desktop. A
-# phone cannot run two copies of the app, so on Android and iOS the receiver is the psi CLI on the host.
+# mobile cannot run two copies of the app, so on Android and iOS the receiver is the psi CLI on the host.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -26,12 +26,12 @@ wait_for_ready "$SENDER_PORT"
 send_command "$SENDER_PORT" navigate '{"page":"secrets"}' || exit 1
 wait_for_log "$TMP_DIR" "Secrets page loaded"
 
-# The sender holds one secret, added through the real Add Secret dialog because a phone's vault cannot be written from the host.
+# The sender holds one secret, added through the real Add Secret dialog because a mobile's vault cannot be written from the host.
 add_secret_via_ui "$SENDER_PORT" test-secret api-key "TESTAPIKEY123" || exit 1
 
 # --- 1. Start a share, then cancel it while it waits for a receiver. ---
 
-# The share action is in the row's actions menu on a phone. A desktop has no such menu and the click finds nothing.
+# The share action is in the row's actions menu on a mobile. A desktop has no such menu and the click finds nothing.
 send_command "$SENDER_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$SENDER_PORT" click '{"dataId":"share-secret-button"}' || exit 1
 send_command "$SENDER_PORT" click '{"dataId":"share-secret-send-button"}' || exit 1
@@ -89,7 +89,7 @@ case "$PLATFORM" in
         send_command "$RECEIVER_PORT" navigate '{"page":"secrets"}' || exit 1
         wait_for_log "$TMP_DIR/receiver" "Secrets page loaded"
 
-        # The receive action is in the page's actions menu on a phone. A desktop has no such menu and the click finds nothing.
+        # The receive action is in the page's actions menu on a mobile. A desktop has no such menu and the click finds nothing.
         send_command "$RECEIVER_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
         send_command "$RECEIVER_PORT" click '{"dataId":"receive-secret-button"}' || exit 1
         wait_for_log "$TMP_DIR/receiver" "Receive secret dialog opened"

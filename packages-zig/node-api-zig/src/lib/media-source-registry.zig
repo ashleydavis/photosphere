@@ -31,7 +31,7 @@ pub const IMediaSourceBuildOptions = struct {
     // Generates names for those temporary files.
     uuidGenerator: IUuidGenerator,
 
-    // Reaches the phone's shell, for a source only the phone can read (the device photo library). Null where there is no phone shell.
+    // Reaches the mobile's shell, for a source only the mobile can read (the device photo library). Null where there is no mobile shell.
     nativeCaller: ?utils.native_caller.INativeCaller,
 };
 

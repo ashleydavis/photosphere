@@ -45,7 +45,7 @@ test "WindowsNativeCalls refuses a background report it cannot read" {
     try std.testing.expectEqualStrings("backgroundLog needs {\"error\": true or false, \"message\": text}, and was given {\"message\":3}.", utils.errors.lastErrorMessage());
 }
 
-test "WindowsNativeCalls does not know a native call only a phone can make" {
+test "WindowsNativeCalls does not know a native call only a mobile can make" {
     var native_calls = WindowsNativeCalls.init();
     defer native_calls.deinit();
     try std.testing.expect((try native_calls.call(std.testing.allocator, "exportFile", "{\"path\":\"a.jpg\"}")) == null);

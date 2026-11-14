@@ -15,7 +15,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 // How long one read or write of a serialised file may take before it is retried.
 //
 // Thirty seconds, the retry default, is a desktop's idea of a long time. These files cross the same
-// link as everything else, and on a phone pushing about seven megabytes a minute through the engine
+// link as everything else, and on a mobile pushing about seven megabytes a minute through the engine
 // bridge a database shard written to S3 can take longer than that, which showed up as a background
 // sync that failed every pass with a timeout naming nothing at all.
 //

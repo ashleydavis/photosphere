@@ -94,7 +94,7 @@ done
 # no device, no settle time after a story is ready and no cleanup of a device afterwards.
 #
 # The Photosphere App's harness takes its platform from PHOTOSPHERE_SMOKE_PLATFORM, which names the
-# operating system for the host and the phone platform for the others.
+# operating system for the host and the mobile platform for the others.
 #
 ON_HOST=false
 case "$PLATFORM_NAME" in
@@ -172,12 +172,12 @@ TMP_DIR="$REPO_DIR/stories-tmp/$PLATFORM_NAME"
 #
 # The descriptor holding the device's lock while the app runs on Android, kept open for the whole run so
 # no other suite reinstalls the app or wipes its data while the stories are playing. The Photosphere
-# App's phone libraries claim the device when the app is started; on the other platforms it stays empty.
+# App's mobile libraries claim the device when the app is started; on the other platforms it stays empty.
 #
 STORY_DEVICE_FD=""
 
 #
-# Builds the app under test, and on a phone starts it from nothing with the 50-assets fixture seeded
+# Builds the app under test, and on a mobile starts it from nothing with the 50-assets fixture seeded
 # into its storage. The cycle switches theme at runtime, so one build covers both light and dark.
 #
 build_app() {
@@ -187,8 +187,8 @@ build_app() {
     photosphere_platform_prepare "$PHOTOSPHERE_SMOKE_RUN_DIR" || return 1
     if [ "$ON_HOST" = false ]; then
         #
-        # A phone starts from nothing: wipe the app, then seed the 50-assets fixture under the simple name 50-assets, which the app resolves into its own database folder,
-        # the way the Photosphere App's own phone scenarios seed theirs.
+        # A mobile starts from nothing: wipe the app, then seed the 50-assets fixture under the simple name 50-assets, which the app resolves into its own database folder,
+        # the way the Photosphere App's own mobile scenarios seed theirs.
         #
         reset_app_state
         log_info "Seeding the 50-assets fixture into the app sandbox..."

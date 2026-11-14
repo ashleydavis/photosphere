@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Opens the checked-in 50-assets fixture and expects the gallery to load 50 assets. On a desktop the fixture is opened from where it sits
-# in the repository. On a phone it is copied into the app's storage sandbox first (a host path does not exist on the device) and opened
+# in the repository. On a mobile it is copied into the app's storage sandbox first (a host path does not exist on the device) and opened
 # by its sandbox-relative name; there the asset server's thumbnail route is also fetched over a forwarded port.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

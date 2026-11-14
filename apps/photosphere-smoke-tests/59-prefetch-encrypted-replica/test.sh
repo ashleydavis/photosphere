@@ -7,12 +7,12 @@
 # asked isDatabasePartial whether the replica was partial without handing it any credentials, so the
 # merkle tree it reads to answer that was read as the raw ciphertext it is on disk, and every pass
 # failed on the serialized checksum. Measured on a Pixel 6 against an encrypted S3 origin, once a
-# pass, for as long as the phone was left running:
+# pass, for as long as the mobile was left running:
 #
 #   E AutoImportService: Could not work out what the background prefetch should do:
 #     plan-prefetch failed: Checksum mismatch: expected <the file's last 32 bytes> got <...>
 #
-# A phone's database is encrypted, so that was the loop not working at all in the case that matters,
+# A mobile's database is encrypted, so that was the loop not working at all in the case that matters,
 # behind a test suite that was green.
 #
 # This needs the LAN bridge and 57 does not, which is why it is a test of its own rather than 57 made
@@ -143,7 +143,7 @@ cli_expect_success "Registering the origin with its credentials and key" \
     dbs add --yes --name "$ORIGIN_ENTRY_NAME" --description "Encrypted S3 origin" --path "$S3_ORIGIN_PATH" \
         --s3-cred "$S3_SECRET_NAME" --encryption-key "$ENC_KEY_NAME"
 
-# --- 2. The phone's database, an encrypted partial replica of that origin. ---
+# --- 2. The mobile's database, an encrypted partial replica of that origin. ---
 
 LOCAL_REPLICA="$TMP_DIR/$DB_NAME"
 cli_expect_success "Making the encrypted partial replica" \
@@ -172,7 +172,7 @@ if [ -d "$LOCAL_REPLICA/thumb" ]; then
 fi
 log_info "The partial replica holds no thumbnails, which is what the background loop has to fix"
 
-# --- 3. Put the credentials and the key on the phone, through a real LAN share. ---
+# --- 3. Put the credentials and the key on the mobile, through a real LAN share. ---
 
 # Wipe everything the app has stored on the device, so this test starts from a known state and, in
 # particular, from a state where no database has ever been opened.
@@ -203,7 +203,7 @@ wait_for_log "$TMP_DIR" "Database imported"
 send_command "$APP_PORT" click '{"dataId":"receive-database-close-button"}' || exit 1
 log_success "The device keychain now holds the bucket's credentials and the database's encryption key"
 
-# --- 4. Put the replica on the phone, with syncing on and automatic import off. ---
+# --- 4. Put the replica on the mobile, with syncing on and automatic import off. ---
 
 "${PLATFORM}_seed_database" "$LOCAL_REPLICA" "$DB_NAME" || exit 1
 

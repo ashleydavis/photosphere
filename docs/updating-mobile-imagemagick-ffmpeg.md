@@ -11,7 +11,7 @@ An update changes what the Zig CLI (`psi`) ships as well as the Photosphere App,
 
 The vendored source is never edited, except for FFmpeg's command line programs, which `third-party/ffmpeg/update-ffmpeg.sh` patches with `third-party/ffmpeg/fftools-per-run-state.patch` (see `third-party/ffmpeg/update-ffmpeg.md`). If a new version does not build unchanged for a target, or the patch does not apply to it, stop for that target and report which target failed and why.
 
-## Phones
+## Mobiles
 
 On Android the libraries are built into `libphotosphere.so` by the core build, and on iOS into the core static library, so the app projects hold no copy of them and carry no ImageMagick or FFmpegKit dependency. ImageMagick has the JPEG, PNG and WebP delegates on every platform, so a WebP picture is read the same way everywhere (no system decoder is used).
 

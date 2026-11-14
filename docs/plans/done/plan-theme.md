@@ -5,7 +5,7 @@
 - The documentation is written in step 16, after the code and before the clean up.
 - A bad `ziggy.theme` extra on Android fails the start with `UnknownTheme`, as a bad `--theme` does on the desktop. The extra is the Android form of the command line, as `ziggy.remoteControl` is, and any app on the device can already start the exported activity with any extra; a launch with a bad extra fails only that launch, and the user's own launch carries no extra.
 - The `system-theme` system message is not limited to the native app. The core cannot tell who posted it: the native app's `ziggy_send_message` is the same path every frontend message takes. The page is the app's own frontend, which `ziggy_check_url` keeps to the app's address, can already change the setting with `setConfig("theme", ...)`, and with `system-theme` changes only what `system` resolves to until the next system change, with no write to the config file.
-- The scenario that changes the device's appearance runs only on a platform whose library says it can do that (`ziggy_platform_changes_appearance`), so it is not listed on a connected iPhone or iPad, where no command changes the appearance, as the `desktop-only` scenarios are not listed on a phone.
+- The scenario that changes the device's appearance runs only on a platform whose library says it can do that (`ziggy_platform_changes_appearance`), so it is not listed on a connected iPhone or iPad, where no command changes the appearance, as the `desktop-only` scenarios are not listed on a mobile.
 
 ## Acceptance criteria
 

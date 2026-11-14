@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Enables developer mode from the About page, opens the developer screen and exercises its tools: the stories browser, the FPS
-# indicator and the developer tools toggle. The toggle asks the native app to open its developer tools, which a phone shows as an
+# indicator and the developer tools toggle. The toggle asks the native app to open its developer tools, which a mobile shows as an
 # in-page console.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

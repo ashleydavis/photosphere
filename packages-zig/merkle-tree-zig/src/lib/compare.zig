@@ -43,7 +43,7 @@ pub const CompareProgressCallback = struct {
 // By name, and not by the merkle diff. The merkle diff matches leaves by hash, counting how many
 // times each hash appears, so two files with the same content under different names are the same
 // file to it and which of them it calls "already there" is the order it visits them in. Every library
-// holds such files: a photo imported twice sits under two ids with one content. Measured on a phone
+// holds such files: a photo imported twice sits under two ids with one content. Measured on a mobile
 // against an origin holding 15,491 files, 243 files the origin did not have were reported as present
 // and 141 that it did have were reported as missing, and the sync that copied by the same diff left
 // the 243 behind for good.

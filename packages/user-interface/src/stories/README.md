@@ -8,7 +8,7 @@ The stories browser lets developers view, exercise, and visually compare each UI
 
 Playing the stories is the only thing that catches a broken story. There is no unit test that mounts them: the project does not unit-test React components, so a story that throws (say, a dialog whose context provider is missing from the mocks) will not fail `bun run test`. Play the stories after changing a page, component, or the mock provider stack.
 
-Because the same stories render in the web build and in the Photosphere App on every platform, running them on a phone-sized screen is the quickest way to find pages that do not fit on mobile.
+Because the same stories render in the web build and in the Photosphere App on every platform, running them on a mobile-sized screen is the quickest way to find pages that do not fit on mobile.
 
 ## Entry points
 
@@ -57,7 +57,7 @@ The app is **visible by default** so you can watch the stories cycle: the Photos
 
 Screenshots land in `<dir>/<theme>/<category>/<story-id>.png`, and an `index.html` is generated at the root of the screenshots directory showing each story's light and dark shots **side by side**, with a search box that filters by story id. Open it to review every story in both themes at once. Output directories are gitignored.
 
-Because Android and iOS run at phone resolution, `bun run stories:ziggy:and` is the fastest way to catch a page that overflows a small screen (content pushed off-screen, buttons out of reach, text clipped).
+Because Android and iOS run at mobile resolution, `bun run stories:ziggy:and` is the fastest way to catch a page that overflows a small screen (content pushed off-screen, buttons out of reach, text clipped).
 
 ### How it works on each platform
 

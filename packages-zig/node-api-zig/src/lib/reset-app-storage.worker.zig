@@ -10,19 +10,19 @@
 // under the user's home, which hold only the app's own files, so a database at a path the user chose
 // is left exactly where it is.
 //
-// On a phone every database the app created sits in the app's data directory, which only the app's
+// On a mobile every database the app created sits in the app's data directory, which only the app's
 // shell knows. On Android that is the home directory, which getCacheDir() answers there, but on iOS
 // it is the app's Application Support directory, which neither getConfigDir() nor getCacheDir()
-// answers. So the Photosphere App's core runs resetAppStorage itself on a phone, naming its data
+// answers. So the Photosphere App's core runs resetAppStorage itself on a mobile, naming its data
 // directory as the third directory to empty, and that is what takes the databases off the device.
 //
 // The handler takes no input naming a path, deliberately. A task that accepted "delete this
 // directory" would be one bad caller away from deleting somebody's photo library, and nothing in the
 // type system would catch it. The only paths it can ever reach are the two it reads for itself, and
-// the data directory a phone's core passes in from its own configuration.
+// the data directory a mobile's core passes in from its own configuration.
 //
 // Runs on every platform via the shared task queue: the app's core and the CLI register it through
-// task-handlers.zig. On a phone the deletes go straight to the filesystem, so the directories named
+// task-handlers.zig. On a mobile the deletes go straight to the filesystem, so the directories named
 // here are the only boundary.
 //
 
@@ -44,7 +44,7 @@ const readdir = node_utils.node_fs.readdir;
 pub const IResetAppStorageResult = struct {
     //
     // The directories that were emptied, each once: the config and the cache directory, and on a
-    // phone the app's data directory, fewer when any of them are the same place.
+    // mobile the app's data directory, fewer when any of them are the same place.
     //
     directoriesCleared: []const []const u8,
 
@@ -93,7 +93,7 @@ fn clearDirectory(allocator: std.mem.Allocator, io: std.Io, directoryPath: []con
 //
 // Empties the app's config and cache directories, and the device's data directory when one is
 // given, and reports what it removed. Each directory is emptied once, however many of them name it.
-// deviceDataDir is the app's data directory on a phone, where every database the app made sits, and
+// deviceDataDir is the app's data directory on a mobile, where every database the app made sits, and
 // null everywhere else: on desktop the data directory holds the default database, which is the
 // user's photos and must survive a reset.
 //
@@ -154,7 +154,7 @@ fn deleteFileIfPresent(io: std.Io, path: []const u8) !bool {
 //
 // Handler for the reset-app-storage task. Empties the app's config and cache directories and reports
 // what it removed. It names no data directory, so on desktop and in the CLI the data directory is
-// left alone; the Photosphere App's core answers this task type itself on a phone (see resetAppStorage).
+// left alone; the Photosphere App's core answers this task type itself on a mobile (see resetAppStorage).
 // (Zig: the task data is a JSON value that is ignored, and the output is a JSON value holding IResetAppStorageResult.
 // The context is ignored.)
 //

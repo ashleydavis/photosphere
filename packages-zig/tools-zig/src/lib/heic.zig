@@ -14,7 +14,7 @@ const Dimensions = types.Dimensions;
 //
 // HEIC and HEIF pictures, which ImageMagick is built without (third-party/imagemagick builds no HEIF delegate) and FFmpeg reads.
 //
-// A phone's HEIC is a grid of HEVC tiles. FFmpeg's demuxer reports the grid as a stream group, and its command line program joins the
+// A mobile's HEIC is a grid of HEVC tiles. FFmpeg's demuxer reports the grid as a stream group, and its command line program joins the
 // tiles with the xstack filter, trims them to the picture's size and turns the result as the file's rotation and mirroring say
 // (which is why third-party/ffmpeg is built with xstack). So the size of a HEIC comes from ffprobe, and everything ImageMagick does to
 // a picture is done to a JPEG FFmpeg decodes the HEIC into.

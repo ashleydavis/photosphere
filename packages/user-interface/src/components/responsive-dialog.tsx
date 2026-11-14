@@ -18,13 +18,13 @@ export interface IProps {
     onClose: (() => void) | undefined;
 
     //
-    // The dialog's preferred width (in pixels) on a desktop-sized screen. Ignored on a phone, where
+    // The dialog's preferred width (in pixels) on a desktop-sized screen. Ignored on a mobile, where
     // the dialog is a sheet that spans the screen.
     //
     minWidth: number;
 
     //
-    // The dialog's maximum width (in pixels) on a desktop-sized screen. Ignored on a phone, where
+    // The dialog's maximum width (in pixels) on a desktop-sized screen. Ignored on a mobile, where
     // the dialog is a sheet that spans the screen.
     //
     maxWidth: number;
@@ -48,7 +48,7 @@ export interface IProps {
 //
 // Presents a dialog in the form that suits the screen it is on.
 //
-// On a desktop-sized screen it is a centred modal dialog. On a phone it is a sheet that slides up
+// On a desktop-sized screen it is a centred modal dialog. On a mobile it is a sheet that slides up
 // from the bottom edge, which uses the full width, puts the actions under the thumb, and reads as
 // native.
 //

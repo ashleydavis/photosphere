@@ -61,7 +61,7 @@ export interface IEntityCardProps {
 // A single entity (a database, a secret) presented as a card.
 //
 // This is the mobile replacement for a table row. A table needs one column per field and a row of
-// icon buttons per record, which at phone width collapses into truncated headers ("N…", "D…") and
+// icon buttons per record, which at mobile width collapses into truncated headers ("N…", "D…") and
 // overlapping text. A card gives the name the whole width, stacks the supporting detail underneath,
 // makes the whole card a large tap target for the primary action, and hides the remaining actions
 // behind a ⋮ menu with full-height menu rows.

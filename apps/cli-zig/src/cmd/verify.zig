@@ -256,7 +256,7 @@ pub fn verifyCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, contex
     // It used to exit 0 whatever it found, so the only place the result appeared was the words on the
     // screen. Anything reading the exit code, a script, a hook, a CI job, was told the database was
     // fine while the command was printing that 180 assets had no record: measured against a real
-    // 2,292 asset library synced from a phone, where exactly that happened and the run reported a
+    // 2,292 asset library synced from a mobile, where exactly that happened and the run reported a
     // pass.
     exit(io, log, if (hasProblems) 1 else 0);
 }

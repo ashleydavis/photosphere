@@ -2,7 +2,7 @@
 
 # Selects an asset in the gallery and moves it to another database from the right sidebar, then opens both databases and checks the
 # asset left the source and arrived in the destination. On a desktop both databases are created with the CLI and databases.toml lists
-# them. On a phone both are copied into the app's sandbox and registered, and the entries' paths are their sandbox-relative names.
+# them. On a mobile both are copied into the app's sandbox and registered, and the entries' paths are their sandbox-relative names.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"

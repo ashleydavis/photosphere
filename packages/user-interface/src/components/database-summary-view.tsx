@@ -94,7 +94,7 @@ interface IStatTileProps {
 }
 
 //
-// A single headline statistic, shown as a tile with the number given real size. On a phone this is
+// A single headline statistic, shown as a tile with the number given real size. On a mobile this is
 // what the page is for: the numbers should be readable at arm's length, not buried in a label/value
 // table built for a wide screen.
 //
@@ -133,7 +133,7 @@ interface ISummaryRowProps {
 
 //
 // A labelled row of detail. The label sits above the value rather than beside it, because a
-// side-by-side row leaves a phone with a 48px-wide column for a value that is often a long path or
+// side-by-side row leaves a mobile with a 48px-wide column for a value that is often a long path or
 // a 64-character hash.
 //
 function SummaryRow({ dataId, label, value }: ISummaryRowProps) {

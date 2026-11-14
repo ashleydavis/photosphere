@@ -2,11 +2,11 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-Test the app against a database large enough to show whether the gallery scrolls, loads and stays usable on a phone.
+Test the app against a database large enough to show whether the gallery scrolls, loads and stays usable on a mobile.
 
 ## Prep
 
-- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
+- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real mobile, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
 - `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
 - A database with at least fifty photos in it: the `50-assets` test database, which holds 60.
 - `bun run android:50` and `bun run ios:50` put it on the device as `test-50-assets` and open it on launch.
@@ -27,7 +27,7 @@ Expected:
 
 ### 1. Open it
 
-1. Open the database on the phone.
+1. Open the database on the mobile.
 
 Expected:
 - The gallery appears without the app freezing.

@@ -2,7 +2,7 @@
 
 # Edits an encryption-key secret and saves it unchanged. On a desktop the vault is seeded with a raw PEM (no JSON envelope), the format
 # the Receive Secret flow produces and that once crashed the Edit dialog, and the vault is checked to still hold exactly that PEM. On a
-# phone the vault cannot be written from the host, so the secret is added through the Add Secret dialog with an empty PEM (the driver
+# mobile the vault cannot be written from the host, so the secret is added through the Add Secret dialog with an empty PEM (the driver
 # cannot type into the PEM textarea), which covers the add-then-edit path for the type but not the PEM value.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -36,7 +36,7 @@ wait_for_log "$TMP_DIR" "Secrets page loaded"
 case "$PLATFORM" in
     android|ios)
         add_secret_via_ui "$APP_PORT" "enc-key" "encryption-key" "" || exit 1
-        # The secret's actions are in its card's menu on a phone.
+        # The secret's actions are in its card's menu on a mobile.
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
         ;;
 esac

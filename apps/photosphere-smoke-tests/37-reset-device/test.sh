@@ -5,7 +5,7 @@
 #
 # The assertion that matters most differs by platform. On a desktop a database sits wherever the user put it and may be the only copy
 # of their photos, so the reset must forget the entry and leave every file of it alone: the database is created outside the app's
-# config directory, exactly as a user does, and checked to still be there afterwards. On a phone every local database lives inside the
+# config directory, exactly as a user does, and checked to still be there afterwards. On a mobile every local database lives inside the
 # app's storage, so clearing that storage is what takes the databases off the device: the last assertions read the storage back to
 # prove the database directory really went, rather than trusting a log line or an empty-looking list.
 
@@ -95,7 +95,7 @@ case "$PLATFORM" in
         click_sidebar_item "$APP_PORT" new-database || exit 1
         wait_for_log "$TMP_DIR" "Create database dialog opened"
         send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"test-db"}' || exit 1
-        # A user on a phone types the short name, which the app resolves into its own storage.
+        # A user on a mobile types the short name, which the app resolves into its own storage.
         send_command "$APP_PORT" type '{"dataId":"database-path-input","text":"test-db"}' || exit 1
         send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
         wait_for_log "$TMP_DIR" "Database created"

@@ -92,7 +92,7 @@ describe("the gap between background import passes", () => {
     });
 
     test("a gap of zero falls back to the default rather than spinning", () => {
-        // Zero is a loop that starts a fresh pass the instant the last one ends, which on a phone is
+        // Zero is a loop that starts a fresh pass the instant the last one ends, which on a mobile is
         // a flat battery rather than a fast backup.
         expect(resolveAutoImportPauseMs(0)).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
     });

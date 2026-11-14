@@ -67,7 +67,7 @@ This plan does not choose a format. It sets out the options to be explored, so t
 
 ## Notes
 
-- **Every measurement that matters here is on the phone, not the desktop.** The desktop commits in tens of milliseconds and will not show the problem. The device is where a commit reached 60 seconds.
+- **Every measurement that matters here is on the mobile, not the desktop.** The desktop commits in tens of milliseconds and will not show the problem. The device is where a commit reached 60 seconds.
 - **The cost is CPU, not disk.** Of a 468 second write stage measured on device, only 35 seconds was inside the write calls. The rest was the engine building the bytes: records are serialised to BSON in JavaScript, that JavaScript runs in QuickJS with no JIT, and the bytes then cross the native bridge as a base64 string. So an option that writes fewer bytes wins even if it makes more calls, and an option that makes many more small calls has to be measured rather than assumed.
 - **The record size fix is already done and is not this.** Derivative images used to carry the original's metadata into every record, and fixing that took the database from 194 MB at 928 photos to 26 MB at 2,291. What remains is the growth curve, not the record size.
 - **Why this is worth a format change at all:** it was reported as a user-visible fault, not found by profiling. The app looks like it is doing nothing between jumps of 250 photos. Any option that makes the commit cheaper but leaves the batch at 250 has not fixed the thing this plan exists for.

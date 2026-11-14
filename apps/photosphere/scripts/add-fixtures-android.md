@@ -7,4 +7,4 @@ Invoke: `bun run android:add-fixtures -- [--target <adb serial>] <file...>` from
 - `<file...>`: the photos and videos to add. A relative path is taken from the repository root, such as `test/test.jpg` or `test/multiple-files/test.mp4`.
 - `--target <serial>`: the device to use (or set `PHOTOSPHERE_ANDROID_TARGET`). Without it the device is picked the way [run-android](run-android.md) picks one, so the photos land on the device `bun run android` uses.
 
-It works on a real phone as well, where the photos stay in the phone's library afterwards.
+It works on a real mobile as well, where the photos stay in the mobile's library afterwards.

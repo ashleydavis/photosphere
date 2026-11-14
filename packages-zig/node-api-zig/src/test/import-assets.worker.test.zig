@@ -1507,7 +1507,7 @@ fn readReleasedPaths(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 
 test "releases each file once the import has finished with it" {
     const log = utils.mute_log.MuteLog.init();
-    // On a phone this is what deletes the copy that had to be made to read the photo at all.
+    // On a mobile this is what deletes the copy that had to be made to read the photo at all.
     // Doing it per file rather than at the end of the run is what keeps a long automatic import
     // from filling the sandbox with copies of every photo it has ever looked at.
     var context: ImportTest = undefined;
@@ -1666,7 +1666,7 @@ test "writes fewer assets than a batch holds rather than stranding them" {
     const io = std.testing.io;
     // Assets are held back until a batch is worth committing, because every batch pays for a
     // full database commit whatever its size. What that must never do is strand the last few:
-    // a run that took in fewer than a batch's worth has to write them anyway, and a phone
+    // a run that took in fewer than a batch's worth has to write them anyway, and a mobile
     // taking in one photo is exactly that run.
     _ = try context.writePhoto("img1.jpg");
 

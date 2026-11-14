@@ -1,14 +1,14 @@
 //
 // Typed access to the native connection-type host function.
 //
-// The background sync loop has to know whether the phone is on Wi-Fi, on a cellular connection, or
+// The background sync loop has to know whether the mobile is on Wi-Fi, on a cellular connection, or
 // on nothing at all, because the "Only sync over Wi-Fi" setting refuses a sync on cellular. The app's
 // own network status lives in the WebView, and there may be no WebView: the loop runs while the app
 // is off screen. So the worker asks the platform directly, through ConnectivityManager on Android and
 // NWPathMonitor on iOS.
 //
 // (Zig has no process-wide global host, so the host is a value the caller passes in: whoever runs the handler knows how
-// the platform is asked (the phone's native app, through the host request callback of Ziggy's core), and passes it. It cannot
+// the platform is asked (the mobile's native app, through the host request callback of Ziggy's core), and passes it. It cannot
 // be missing, so there is no "host not installed" case to report. A host returns an error, and it reaches the caller as one.)
 //
 

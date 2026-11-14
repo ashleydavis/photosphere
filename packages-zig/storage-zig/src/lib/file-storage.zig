@@ -263,7 +263,7 @@ pub const FileStorage = struct {
     //
     // A stream that carries the path of a file it is reading is copied file to file rather than
     // piped. Node's own ReadStream exposes `path`, and so does the mobile shim's, which is what
-    // makes this worth doing: on a phone every byte piped through the shims crosses the engine
+    // makes this worth doing: on a mobile every byte piped through the shims crosses the engine
     // bridge as a base64 string built inside the JS engine, so importing a five megabyte photo built
     // a seven megabyte string to read it and another to write it, to accomplish a copy the platform
     // can do without moving anything into the engine at all. A transformed stream (an encrypting one,

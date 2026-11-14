@@ -2,7 +2,7 @@
 
 # Creates two databases in a row from the New Database dialog and proves each lands in its own directory and opens. On a desktop each
 # path is filled by Browse (the folder dialog's answer is staged with the control connection's pick-answer command, because a test
-# cannot drive the native dialog). On a phone there is no folder dialog for a database location: the dialog must not offer Browse, and
+# cannot drive the native dialog). On a mobile there is no folder dialog for a database location: the dialog must not offer Browse, and
 # the user types a name, which the app resolves to a directory in its own data directory. If both databases resolved to the same
 # directory, the second create would land on the first's non-empty directory and fail.
 
@@ -43,7 +43,7 @@ create_database_from_dialog() {
             local browse
             browse="$(read_value "$APP_PORT" "database-browse-button")"
             if [ -n "$browse" ]; then
-                log_error "The New Database dialog offers Browse on a phone ('$browse'), where there is no folder dialog for a database location"
+                log_error "The New Database dialog offers Browse on a mobile ('$browse'), where there is no folder dialog for a database location"
                 exit 1
             fi
             send_command "$APP_PORT" type "$(jq -cn --arg text "$name" '{dataId: "database-path-input", text: $text}')" || exit 1

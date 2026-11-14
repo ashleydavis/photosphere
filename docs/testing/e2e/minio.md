@@ -29,19 +29,19 @@ The options say what the database starts with:
 - `--encrypt`: the database is encrypted with a key generated for it, stored as the secret `<name>-key` and attached to the entry.
 - `--key <pem file>`: the database is encrypted with that 4096-bit RSA key, which is not attached to the entry.
 - `--empty`: no database at all, only the bucket, the credentials and the entry.
-- `--lan-ip <address>`: the address the phone uses to reach this machine, when the one worked out automatically is wrong.
+- `--lan-ip <address>`: the address the mobile uses to reach this machine, when the one worked out automatically is wrong.
 
 `source` sets up that terminal for the CLI: `psi` on the PATH, the test's own CLI config and vault (your keychain and database list are not touched), the credentials for the bucket, and `$S3_DB`, the database's `s3:` path. Run the test's later CLI commands in the same terminal.
 
-`start-minio` finishes by printing the endpoint, region, access key and secret key, for a test that has you type them into the phone.
+`start-minio` finishes by printing the endpoint, region, access key and secret key, for a test that has you type them into the mobile.
 
-## Get the database onto the phone
+## Get the database onto the mobile
 
 ```bash
 psi dbs send --name <name> --yes
 ```
 
-It prints a pairing code and waits. On the phone, go to the **Databases** page, choose **Receive database**, enter the code, and save. The entry arrives with its credentials (and its key, with `--encrypt`).
+It prints a pairing code and waits. On the mobile, go to the **Databases** page, choose **Receive database**, enter the code, and save. The entry arrives with its credentials (and its key, with `--encrypt`).
 
 ## Stop it
 
@@ -49,14 +49,14 @@ It prints a pairing code and waits. On the phone, go to the **Databases** page, 
 bun run stop-minio -- <name>
 ```
 
-## The phone has to reach this machine
+## The mobile has to reach this machine
 
-The credentials sent to the phone point at this machine's address on the local network, such as `http://192.168.1.20:41234`.
+The credentials sent to the mobile point at this machine's address on the local network, such as `http://192.168.1.20:41234`.
 
-- A real phone must be on the same Wi-Fi as this machine.
+- A real mobile must be on the same Wi-Fi as this machine.
 - The Android emulator pool is on the local network, so it reaches the address too. The iOS simulator shares this machine's network.
 - A firewall on this machine must let the port through. MinIO takes a free port each time, printed by `start-minio`.
-- On Linux the address is the first one `hostname -I` prints, and on macOS the address of `en0` or `en1`. If that is not the one the phone can reach, pass the right one with `--lan-ip`.
+- On Linux the address is the first one `hostname -I` prints, and on macOS the address of `en0` or `en1`. If that is not the one the mobile can reach, pass the right one with `--lan-ip`.
 
 The server speaks plain HTTP. That is expected: it lives only for the test and holds nothing real.
 

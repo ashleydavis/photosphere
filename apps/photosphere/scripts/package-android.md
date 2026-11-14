@@ -7,7 +7,7 @@ Invoke: `bun run --filter=ziggy package:android -- [--arch "<list>"] [--binary <
 - `--arch "<list>"`: `x86_64` and `arm64`, space separated, or `all`. The default is both.
 - `--binary <dir>`: a directory `build:android -- --minify --output-dir <dir>` built into (what the release workflow's `app-build` job makes). Each APK takes its Zig library from `<dir>/jniLibs` as it is, so no library is built again. Without it the script builds the release libraries itself.
 - `--version-name <name>`: the version the APK reports, and the name in its file name, such as `1.2.3` for the tag `v1.2.3`. The default is the version in `apps/photosphere/package.json`.
-- `--version-code <number>`: the whole number Android uses to tell a newer build from an older one, which has to go up with every build that replaces another on a phone. The default is 1.
+- `--version-code <number>`: the whole number Android uses to tell a newer build from an older one, which has to go up with every build that replaces another on a mobile. The default is 1.
 - `--output-dir <dir>`: where the APKs go, relative to `apps/photosphere` when not absolute. The default is `apps/photosphere/out/android`.
 
 The artifacts are named `photosphere-<version>-android-<arch>.apk`.

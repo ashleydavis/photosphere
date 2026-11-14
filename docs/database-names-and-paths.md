@@ -59,7 +59,7 @@ There are three kinds of filesystem path, and each resolves differently:
 - **A simple name** is a single folder name: no `/` or `\`, not `.` or `..`. Only a simple name uses the data dir:
   - In the app it resolves to `<data dir>/dbs/<name>`.
   - In the CLI it opens `<cwd>/<name>` when a database is there, otherwise `<data dir>/dbs/<name>` when a database is there. A new database is created at `<cwd>/<name>`.
-- **A relative path** is any other path that is not absolute, including `.`, `./x`, `../x` and `foo/bar`, resolves against the working directory, in the app and the CLI. On a phone the working directory is `/`, so such a path fails there.
+- **A relative path** is any other path that is not absolute, including `.`, `./x`, `../x` and `foo/bar`, resolves against the working directory, in the app and the CLI. On a mobile the working directory is `/`, so such a path fails there.
 - Backslashes become forward slashes.
 - When both encryption keys are given, the database is opened as encrypted.
 
@@ -189,7 +189,7 @@ On mobile, sync and prefetch work on `sync.database_path` in `config.toml`, whic
 
 ## Simple names and the data directory
 
-On a phone the app's storage path is hidden from the user, so the only thing they can type is a simple name such as `my-photos`. The app puts a database given by a simple name in its data directory, at `<data dir>/dbs/<name>`.
+On a mobile the app's storage path is hidden from the user, so the only thing they can type is a simple name such as `my-photos`. The app puts a database given by a simple name in its data directory, at `<data dir>/dbs/<name>`.
 
 - In the app, on every platform, an absolute path is used as it is. A simple name resolves against `<data dir>/dbs`; any other relative path resolves against the working directory. So `my-photos` is `<data dir>/dbs/my-photos`.
 - `<data dir>` is the data directory Ziggy's native app chooses. The smoke tests give each scenario its own (see [Environment variables](#environment-variables)).
@@ -220,7 +220,7 @@ The files below are the ones the app and the CLI write that refer to a database.
 
 ### config.toml
 
-- On a phone the page asks for `config.toml` and the core points that at the settings directory, so every platform uses the one file there.
+- On a mobile the page asks for `config.toml` and the core points that at the settings directory, so every platform uses the one file there.
 - What the user chose:
   - `developer_mode`, `show_fps_indicator`: developer settings.
   - `saved_searches`: searches saved from the sidebar.
@@ -231,7 +231,7 @@ The files below are the ones the app and the CLI write that refer to a database.
   - Only the two `*_path` keys refer to a database.
 - Read and written by the app's settings handlers.
 - Creating the default database writes `auto_import.default_database_path`. Automatic import reads it.
-- On a phone the page writes only the `sync` section.
+- On a mobile the page writes only the `sync` section.
 - Writes merge under a lock file beside `config.toml`.
 - Read and written by the app only.
 
@@ -239,7 +239,7 @@ The files below are the ones the app and the CLI write that refer to a database.
 
 - `databases.recent_names`: up to 5 database **names**, most recent first. A name with no database record is dropped when read.
 - `databases.last_opened_path`: a **path**, the database to reopen at the next start.
-- What else the app remembered: `desktop.last_folder`, `desktop.last_download_folder`, `desktop.dev_tools_open`, `searches.recent`, `gallery.sort`, `gallery.row_height`, `news` (shown news ids, the last update version told about and on a phone the fetched feed) and `ui` (keys the interface makes, such as collapsed sidebar sections).
+- What else the app remembered: `desktop.last_folder`, `desktop.last_download_folder`, `desktop.dev_tools_open`, `searches.recent`, `gallery.sort`, `gallery.row_height`, `news` (shown news ids, the last update version told about and on a mobile the fetched feed) and `ui` (keys the interface makes, such as collapsed sidebar sections).
 - Folder pickers start in a saved folder and store the chosen folder back: `desktop.last_folder` by default, or `desktop.last_download_folder`.
 - Refers to databases through `databases.recent_names` by **name**, `databases.last_opened_path` by **path** and `desktop.last_folder`, where Open Database stores the **parent folder** of the database it opened.
 - Read and written by the app and its folder pickers. The `news` section is also read and written by the CLI.
@@ -248,16 +248,16 @@ The files below are the ones the app and the CLI write that refer to a database.
 
 The vault holds the secrets a database record names by `s3_key`, `encryption_key` and `geocoding_key`. It also holds the CLI's `default:s3`. The database record stores only the secret's **name**.
 
-The vault is `phone` on Android and iOS and `keychain` elsewhere. The tests use `plaintext`.
+The vault is `mobile` on Android and iOS and `keychain` elsewhere. The tests use `plaintext`.
 
 - `keychain` on macOS: the login keychain through `security`, service `photosphere`, account `psi-<name>`.
 - `keychain` on Linux: the Secret Service through `secret-tool`, service `photosphere`.
 - `keychain` on Windows: the Windows `PasswordVault` through PowerShell, resource `photosphere`.
-- `phone` on Android: `EncryptedSharedPreferences` file `photosphere_secure_store`.
-- `phone` on iOS: the keychain, generic passwords under service `au.com.codecapers.photosphere.securestore`.
+- `mobile` on Android: `EncryptedSharedPreferences` file `photosphere_secure_store`.
+- `mobile` on iOS: the keychain, generic passwords under service `au.com.codecapers.photosphere.securestore`.
 - `plaintext` on any platform, used only by the tests: `vault.json` in the plaintext vault directory above.
 
-A phone secret is two items in the phone's keychain: `photosphere.secret.<name>` holds the value and `photosphere.secret-type.<name>` the type.
+A mobile secret is two items in the mobile's keychain: `photosphere.secret.<name>` holds the value and `photosphere.secret-type.<name>` the type.
 
 ### Inside each database
 
@@ -495,7 +495,7 @@ Each smoke test scenario sets its own, so scenarios running side by side each us
 | `PHOTOSPHERE_DATA_DIR` | Replaces the `<data dir>` that `dbs/` is in | Every platform |
 | `PHOTOSPHERE_LOG_DIR` | Moves the app's logs | Every platform |
 | `PHOTOSPHERE_CACHE_DIR` | Moves the cache directory | Desktop |
-| `PHOTOSPHERE_VAULT_TYPE` | Picks the vault: `keychain`, `phone` or `plaintext` | Desktop and iOS, as `plaintext` |
+| `PHOTOSPHERE_VAULT_TYPE` | Picks the vault: `keychain`, `mobile` or `plaintext` | Desktop and iOS, as `plaintext` |
 | `PHOTOSPHERE_VAULT_DIR` | Moves the plaintext vault, default `~/.config/photosphere/vault` | Desktop and iOS |
 | `PHOTOSPHERE_TEST_MODE` | Test mode | Every platform, as `1` |
 | `PHOTOSPHERE_TMP_DIR` | Moves the CLI's temp directory, and so its logs | |
@@ -508,7 +508,7 @@ Each smoke test scenario sets its own, so scenarios running side by side each us
 | `PSI_ENCRYPTION_KEY` | An encryption key, as a file path or vault name, used when neither the command nor the database record names one | |
 
 - On Windows the home directory is `USERPROFILE`.
-- The plaintext vault is only for tests. A real install uses the keychain on desktop and the phone's keychain on mobile.
+- The plaintext vault is only for tests. A real install uses the keychain on desktop and the mobile's keychain on mobile.
 - On Android a debuggable build copies every `PHOTOSPHERE_*` string extra of the launching Intent into the environment.
 
 ### Where a smoke test scenario's files go
@@ -585,6 +585,6 @@ iOS device, with the cache left where the app keeps it:
 - Android's folder picker returns `content://` addresses, which the app treats as relative filesystem paths, so a picked folder fails to open.
 - Comparing paths as exact strings means the same folder written two ways is two databases.
 - Moving the data directory for a test moves `dbs/`. The app's logs stay in Ziggy's data directory unless the log directory is moved too.
-- A reset on a phone empties Ziggy's data directory, so a data directory a test moved survives it.
+- A reset on a mobile empties Ziggy's data directory, so a data directory a test moved survives it.
 - The per-database cache key hashes the path string as given, so `test-db` and its absolute path get separate hash caches and import records.
-- The app and Ziggy leave the working directory on a phone as the system sets it. That it is `/` comes from the failure seen when a simple name was typed (`ReadOnlyFileSystem` on `/my-photos`).
+- The app and Ziggy leave the working directory on a mobile as the system sets it. That it is `/` comes from the failure seen when a simple name was typed (`ReadOnlyFileSystem` on `/my-photos`).

@@ -6,7 +6,7 @@ const support = @import("test-support.zig");
 const TestApp = support.TestApp;
 
 //
-// Queues a planning task with the add-task message the phone's loop sends.
+// Queues a planning task with the add-task message the mobile's loop sends.
 //
 fn addTask(app: *TestApp, task_id: []const u8, task_type: []const u8) !void {
     const message = try utils.json.stringify(std.testing.allocator, .{
@@ -57,7 +57,7 @@ test "plan-auto-import puts a new default database in the dbs directory of the d
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, expected);
 }
 
-test "plan-sync runs on Ziggy's runner and refuses when syncing is switched off, without asking the phone anything" {
+test "plan-sync runs on Ziggy's runner and refuses when syncing is switched off, without asking the mobile anything" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -71,7 +71,7 @@ test "plan-sync runs on Ziggy's runner and refuses when syncing is switched off,
     try std.testing.expect((try app.lastNativeCall(calls.allocator())) == null);
 }
 
-test "plan-sync asks the phone for the connection type when syncing is switched on, and a phone that cannot answer is an error that says so" {
+test "plan-sync asks the mobile for the connection type when syncing is switched on, and a mobile that cannot answer is an error that says so" {
     const log = utils.mute_log.MuteLog.init();
     var app: TestApp = undefined;
     try app.start();
@@ -84,16 +84,16 @@ test "plan-sync asks the phone for the connection type when syncing is switched 
     var config = (try node_api.config_worker.readConfig(arena.allocator(), std.testing.io, log, config_path)).config;
     config.sync.settings.enabled = true;
     try node_api.config_file.saveConfigFile(arena.allocator(), std.testing.io, config_path, config);
-    app.setNativeCallResult(false, "The phone cannot tell.");
+    app.setNativeCallResult(false, "The mobile cannot tell.");
 
     try addTask(&app, "plan-sync-2", "plan-sync");
 
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"plan-sync-2\",\"status\":\"failed\"");
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "The phone cannot tell.");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "The mobile cannot tell.");
     try std.testing.expectEqualStrings("networkConnectionType", (try app.lastNativeCall(calls.allocator())).?.method);
 }
 
-test "plan-prefetch runs on Ziggy's runner and does not ask the phone when no database is chosen to prefetch" {
+test "plan-prefetch runs on Ziggy's runner and does not ask the mobile when no database is chosen to prefetch" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();

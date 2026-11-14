@@ -10,7 +10,7 @@ const retry = utils.retry.retry;
 // How long one request against the lock file may take before it is retried.
 //
 // Thirty seconds, the retry default, is a desktop's idea of a long time. The lock file lives beside
-// the database, so on a phone syncing to S3 it is a network request queued behind whatever else that
+// the database, so on a mobile syncing to S3 it is a network request queued behind whatever else that
 // connection is carrying. Every background sync pass on a Pixel 6 died with "Operation timed out
 // after 30000ms: () => rawStorage.releaseWriteLock(...)", thrown from the release in a finally
 // block, which killed the pass before it reached the half that pushes files. The library never went

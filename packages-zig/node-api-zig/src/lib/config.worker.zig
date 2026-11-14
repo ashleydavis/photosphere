@@ -96,7 +96,7 @@ pub const IWriteConfigSync = struct {
 //
 // A missing `value` clears the key, which is what IConfig.clear means, and is not the same as the
 // entry not being sent at all. The two have to be told apart because the entry crosses the bridge to
-// the phone as JSON, where an undefined property simply disappears: a caller that meant "clear this"
+// the mobile as JSON, where an undefined property simply disappears: a caller that meant "clear this"
 // would arrive looking like a caller that meant nothing, so the key would be left as it was.
 // (Zig: the value is the std.json.Value it arrives as. A null value clears the key, as an absent one does.)
 //

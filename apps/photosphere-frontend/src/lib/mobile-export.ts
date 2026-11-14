@@ -3,7 +3,7 @@ import { TaskStatus, type ITaskResult } from "task-queue";
 import type { ISaveDownloadResult } from "user-interface";
 
 //
-// Export helpers for a phone. A phone cannot write to a folder the user chooses (an iOS security-scoped address or an Android
+// Export helpers for a mobile. A mobile cannot write to a folder the user chooses (an iOS security-scoped address or an Android
 // content:// tree is not a path the storage layer can write to), so a download is written to a temporary folder in the app's
 // private storage by the save-asset or save-assets-batch task, and the native app's share or save sheet then hands the finished
 // files out, deleting each temporary copy on every exit. The exportFile and exportFiles request channels of the core ask the
@@ -179,7 +179,7 @@ export interface IExportFilesReply {
 }
 
 //
-// What saving a download on a phone needs from the rest of the app.
+// What saving a download on a mobile needs from the rest of the app.
 //
 export interface IMobileExportDependencies {
     // Makes the unique id that keeps one export's temporary files apart from another's.
@@ -200,7 +200,7 @@ export interface IMobileExportDependencies {
 }
 
 //
-// Saves downloaded assets on a phone: writes them to a temporary place with the save-asset task (one file) or the
+// Saves downloaded assets on a mobile: writes them to a temporary place with the save-asset task (one file) or the
 // save-assets-batch task (several), then hands them out through the native app's sheet. A task that does not succeed is a
 // failed save, a sheet the user dismissed is a cancelled one, and anything else is saved.
 //

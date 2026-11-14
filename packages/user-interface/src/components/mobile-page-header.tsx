@@ -36,15 +36,15 @@ export interface IMobilePageHeaderProps {
     title: string;
 
     // A short line under the title describing what the page holds (for example how many databases
-    // are configured). Gives the header somewhere to breathe on a phone, where the page is
+    // are configured). Gives the header somewhere to breathe on a mobile, where the page is
     // otherwise a wall of controls.
     subtitle?: string;
 
     // The one action the page most wants you to take. Rendered as a solid, full-width button on a
-    // phone and as a normal button on desktop.
+    // mobile and as a normal button on desktop.
     primaryAction: IPageHeaderAction;
 
-    // Everything else. Collapsed into an overflow menu on a phone rather than crowding the header.
+    // Everything else. Collapsed into an overflow menu on a mobile rather than crowding the header.
     secondaryActions: IPageHeaderAction[];
 
     // Called when the refresh control is used.
@@ -57,10 +57,10 @@ export interface IMobilePageHeaderProps {
 //
 // The header shared by the management pages (databases, secrets).
 //
-// On a phone it is laid out as a mobile screen: a large title with a subtitle, a single full-width
+// On a mobile it is laid out as a mobile screen: a large title with a subtitle, a single full-width
 // primary action, and every other action folded into an overflow menu. Cramming a title, a refresh
 // button, and three labelled buttons into one row is what pushed actions off the side of the screen
-// before; a phone header carries one action and hides the rest behind the ⋮ menu.
+// before; a mobile header carries one action and hides the rest behind the ⋮ menu.
 //
 // On a wide screen it stays the familiar row: title on the left, actions on the right.
 //

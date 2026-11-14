@@ -132,7 +132,7 @@ export function applyTaskCompleted(jobs: IJob[], taskId: string): IJob[] {
 //
 // A count rather than the job's name, however much room there looks to be.
 //
-// The navbar is the most crowded row in the app and it is the same component on a phone, where
+// The navbar is the most crowded row in the app and it is the same component on a mobile, where
 // "Replicating to my-holiday-backup" has nowhere to go: it was hidden entirely below the small
 // breakpoint, leaving a spinner that said nothing, and on a narrow desktop window it wrapped onto
 // two lines and collided with the navigation links. The names are one tap away in the sidebar, which
@@ -173,7 +173,7 @@ export interface IJobListChanges {
 //
 // Works out what has started and what has finished, so both can be recorded in the app log.
 //
-// The log is how this app is diagnosed on every platform, and a phone is the case that needs it:
+// The log is how this app is diagnosed on every platform, and a mobile is the case that needs it:
 // there is no console to watch and the work carries on while the screen is off, so what ran and how
 // long it took can only be read afterwards.
 //

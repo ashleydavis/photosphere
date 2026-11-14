@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Adds a secret whose name already exists and expects the duplicate-name guard to fire. On a desktop the conflicting secret is seeded in
-# the vault, which is then checked to hold exactly one secret and to be a file that was not rewritten. On a phone the vault cannot be
+# the vault, which is then checked to hold exactly one secret and to be a file that was not rewritten. On a mobile the vault cannot be
 # written from the host, so the first secret is added through the Add Secret dialog and only the guard is covered.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

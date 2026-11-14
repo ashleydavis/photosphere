@@ -6,7 +6,7 @@ import { normaliseSyncSettings, resolveSyncPauseMs, type ISyncFile, type ISyncSe
 import { planSyncDatabase, planSyncSeed, type IMobileSyncSettings } from "./background-work";
 
 //
-// The settings a phone's background work plans from, read and written through the core's read-config and write-config tasks.
+// The settings a mobile's background work plans from, read and written through the core's read-config and write-config tasks.
 //
 // The page reaches a single setting through the core's get-config and set-config channels. The background work needs whole sections at
 // once (the automatic import settings with the database they write to, the syncing settings with the database the loop pushes), and

@@ -172,7 +172,7 @@ describe("AutoImportScanner", () => {
     });
 
     test("an item already in the database is never opened and never pushed", async () => {
-        // The whole point of asking before opening: on a phone, opening an item copies the entire
+        // The whole point of asking before opening: on a mobile, opening an item copies the entire
         // photo out of the library, and hashing it reads that copy back.
         const source = sourceWith([makeItem("already-in", 1), makeItem("new-one", 2)]);
 

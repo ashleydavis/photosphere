@@ -1,8 +1,8 @@
 //
-// The requests only a phone can answer: requestMediaPermission, exportFile, exportFiles, exportTempFolder, startBackgroundImport, stopBackgroundImport,
+// The requests only a mobile can answer: requestMediaPermission, exportFile, exportFiles, exportTempFolder, startBackgroundImport, stopBackgroundImport,
 // and the secure store's get, set, delete and keys (secureStoreGet, secureStoreSet, secureStoreDelete and secureStoreKeys here).
 //
-// Each is a task type, because the phone's native app shows native interface (a permission prompt, a share sheet) and waits for the
+// Each is a task type, because the mobile's native app shows native interface (a permission prompt, a share sheet) and waits for the
 // user, and the thread that handles the page's messages must not wait for that. Each calls the native app through the core's one native
 // call callback, by the method's name, and passes the native app's result to the page unchanged. A platform that has no such
 // callback answers with an error that says so, except that on Windows, whose native app has none, the core answers
@@ -31,7 +31,7 @@ const json = ziggy.json;
 fn callNativeApp(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, method: []const u8, request_json: []const u8) ![]const u8 {
     const result = try background_work.callNativeApp(services, io, allocator, timers, method, request_json);
     _ = std.json.parseFromSliceLeaky(std.json.Value, allocator, result, .{}) catch {
-        return utils.errors.throwError("The phone's answer to {s} could not be read.", .{method});
+        return utils.errors.throwError("The mobile's answer to {s} could not be read.", .{method});
     };
     return result;
 }
@@ -121,7 +121,7 @@ pub fn exportFilesHandler(services: TaskServices, timers: Timers, io: std.Io, al
 }
 
 //
-// exportTempFolder: the payload is {folder}, a sandbox-relative folder for the files of one export. Asks the phone to make it, because
+// exportTempFolder: the payload is {folder}, a sandbox-relative folder for the files of one export. Asks the mobile to make it, because
 // the save tasks write to an absolute path in a folder that exists. The reply is {path}, the folder's absolute path.
 //
 pub fn exportTempFolderHandler(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
@@ -145,7 +145,7 @@ pub fn startBackgroundImportHandler(services: TaskServices, timers: Timers, io: 
     const result = try std.json.parseFromSliceLeaky(std.json.Value, allocator, try callNativeApp(services, io, allocator, timers, "requestNotificationPermission", "null"), .{});
     const granted = if (result == .object) result.object.get("granted") else null;
     if (granted == null or granted.? != .bool) {
-        return utils.errors.throwError("The phone's answer to requestNotificationPermission could not be read.", .{});
+        return utils.errors.throwError("The mobile's answer to requestNotificationPermission could not be read.", .{});
     }
     if (!granted.?.bool) {
         log.info("Notifications were refused; the background import runs without its notification.");
@@ -166,7 +166,7 @@ pub fn secureStoreGetHandler(services: TaskServices, timers: Timers, io: std.Io,
 }
 
 //
-// secureStoreSet: the payload is {key, value}. Writes the item to the phone's keychain, or overwrites it. The reply is null.
+// secureStoreSet: the payload is {key, value}. Writes the item to the mobile's keychain, or overwrites it. The reply is null.
 //
 pub fn secureStoreSetHandler(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = context;
@@ -190,7 +190,7 @@ pub fn secureStoreDeleteHandler(services: TaskServices, timers: Timers, io: std.
 }
 
 //
-// secureStoreKeys: no payload. The reply is {keys}, every key in the phone's keychain.
+// secureStoreKeys: no payload. The reply is {keys}, every key in the mobile's keychain.
 //
 pub fn secureStoreKeysHandler(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = context;
@@ -204,7 +204,7 @@ pub fn secureStoreKeysHandler(services: TaskServices, timers: Timers, io: std.Io
 pub const NoRequest = struct {};
 
 //
-// requestMediaPermission: answered by the requestMediaPermission task. The response is the phone's answer, {granted, partial}.
+// requestMediaPermission: answered by the requestMediaPermission task. The response is the mobile's answer, {granted, partial}.
 //
 pub fn requestMediaPermissionMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: NoRequest) !ziggy.core.Response(std.json.Value) {
     _ = services;
@@ -229,7 +229,7 @@ pub const ExportFileRequest = struct {
 };
 
 //
-// exportFile: answered by the exportFile task. The response is the phone's answer, {path}.
+// exportFile: answered by the exportFile task. The response is the mobile's answer, {path}.
 //
 pub fn exportFileMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: ExportFileRequest) !ziggy.core.Response(std.json.Value) {
     _ = services;
@@ -254,7 +254,7 @@ pub const ExportFilesRequest = struct {
 };
 
 //
-// exportFiles: answered by the exportFiles task. The response is the phone's answer, {paths}.
+// exportFiles: answered by the exportFiles task. The response is the mobile's answer, {paths}.
 //
 pub fn exportFilesMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: ExportFilesRequest) !ziggy.core.Response(std.json.Value) {
     _ = services;
@@ -277,7 +277,7 @@ pub const ExportTempFolderRequest = struct {
 };
 
 //
-// exportTempFolder: answered by the exportTempFolder task. The response is the phone's answer, {path}.
+// exportTempFolder: answered by the exportTempFolder task. The response is the mobile's answer, {path}.
 //
 pub fn exportTempFolderMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: ExportTempFolderRequest) !ziggy.core.Response(std.json.Value) {
     _ = services;
@@ -321,7 +321,7 @@ pub fn stopBackgroundImportMessageHandler(services: HandlerServices, timers: Tim
 // The data of secureStoreGet and secureStoreDelete.
 //
 pub const SecureStoreKeyRequest = struct {
-    // The key of the item in the phone's keychain.
+    // The key of the item in the mobile's keychain.
     key: []const u8,
 };
 
@@ -329,14 +329,14 @@ pub const SecureStoreKeyRequest = struct {
 // The data of secureStoreSet.
 //
 pub const SecureStoreSetRequest = struct {
-    // The key of the item in the phone's keychain.
+    // The key of the item in the mobile's keychain.
     key: []const u8,
     // The value to store under it.
     value: []const u8,
 };
 
 //
-// secureStoreGet: answered by the secureStoreGet task. The response is the phone's answer, {value}.
+// secureStoreGet: answered by the secureStoreGet task. The response is the mobile's answer, {value}.
 //
 pub fn secureStoreGetMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SecureStoreKeyRequest) !ziggy.core.Response(std.json.Value) {
     _ = services;
@@ -351,7 +351,7 @@ pub fn secureStoreGetMessageHandler(services: HandlerServices, timers: Timers, i
 }
 
 //
-// secureStoreSet: answered by the secureStoreSet task. The response is the phone's answer.
+// secureStoreSet: answered by the secureStoreSet task. The response is the mobile's answer.
 //
 pub fn secureStoreSetMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SecureStoreSetRequest) !ziggy.core.Response(std.json.Value) {
     _ = services;
@@ -366,7 +366,7 @@ pub fn secureStoreSetMessageHandler(services: HandlerServices, timers: Timers, i
 }
 
 //
-// secureStoreDelete: answered by the secureStoreDelete task. The response is the phone's answer.
+// secureStoreDelete: answered by the secureStoreDelete task. The response is the mobile's answer.
 //
 pub fn secureStoreDeleteMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SecureStoreKeyRequest) !ziggy.core.Response(std.json.Value) {
     _ = services;
@@ -381,7 +381,7 @@ pub fn secureStoreDeleteMessageHandler(services: HandlerServices, timers: Timers
 }
 
 //
-// secureStoreKeys: answered by the secureStoreKeys task. The response is the phone's answer, {keys}.
+// secureStoreKeys: answered by the secureStoreKeys task. The response is the mobile's answer, {keys}.
 //
 pub fn secureStoreKeysMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: NoRequest) !ziggy.core.Response(std.json.Value) {
     _ = services;

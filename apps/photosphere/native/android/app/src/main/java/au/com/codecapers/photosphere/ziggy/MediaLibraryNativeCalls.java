@@ -97,7 +97,7 @@ public final class MediaLibraryNativeCalls implements NativeCallHandler {
     // library with no photos in it and nothing would be backed up.
     private void requireAccess(String method) throws NativeCallException {
         if (MediaAccessChecker.current(context) == MediaAccess.NONE) {
-            throw new NativeCallException(method + " needs permission to read the photo library, and the app does not have it. Allow access to photos and videos for Photosphere in the phone's settings.");
+            throw new NativeCallException(method + " needs permission to read the photo library, and the app does not have it. Allow access to photos and videos for Photosphere in the mobile's settings.");
         }
     }
 

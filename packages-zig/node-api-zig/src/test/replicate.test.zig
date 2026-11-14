@@ -722,7 +722,7 @@ test "replicates from a partial replica, leaving out the files it does not hold"
     const dbId = try fixture.uuidGenerator.generate(allocator, io);
 
     // A partial replica's merkle tree is the whole origin's, so it describes files the replica
-    // does not have: that is what makes it partial, and it is what every phone holds. Treating
+    // does not have: that is what makes it partial, and it is what every mobile holds. Treating
     // the first of those as fatal made a partial replica impossible to replicate or consolidate
     // from, which matters most in the one case where it is the only copy left.
     const presentFile = "asset/present.jpg";
@@ -1049,7 +1049,7 @@ test "is not marked partial" {
     const originPath = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(originPath).?);
 
-    // The phone's replica: partial, and marked so.
+    // The mobile's replica: partial, and marked so.
     const partialPath = try std.fs.path.join(allocator, &.{ fixture.dir, "partial" });
     const partialTree = try replicateTo(allocator, io, log, fixture, originPath, partialPath, true);
     try std.testing.expect(node_api.media_file_database.isPartialDatabase(partialTree.databaseMetadata));

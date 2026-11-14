@@ -5,12 +5,12 @@
 #
 # A sync that overlaps a working prefetch does the same work slowly and gets in its own way. Measured
 # on a Pixel 6: reaching the origin's merkle tree took 81.5 seconds during a pass that overlapped a
-# prefetch, against 97 milliseconds when the phone was idle, and the record merge in that pass took 15
+# prefetch, against 97 milliseconds when the mobile was idle, and the record merge in that pass took 15
 # minutes because it was pulling the metadata shards down one at a time through the lazy storage, which
 # is the same set of files the prefetch was fetching.
 #
 # The hazard is the opposite mistake, and it is worse: a sync that waits for a prefetch that can never
-# finish is a phone that has silently stopped backing up, which is the exact failure this whole piece
+# finish is a mobile that has silently stopped backing up, which is the exact failure this whole piece
 # of work exists to remove. So the wait is bounded by PROGRESS rather than by completion, and this test
 # asserts both halves of that.
 #
@@ -163,7 +163,7 @@ done
 
 run_zig_cli "$TMP_DIR" add "$ORIGIN_PHOTOS_DIR" --db "$S3_ORIGIN_PATH" --yes || exit 1
 
-# --- 2. The phone's database, which is a partial replica of that origin. ---
+# --- 2. The mobile's database, which is a partial replica of that origin. ---
 
 LOCAL_REPLICA="$TMP_DIR/$DB_NAME"
 run_zig_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1

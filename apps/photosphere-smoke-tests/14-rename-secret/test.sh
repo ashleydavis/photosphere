@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Renames a secret through the Edit dialog. On a desktop the vault is seeded with an api-key and checked afterwards: the new name holds
-# the value and the old name is gone. On a phone the vault cannot be written from the host, so a secret is added through the Add Secret
+# the value and the old name is gone. On a mobile the vault cannot be written from the host, so a secret is added through the Add Secret
 # dialog (rename works for any type, so the default s3-credentials type is used) and only the edit is covered.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -33,7 +33,7 @@ wait_for_log "$TMP_DIR" "Secrets page loaded"
 case "$PLATFORM" in
     android|ios)
         add_secret_via_ui "$APP_PORT" "old-name" "s3-credentials" "us-east-1" || exit 1
-        # The secret's actions are in its card's menu on a phone.
+        # The secret's actions are in its card's menu on a mobile.
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
         ;;
 esac

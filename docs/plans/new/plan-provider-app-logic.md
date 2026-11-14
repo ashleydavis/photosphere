@@ -6,7 +6,7 @@
 
 2. **Drag and drop flag.** Drop `supportsDragAndDropImport` from the platform context. `pages/import/import-page.tsx` checks `platformKind === "desktop"` itself. Needs refactor 1 for `platformKind`.
 
-3. **Copy to clipboard.** Drop `copyToClipboard` from the platform context. `components/asset-view.tsx` converts the image to PNG and writes it to the clipboard itself, and does nothing on a phone. Needs refactor 1 for `platformKind`.
+3. **Copy to clipboard.** Drop `copyToClipboard` from the platform context. `components/asset-view.tsx` converts the image to PNG and writes it to the clipboard itself, and does nothing on a mobile. Needs refactor 1 for `platformKind`.
 
 4. **Import progress logging.** Move the effect that logs each new import progress line into `main.tsx`, which is always mounted and already listens to task messages.
 

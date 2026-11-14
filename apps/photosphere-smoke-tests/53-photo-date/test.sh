@@ -94,7 +94,7 @@ SEEDED_FROM_SECONDS=$(date -u +%s)
 SEEDED_UNTIL_SECONDS=$(date -u +%s)
 
 # Automatic import is pointed at the folder and nothing else, switched off: switching it on is what the scenario does below. Watching
-# the whole photo library of a phone would import somebody's collection and never reach a state this can read.
+# the whole photo library of a mobile would import somebody's collection and never reach a state this can read.
 "${PLATFORM}_seed_library_auto_import_config" "false" "" "5000" "$LIBRARY" "$DATED_PHOTO_NAME" || exit 1
 
 "${PLATFORM}_grant_media_permission" || exit 1

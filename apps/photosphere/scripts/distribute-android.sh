@@ -71,7 +71,7 @@ if [ -z "$APP_VERSION" ]; then
 fi
 VERSION_CODE=$(( $(date +%s) / 60 ))
 
-# The phones testers have are arm64. The APK is the release build's, which is debug signed so that it installs.
+# The mobiles testers have are arm64. The APK is the release build's, which is debug signed so that it installs.
 echo "Building the Android APK ($APP_VERSION, version code $VERSION_CODE)..."
 OUTPUT_DIR="$APP_DIR/out/android"
 bash "$SCRIPT_DIR/package-android.sh" --arch arm64 --output-dir "$OUTPUT_DIR" --version-name "$APP_VERSION" --version-code "$VERSION_CODE"

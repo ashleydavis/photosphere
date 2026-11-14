@@ -6,7 +6,7 @@ Test moving a photo from one database to another, and that it arrives whole and 
 
 ## Prep
 
-- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
+- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real mobile, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
 - `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
 - `bun run android:1` and `bun run ios:1` put the `1-asset` test database on the device as `test-1-asset` and open it on launch. That is the first database, and its one photo is the photo to move.
 - The test needs a second database. After the app starts, open the menu, choose **New database** and name it `manual-test-2`.
@@ -20,7 +20,7 @@ bun run ios:1   # iOS
 
 Expected:
 - The reset prints that it wiped Photosphere's data, or that the app is not installed.
-- Two databases are listed on the phone, the first with a photo you will recognise.
+- Two databases are listed on the mobile, the first with a photo you will recognise.
 
 ## Test
 
@@ -63,5 +63,5 @@ Expected: Both verify with no failures. A move that leaves the source database r
 ## Agent notes
 
 - How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Android: the agent does the UI steps with adb. iOS: the human does them, and the agent reads the results from screenshots.
-- Selecting the photo on a phone is a press and hold: `input swipe X Y X Y 800`, with the same start and end point.
-- Check step 4 needs both databases copied to the development machine, by sharing or replicating them from the phone, which is UI steps on the phone.
+- Selecting the photo on a mobile is a press and hold: `input swipe X Y X Y 800`, with the same start and end point.
+- Check step 4 needs both databases copied to the development machine, by sharing or replicating them from the mobile, which is UI steps on the mobile.

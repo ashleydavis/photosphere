@@ -1,7 +1,7 @@
 const std = @import("std");
 const vault_zig = @import("vault-zig");
 const utils = @import("utils-zig");
-const PhoneVault = vault_zig.phone_vault.PhoneVault;
+const MobileVault = vault_zig.mobile_vault.MobileVault;
 const ISecret = vault_zig.vault.ISecret;
 const INativeCaller = utils.native_caller.INativeCaller;
 const errors = utils.errors;
@@ -9,7 +9,7 @@ const node_utils = @import("node-utils-zig");
 const isolated_vault = @import("isolated-vault.zig");
 
 //
-// A host that keeps keychain items in memory and answers the secureStore requests the way the phone's shell does. It records the
+// A host that keeps keychain items in memory and answers the secureStore requests the way the mobile's shell does. It records the
 // methods it was asked for.
 //
 const MemoryHost = struct {
@@ -91,21 +91,21 @@ const MemoryHost = struct {
     }
 };
 
-test "PhoneVault: get returns null for a secret that is not there" {
+test "MobileVault: get returns null for a secret that is not there" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    const vault = phone.vault();
+    var mobile = MobileVault.init(host.requester());
+    const vault = mobile.vault();
     try std.testing.expect(try vault.get(arena.allocator(), std.testing.io, "missing") == null);
 }
 
-test "PhoneVault: set then get returns the name, type and value" {
+test "MobileVault: set then get returns the name, type and value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    const vault = phone.vault();
+    var mobile = MobileVault.init(host.requester());
+    const vault = mobile.vault();
     try vault.set(arena.allocator(), std.testing.io, .{
         .name = "my-s3",
         .type = "s3-credentials",
@@ -117,12 +117,12 @@ test "PhoneVault: set then get returns the name, type and value" {
     try std.testing.expectEqualStrings("{\"accessKeyId\":\"a\"}", secret.value);
 }
 
-test "PhoneVault: set stores the value under the value key and the type under the type key" {
+test "MobileVault: set stores the value under the value key and the type under the type key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    try phone.vault().set(arena.allocator(), std.testing.io, .{
+    var mobile = MobileVault.init(host.requester());
+    try mobile.vault().set(arena.allocator(), std.testing.io, .{
         .name = "key1",
         .type = "plain",
         .value = "secret-value",
@@ -132,12 +132,12 @@ test "PhoneVault: set stores the value under the value key and the type under th
     try std.testing.expectEqual(@as(u32, 2), host.items.count());
 }
 
-test "PhoneVault: set overwrites a secret of the same name" {
+test "MobileVault: set overwrites a secret of the same name" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    const vault = phone.vault();
+    var mobile = MobileVault.init(host.requester());
+    const vault = mobile.vault();
     try vault.set(arena.allocator(), std.testing.io, .{
         .name = "a",
         .type = "plain",
@@ -153,12 +153,12 @@ test "PhoneVault: set overwrites a secret of the same name" {
     try std.testing.expectEqualStrings("two", secret.value);
 }
 
-test "PhoneVault: delete removes both items and does nothing for a missing secret" {
+test "MobileVault: delete removes both items and does nothing for a missing secret" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    const vault = phone.vault();
+    var mobile = MobileVault.init(host.requester());
+    const vault = mobile.vault();
     try vault.set(arena.allocator(), std.testing.io, .{
         .name = "a",
         .type = "plain",
@@ -169,12 +169,12 @@ test "PhoneVault: delete removes both items and does nothing for a missing secre
     try vault.delete(arena.allocator(), std.testing.io, "never-there");
 }
 
-test "PhoneVault: list returns every secret and ignores other keychain items" {
+test "MobileVault: list returns every secret and ignores other keychain items" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    const vault = phone.vault();
+    var mobile = MobileVault.init(host.requester());
+    const vault = mobile.vault();
     try vault.set(arena.allocator(), std.testing.io, .{
         .name = "a",
         .type = "plain",
@@ -207,12 +207,12 @@ test "PhoneVault: list returns every secret and ignores other keychain items" {
 // A delete removes the type before the value, so a list that runs beside one can find a listed type gone while its value is still
 // there. That secret is being deleted and is skipped, as MobileSecretStore.listSecrets skips a type that is gone.
 //
-test "PhoneVault: list skips a secret whose type was deleted after the keys were read, even while its value is still there" {
+test "MobileVault: list skips a secret whose type was deleted after the keys were read, even while its value is still there" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    const vault = phone.vault();
+    var mobile = MobileVault.init(host.requester());
+    const vault = mobile.vault();
     try vault.set(arena.allocator(), std.testing.io, .{
         .name = "kept",
         .type = "plain",
@@ -249,87 +249,87 @@ const FixedAnswerHost = struct {
     }
 };
 
-test "PhoneVault: an answer to secureStoreGet that cannot be read, has no value, or has a value that is not text is an error" {
+test "MobileVault: an answer to secureStoreGet that cannot be read, has no value, or has a value that is not text is an error" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const cases = [_][2][]const u8{
-        .{ "not json", "The phone's answer to secureStoreGet could not be read." },
-        .{ "{}", "The phone's answer to secureStoreGet has no value." },
-        .{ "{\"value\":5}", "The phone's answer to secureStoreGet has a value that is not text." },
+        .{ "not json", "The mobile's answer to secureStoreGet could not be read." },
+        .{ "{}", "The mobile's answer to secureStoreGet has no value." },
+        .{ "{\"value\":5}", "The mobile's answer to secureStoreGet has a value that is not text." },
     };
     for (cases) |case| {
         var host: FixedAnswerHost = .{
             .answer = case[0],
         };
-        var phone = PhoneVault.init(host.requester());
-        try std.testing.expectError(error.Thrown, phone.vault().get(arena.allocator(), std.testing.io, "a"));
+        var mobile = MobileVault.init(host.requester());
+        try std.testing.expectError(error.Thrown, mobile.vault().get(arena.allocator(), std.testing.io, "a"));
         try std.testing.expectEqualStrings(case[1], errors.lastErrorMessage());
     }
 }
 
-test "PhoneVault: an answer to secureStoreKeys that cannot be read, has no list, or lists a key that is not text is an error" {
+test "MobileVault: an answer to secureStoreKeys that cannot be read, has no list, or lists a key that is not text is an error" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const cases = [_][2][]const u8{
-        .{ "not json", "The phone's answer to secureStoreKeys could not be read." },
-        .{ "{\"keys\":1}", "The phone's answer to secureStoreKeys has no list of keys." },
-        .{ "{\"keys\":[1]}", "The phone's answer to secureStoreKeys has a key that is not text." },
+        .{ "not json", "The mobile's answer to secureStoreKeys could not be read." },
+        .{ "{\"keys\":1}", "The mobile's answer to secureStoreKeys has no list of keys." },
+        .{ "{\"keys\":[1]}", "The mobile's answer to secureStoreKeys has a key that is not text." },
     };
     for (cases) |case| {
         var host: FixedAnswerHost = .{
             .answer = case[0],
         };
-        var phone = PhoneVault.init(host.requester());
-        try std.testing.expectError(error.Thrown, phone.vault().list(arena.allocator(), std.testing.io));
+        var mobile = MobileVault.init(host.requester());
+        try std.testing.expectError(error.Thrown, mobile.vault().list(arena.allocator(), std.testing.io));
         try std.testing.expectEqualStrings(case[1], errors.lastErrorMessage());
     }
 }
 
-test "PhoneVault: a value with no type is an error" {
+test "MobileVault: a value with no type is an error" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
     try host.items.put(arena.allocator(), "photosphere.secret.orphan", "v");
-    var phone = PhoneVault.init(host.requester());
-    try std.testing.expectError(error.Thrown, phone.vault().get(arena.allocator(), std.testing.io, "orphan"));
+    var mobile = MobileVault.init(host.requester());
+    try std.testing.expectError(error.Thrown, mobile.vault().get(arena.allocator(), std.testing.io, "orphan"));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "no type") != null);
 }
 
-test "PhoneVault: a failing host fails the call with its reason" {
+test "MobileVault: a failing host fails the call with its reason" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
     host.failure = "The device keychain could not be opened";
-    var phone = PhoneVault.init(host.requester());
-    try std.testing.expectError(error.Thrown, phone.vault().get(arena.allocator(), std.testing.io, "a"));
+    var mobile = MobileVault.init(host.requester());
+    try std.testing.expectError(error.Thrown, mobile.vault().get(arena.allocator(), std.testing.io, "a"));
     try std.testing.expectEqualStrings("The device keychain could not be opened", errors.lastErrorMessage());
 }
 
-test "PhoneVault: checkPrereqs is ok" {
+test "MobileVault: checkPrereqs is ok" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    const result = try phone.vault().checkPrereqs(arena.allocator(), std.testing.io);
+    var mobile = MobileVault.init(host.requester());
+    const result = try mobile.vault().checkPrereqs(arena.allocator(), std.testing.io);
     try std.testing.expect(result.ok);
 }
 
-test "getVaultWithHost: the phone type returns a PhoneVault that asks the given host" {
+test "getVaultWithHost: the mobile type returns a MobileVault that asks the given host" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    const vault = try vault_zig.get_vault.getVaultWithHost(arena.allocator(), "phone", host.requester());
-    try std.testing.expect(vault.vtable == &PhoneVault.vtable);
+    const vault = try vault_zig.get_vault.getVaultWithHost(arena.allocator(), "mobile", host.requester());
+    try std.testing.expect(vault.vtable == &MobileVault.vtable);
     _ = try vault.get(arena.allocator(), std.testing.io, "x");
     try std.testing.expectEqual(@as(usize, 1), host.methods.items.len);
     try std.testing.expectEqualStrings("secureStoreGet", host.methods.items[0]);
 }
 
-test "getVaultWithHost: the phone type without a host is an error" {
+test "getVaultWithHost: the mobile type without a host is an error" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expectError(error.Thrown, vault_zig.get_vault.getVaultWithHost(arena.allocator(), "phone", null));
-    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "phone vault needs") != null);
+    try std.testing.expectError(error.Thrown, vault_zig.get_vault.getVaultWithHost(arena.allocator(), "mobile", null));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "mobile vault needs") != null);
 }
 
 test "getVaultWithHost: another type is the vault getVault returns" {
@@ -342,13 +342,13 @@ test "getVaultWithHost: another type is the vault getVault returns" {
     try std.testing.expect(vault.vtable == &vault_zig.plaintext_vault.PlaintextVault.vtable);
 }
 
-test "PhoneVault: a failed value write leaves the secret unlisted rather than listed with no value" {
+test "MobileVault: a failed value write leaves the secret unlisted rather than listed with no value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
     host.failing_set_key = "photosphere.secret.api";
-    var phone = PhoneVault.init(host.requester());
-    const vault = phone.vault();
+    var mobile = MobileVault.init(host.requester());
+    const vault = mobile.vault();
 
     try std.testing.expectError(error.Thrown, vault.set(arena.allocator(), std.testing.io, .{
         .name = "api",
@@ -360,12 +360,12 @@ test "PhoneVault: a failed value write leaves the secret unlisted rather than li
     try std.testing.expectEqual(@as(usize, 0), secrets.len);
 }
 
-test "PhoneVault: a secret name containing the type prefix does not confuse the enumeration" {
+test "MobileVault: a secret name containing the type prefix does not confuse the enumeration" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var host = MemoryHost.init(arena.allocator());
-    var phone = PhoneVault.init(host.requester());
-    const vault = phone.vault();
+    var mobile = MobileVault.init(host.requester());
+    const vault = mobile.vault();
 
     // A name that embeds the other prefix would break any scheme that split keys on a separator.
     try vault.set(arena.allocator(), std.testing.io, .{

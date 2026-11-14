@@ -253,7 +253,7 @@ test "should handle both sides having deleted fields" {
         2000,
         try documentOf(allocator, &.{
             property("age", try leaf(allocator, 1800)), // deleted with newer timestamp
-            property("phone", try leaf(allocator, 2000)), // deleted
+            property("mobile", try leaf(allocator, 2000)), // deleted
         }),
     );
 
@@ -262,14 +262,14 @@ test "should handle both sides having deleted fields" {
     try std.testing.expect(get(result.value, "name").eql(stringValue("Jane"))); // value2 has newer root timestamp
     try std.testing.expect(get(result.value, "age") == .undefined);
     try std.testing.expect(get(result.value, "email") == .undefined);
-    try std.testing.expect(get(result.value, "phone") == .undefined);
+    try std.testing.expect(get(result.value, "mobile") == .undefined);
 
     // Fields with newer timestamps should be in metadata
     try std.testing.expectEqual(@as(f64, 1800), timestampOf(result.metadata.fields.?, "age")); // value2 wins
     // email: value1 has timestamp 1500, value2 doesn't have it (timestamp 2000 from root)
     // value2 wins (2000 > 1500), so timestamp should be 2000
     try std.testing.expectEqual(@as(f64, 2000), timestampOf(result.metadata.fields.?, "email"));
-    try std.testing.expectEqual(@as(f64, 2000), timestampOf(result.metadata.fields.?, "phone"));
+    try std.testing.expectEqual(@as(f64, 2000), timestampOf(result.metadata.fields.?, "mobile"));
 }
 
 test "should merge arrays as primitives (treated as values, not merged)" {

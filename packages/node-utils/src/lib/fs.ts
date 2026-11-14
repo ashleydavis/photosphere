@@ -629,7 +629,7 @@ export function getCacheDir(): string {
     // empty home directory, which is what keeps every derived path inside the app's storage sandbox,
     // and it is the only reliable signal there: the same shim answers platform() with "android" on
     // iOS as well, so a device that reached the branches below would be told it was an Android one.
-    // Anything moved above this line has to be true of a phone as well as a desktop.
+    // Anything moved above this line has to be true of a mobile as well as a desktop.
     const homeDir = os.homedir();
     if (!homeDir) {
         return '.';

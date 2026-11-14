@@ -74,7 +74,7 @@ pub fn retry(io: std.Io, log: logging.ILog, operation: anytype, maxAttempts: u32
             if (attempts_left >= 1) {
                 // What went wrong on an attempt that is about to be tried again, said once, in one
                 // line. It used to be verbose-only, and the last attempt's error was the only one
-                // anyone ever saw: on a phone that made a failure that takes three attempts and a
+                // anyone ever saw: on a mobile that made a failure that takes three attempts and a
                 // minute and a half look like a single event with a single cause, and hid that the
                 // first attempt failed differently from the ones that followed it.
                 logRetryWarning(log, errorContext, err);

@@ -2,7 +2,7 @@
 
 # Proves a reset that cannot finish says so, loudly, and stops.
 #
-# The dangerous failure for this feature is a quiet one: a user hands a phone or a laptop on believing
+# The dangerous failure for this feature is a quiet one: a user hands a mobile or a laptop on believing
 # their credentials went, when the reset stopped half way through. So the reset throws rather than
 # swallowing anything, and the dialog turns that into a toast that does not auto-dismiss.
 #
@@ -29,7 +29,7 @@ log_info "Pre-creating database with the CLI..."
 create_database "$TMP_DIR/test-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/test-db" "test-db" || exit 1
 
-# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+# A user on a mobile types the short name, which the app resolves into its own storage. A desktop user types the full path.
 case "$PLATFORM" in
     android|ios)
         DATABASE_PATH="test-db"

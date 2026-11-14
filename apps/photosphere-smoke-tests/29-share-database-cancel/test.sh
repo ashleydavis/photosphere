@@ -8,7 +8,7 @@
 # test the point of it rather than padding: the cancel on its own passes whether or not the restart is possible.
 #
 # The sender is the app under test on every platform. The receiver of the restarted share is a second copy of the app on a desktop. A
-# phone cannot run two copies of the app, so on Android and iOS the receiver is the psi CLI on the host.
+# mobile cannot run two copies of the app, so on Android and iOS the receiver is the psi CLI on the host.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -36,7 +36,7 @@ wait_for_log "$TMP_DIR" "Databases page loaded"
 
 # --- 1. Start a share, then cancel it while it waits for a receiver. ---
 
-# The share action is in the row's actions menu on a phone. A desktop has no such menu and the click finds nothing.
+# The share action is in the row's actions menu on a mobile. A desktop has no such menu and the click finds nothing.
 send_command "$SENDER_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$SENDER_PORT" click '{"dataId":"share-database-button"}' || exit 1
 # The dialog fills its name, description and path from the entry in an effect after it opens, and the Send button sends what the form
@@ -77,7 +77,7 @@ case "$PLATFORM" in
         send_command "$RECEIVER_PORT" navigate '{"page":"databases"}' || exit 1
         wait_for_log "$TMP_DIR/receiver" "Databases page loaded"
 
-        # The receive action is in the page's actions menu on a phone. A desktop has no such menu and the click finds nothing.
+        # The receive action is in the page's actions menu on a mobile. A desktop has no such menu and the click finds nothing.
         send_command "$RECEIVER_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
         send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-button"}' || exit 1
         wait_for_log "$TMP_DIR/receiver" "Receive database dialog opened"

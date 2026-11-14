@@ -254,14 +254,14 @@ make_video() {
     fi
 }
 
-# The video types the program takes, in the codecs phones record them in. Needs ffmpeg with libx264 and libx265.
+# The video types the program takes, in the codecs mobiles record them in. Needs ffmpeg with libx264 and libx265.
 make_video 96x54-h264.mp4 -c:v libx264 -pix_fmt yuv420p -c:a aac
 make_video 112x64-hevc.mp4 -c:v libx265 -x265-params log-level=error -tag:v hvc1 -pix_fmt yuv420p -c:a aac
 make_video 128x72-h264.mov -c:v libx264 -pix_fmt yuv420p -c:a aac
 make_video 144x80-hevc.mov -c:v libx265 -x265-params log-level=error -tag:v hvc1 -pix_fmt yuv420p -c:a aac
 
-# The other video types phones and cameras record that the import takes (its content type starts video/).
-# 3GP from older phones, in H.263 (only the standard sizes, 128x96 is SQCIF) and H.264.
+# The other video types mobiles and cameras record that the import takes (its content type starts video/).
+# 3GP from older mobiles, in H.263 (only the standard sizes, 128x96 is SQCIF) and H.264.
 make_video 128x96-h263.3gp -c:v h263 -c:a aac
 make_video 160x90-h264.3gp -c:v libx264 -pix_fmt yuv420p -c:a aac
 # M4V, the MP4 an iPhone or iTunes names .m4v.
@@ -277,9 +277,9 @@ make_video 240x144-mpeg1.mpeg -c:v mpeg1video -c:a mp2
 make_video 256x144-h264.mkv -c:v libx264 -pix_fmt yuv420p -c:a aac
 make_video 272x160-vp9.webm -c:v libvpx-vp9 -pix_fmt yuv420p -an
 make_video 288x160-vp8.webm -c:v libvpx -pix_fmt yuv420p -an
-# Windows Media from older Windows phones and cameras: WMV in ASF, with WMA sound.
+# Windows Media from older Windows mobiles and cameras: WMV in ASF, with WMA sound.
 make_video 320x180-wmv2.wmv -c:v wmv2 -c:a wmav2 -f asf
-# MS MPEG-4 v3 (DivX 3) in AVI, from older cameras and phones.
+# MS MPEG-4 v3 (DivX 3) in AVI, from older cameras and mobiles.
 make_video 336x192-msmpeg4v3.avi -c:v msmpeg4 -c:a mp2
 # DV from MiniDV camcorders, in AVI and MOV. The DV encoder takes only the standard sizes: 720x576 is PAL, at 25 frames
 # a second.
@@ -291,7 +291,7 @@ make_video 720x576-dv.mov -c:v dvvideo -pix_fmt yuv420p -c:a pcm_s16le -ar 48000
 # TypeScript .ts file has the same content type.
 make_video 304x176-h264-not-imported.mts -c:v libx264 -pix_fmt yuv420p -c:a aac -f mpegts
 
-# A phone's HEIC: a 1000x700 picture stored as tiles, which the built-in FFmpeg decodes and joins.
+# A mobile's HEIC: a 1000x700 picture stored as tiles, which the built-in FFmpeg decodes and joins.
 if [ ! -f "$out/1000x700-tiled.heic" ]; then
     cp "$out/../heic/tiled.heic" "$out/1000x700-tiled.heic"
 fi

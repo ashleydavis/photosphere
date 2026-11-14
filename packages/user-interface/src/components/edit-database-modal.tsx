@@ -267,7 +267,7 @@ export function EditDatabaseModal({
                                     value={form.path}
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                                 />
-                                {/* A phone has no folder dialog for a database location: the user types its name instead. */}
+                                {/* A mobile has no folder dialog for a database location: the user types its name instead. */}
                                 {platform.platformKind === "desktop" && (
                                     <Button data-id="edit-database-browse-button" variant="outlined" onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}>
                                         Browse

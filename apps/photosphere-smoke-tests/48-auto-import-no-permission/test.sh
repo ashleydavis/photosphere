@@ -15,9 +15,9 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 48 "auto-import-no-permission"
 
-# Phones only: a desktop asks for no photo permission, so there is nothing to refuse.
+# Mobiles only: a desktop asks for no photo permission, so there is nothing to refuse.
 if [ "$PLATFORM" != "android" ] && [ "$PLATFORM" != "ios" ]; then
-    log_info "SKIP: this scenario refuses the photo permission, which only a phone asks for."
+    log_info "SKIP: this scenario refuses the photo permission, which only a mobile asks for."
     exit "$TEST_SKIPPED_EXIT_CODE"
 fi
 

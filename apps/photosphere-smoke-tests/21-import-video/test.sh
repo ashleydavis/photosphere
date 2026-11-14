@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Imports a video on a phone, exercising the bundled ffmpeg path (ffprobe for metadata and ffmpeg for the screenshot thumbnail) end to
+# Imports a video on a mobile, exercising the bundled ffmpeg path (ffprobe for metadata and ffmpeg for the screenshot thumbnail) end to
 # end, which the image-only import scenario does not cover. Same flow as import-photos but with a single .mp4: seed it into the app's
 # import temp directory, answer the native picker with its path, import it through the photo picker button, and assert it lands in the
 # gallery. It then opens the video, checks on Android that playback started, and checks the device survives it. Playing a video kills an Android emulator whose host renderer is

@@ -31,7 +31,7 @@ wait_for_log "$TMP_DIR" "Secret added"
 
 case "$PLATFORM" in
     android|ios)
-        # The secret's actions are in its card's menu on a phone.
+        # The secret's actions are in its card's menu on a mobile.
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
         ;;
 esac

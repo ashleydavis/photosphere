@@ -124,7 +124,7 @@ describe("describeJobsIndicator", () => {
             job: { id: "job-1", name: "Replicating to my-holiday-backup", cancelSource: undefined },
         }));
 
-        // A job's name is unbounded and the navbar is the same component on a phone. The names are
+        // A job's name is unbounded and the navbar is the same component on a mobile. The names are
         // in the sidebar, one tap away.
         expect(describeJobsIndicator(jobs)?.label).toBe("1 job");
     });

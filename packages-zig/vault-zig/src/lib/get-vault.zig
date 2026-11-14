@@ -9,7 +9,7 @@ const DEFAULT_VAULT_DIR = @import("plaintext-vault.zig").DEFAULT_VAULT_DIR;
 const MacOSKeychainVault = @import("macos-keychain-vault.zig").MacOSKeychainVault;
 const LinuxKeychainVault = @import("linux-keychain-vault.zig").LinuxKeychainVault;
 const WindowsKeychainVault = @import("windows-keychain-vault.zig").WindowsKeychainVault;
-const PhoneVault = @import("phone-vault.zig").PhoneVault;
+const MobileVault = @import("mobile-vault.zig").MobileVault;
 const INativeCaller = utils.native_caller.INativeCaller;
 const errors = utils.errors;
 const process_env = node_utils.process_env;
@@ -28,27 +28,27 @@ threadlocal var vaultInstances: std.StringHashMapUnmanaged(IVault) = .empty;
 
 //
 // Returns the default vault type from the PHOTOSPHERE_VAULT_TYPE environment
-// variable, falling back to "phone" on Android and iOS, where the keychain is the phone's (as the mobile worker's vault always
+// variable, falling back to "mobile" on Android and iOS, where the keychain is the mobile's (as the mobile worker's vault always
 // reads the device keychain), and to "keychain" elsewhere.
 //
 pub fn getDefaultVaultType() []const u8 {
-    return process_env.getEnv("PHOTOSPHERE_VAULT_TYPE") orelse if (builtin.abi.isAndroid() or builtin.os.tag == .ios) "phone" else "keychain";
+    return process_env.getEnv("PHOTOSPHERE_VAULT_TYPE") orelse if (builtin.abi.isAndroid() or builtin.os.tag == .ios) "mobile" else "keychain";
 }
 
 //
-// Returns the vault for the given type like getVault, and for the type "phone" a vault that keeps its secrets in the phone's keychain
-// by asking the host through the given requester. The phone vault is made with the allocator for the caller to use, because the
-// requester belongs to the caller (the task running), and it is not cached. A phone vault with no requester is an error.
+// Returns the vault for the given type like getVault, and for the type "mobile" a vault that keeps its secrets in the mobile's keychain
+// by asking the host through the given requester. The mobile vault is made with the allocator for the caller to use, because the
+// requester belongs to the caller (the task running), and it is not cached. A mobile vault with no requester is an error.
 //
 pub fn getVaultWithHost(allocator: std.mem.Allocator, @"type": []const u8, host: ?INativeCaller) !IVault {
-    if (!std.mem.eql(u8, @"type", "phone")) {
+    if (!std.mem.eql(u8, @"type", "mobile")) {
         return getVault(@"type");
     }
     const requester = host orelse {
-        return errors.throwError("The phone vault needs the phone's shell to keep the secrets, and this program has none.", .{});
+        return errors.throwError("The mobile vault needs the mobile's shell to keep the secrets, and this program has none.", .{});
     };
-    const instance = try allocator.create(PhoneVault);
-    instance.* = PhoneVault.init(requester);
+    const instance = try allocator.create(MobileVault);
+    instance.* = MobileVault.init(requester);
     return instance.vault();
 }
 
@@ -59,7 +59,7 @@ pub fn getVaultWithHost(allocator: std.mem.Allocator, @"type": []const u8, host:
 // Supported types:
 //   "keychain"  - stores secrets in the OS keychain (macOS, Linux, Windows)
 //   "plaintext" - stores secrets as plain-text JSON files under ~/.config/vault
-//   "phone"     - stores secrets in the phone's keychain (getVaultWithHost only)
+//   "mobile"     - stores secrets in the mobile's keychain (getVaultWithHost only)
 //
 // Throws if the type is not recognised.
 //

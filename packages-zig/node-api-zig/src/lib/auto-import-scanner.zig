@@ -30,7 +30,7 @@ const VisitImportFile = import_scanner.VisitImportFile;
 // scan, the write lock, loading and saving the hash cache) was being paid per handful.
 //
 // What is platform-specific stays behind IMediaSource, so this same scanner runs over a watched
-// folder on the desktop and over the device photo library on a phone.
+// folder on the desktop and over the device photo library on a mobile.
 //
 
 //
@@ -151,7 +151,7 @@ pub const IAutoImportScannerDeps = struct {
     // it is, undefined when it is not or when nothing is known about it.
     //
     // This is what stops the scanner paying for a photo that has already been imported. Opening an
-    // item on a phone copies the whole photo out of the library into the sandbox, and hashing it
+    // item on a mobile copies the whole photo out of the library into the sandbox, and hashing it
     // reads that copy back, so a library that is already imported would otherwise cost a full copy
     // and a full hash per photo on every run.
     alreadyImportedContentHash: AlreadyImportedContentHashFn,
@@ -432,7 +432,7 @@ pub const AutoImportScanner = struct {
 
         self.currentItem = item.displayName;
 
-        // Asked before the item is opened, which is the whole point: opening it on a phone copies
+        // Asked before the item is opened, which is the whole point: opening it on a mobile copies
         // the entire photo out of the library, and that copy is what this avoids.
         const importedContentHash = try deps.alreadyImportedContentHash.function(deps.alreadyImportedContentHash.context, allocator, io, log, item);
         if (importedContentHash != null) {
@@ -440,7 +440,7 @@ pub const AutoImportScanner = struct {
             return;
         }
 
-        // Timed because on a phone this copies the whole photo out of the library into the app's
+        // Timed because on a mobile this copies the whole photo out of the library into the app's
         // sandbox before anything can read it, and how much of an import that accounts for has never
         // been established.
         const exportStartedAt = std.Io.Clock.real.now(io).toMilliseconds();

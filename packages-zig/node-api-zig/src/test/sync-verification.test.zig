@@ -187,7 +187,7 @@ test "a target that knows its own hash is not read back" {
     const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-verify");
     defer temp_dirs.removeTempDir(io, workingDir);
 
-    // Reading every copied file back is what made syncing a phone's library unusable: the file
+    // Reading every copied file back is what made syncing a mobile's library unusable: the file
     // crosses the network twice and is hashed in software.
     var hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
     try hashes.put(allocator, try assetPathOf(allocator, assetId), try sync_helpers.hashOf(allocator, assetBytes));
@@ -216,7 +216,7 @@ test "a store that checked the bytes as it wrote them is asked nothing further" 
 
     // Asking cost two more round trips per file on top of the write: one to learn the file is
     // there and how long it is, another to read back the hash the server had just verified. On a
-    // phone, where every request is a fresh connection and the response crosses the engine
+    // mobile, where every request is a fresh connection and the response crosses the engine
     // bridge, those two were a large part of what a file cost.
     const hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
     const target = try syncOneAsset(allocator, io, log, workingDir, &hashes, true);
@@ -241,7 +241,7 @@ test "the hash the sync already has goes up with the file" {
     defer temp_dirs.removeTempDir(io, workingDir);
 
     // Nothing should have to compute it. The AWS SDK asked to checksum a body hashes it in
-    // software, which is slow enough on a phone that one large video held the upload for a
+    // software, which is slow enough on a mobile that one large video held the upload for a
     // very long time with no byte reaching the server. The merkle tree is made of these hashes, so the sync already has it.
     const hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
     const target = try syncOneAsset(allocator, io, log, workingDir, &hashes, null);
@@ -264,7 +264,7 @@ test "a target that does not know its own hash is checked by length, not read ba
     const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-verify");
     defer temp_dirs.removeTempDir(io, workingDir);
 
-    // Reading a file back to hash it is what made syncing a phone's library impossible: each file
+    // Reading a file back to hash it is what made syncing a mobile's library impossible: each file
     // crossed the network twice and was hashed in software, which is slow. `psi verify` is the deep check.
     const hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
     const target = try syncOneAsset(allocator, io, log, workingDir, &hashes, null);

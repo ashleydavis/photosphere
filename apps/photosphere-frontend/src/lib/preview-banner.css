@@ -5,7 +5,7 @@
     These rules cannot be Tailwind utilities because they restyle the #navbar
     and #main elements rendered by the user-interface package, shifting them
     down to make room for the banner. They apply only while the banner is
-    shown, which it is on a desktop and not on a phone.
+    shown, which it is on a desktop and not on a mobile.
 */
 
 body.has-preview-banner #navbar {

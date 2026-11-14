@@ -31,7 +31,7 @@ pub const IAssetServerCoreOptions = struct {
     // Write-lock owner for write/apply operations (see acquireWriteLock).
     sessionId: []const u8,
 
-    // Reaches the phone's keychain for the credentials of a database, or null where there is no phone shell.
+    // Reaches the mobile's keychain for the credentials of a database, or null where there is no mobile shell.
     nativeCaller: ?utils.native_caller.INativeCaller,
 };
 
@@ -107,7 +107,7 @@ pub const AssetServerCore = struct {
     // Write-lock owner for write/apply operations.
     sessionId: []const u8,
 
-    // Reaches the phone's keychain for the credentials of a database, or null where there is no phone shell.
+    // Reaches the mobile's keychain for the credentials of a database, or null where there is no mobile shell.
     nativeCaller: ?utils.native_caller.INativeCaller,
 
     // Cache of lazy database storage instances keyed by database path.

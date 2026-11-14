@@ -687,7 +687,7 @@ ios_wait_for_background_service_gone() {
 
 #
 # The notification permission needs no granting on iOS: the app shows no notification while the background work runs, and asks for no
-# permission to. Says so and succeeds, so a scenario written for both phones reads the same on either.
+# permission to. Says so and succeeds, so a scenario written for both mobiles reads the same on either.
 # Usage: ios_grant_notification_permission
 #
 ios_grant_notification_permission() {
@@ -890,7 +890,7 @@ photosphere_platform_screenshot() {
 }
 
 #
-# Makes the next download end as the user cancelling it. A phone hands a download to the system share sheet, which a test cannot tap,
+# Makes the next download end as the user cancelling it. A mobile hands a download to the system share sheet, which a test cannot tap,
 # so the sheet's outcome is staged as cancelled through the page. Usage: ios_cancel_next_download <port>
 #
 ios_cancel_next_download() {

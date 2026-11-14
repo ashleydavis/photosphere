@@ -2,7 +2,7 @@
 
 # Opens a configured database from the open-database dialog and expects the open to complete, then restarts the app and expects the
 # same database to open by itself. On a desktop the database is created with the CLI and databases.toml is written beside the app's
-# settings, and the database summary is opened from the sidebar and from the navbar's photo count. On a phone the 50-assets fixture is
+# settings, and the database summary is opened from the sidebar and from the navbar's photo count. On a mobile the 50-assets fixture is
 # copied into the app's sandbox, configured, and the sidebar's recent list is checked to show it.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

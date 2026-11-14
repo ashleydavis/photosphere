@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # The database named by last_opened_path in the databases section of state.json is reopened on launch, and closing it clears the key so
-# the next launch lands on the welcome screen. On a desktop the config is written beside the app's settings and the close is checked in that file. On a phone
+# the next launch lands on the welcome screen. On a desktop the config is written beside the app's settings and the close is checked in that file. On a mobile
 # the config is written into the sandbox and three launches cover it: a config naming a last database opens it on launch alone, a
 # config without one stays on the welcome screen, and opening a database from the sidebar records it so the next launch reopens it.
 

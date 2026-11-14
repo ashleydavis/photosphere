@@ -3,20 +3,20 @@
 //
 // The steps are ordered so that nothing is deleted while something is still using it, and so that a
 // failure part-way through leaves the state a user can understand rather than a half-emptied app.
-// The open database is closed first, because on a phone its files are about to be deleted. The
+// The open database is closed first, because on a mobile its files are about to be deleted. The
 // database entries and the secrets go next, through the platform's own operations, so each platform
 // does its own bookkeeping (the desktop menu, the databases-changed event) rather than having its
 // config file pulled out from underneath it. The app's own storage is emptied last.
 //
 // What this must never touch is the point of the whole feature, so it is worth saying here as well
-// as in the dialog: on a phone every local database lives inside the app's storage and goes with it,
+// as in the dialog: on a mobile every local database lives inside the app's storage and goes with it,
 // while on a desktop a database sits wherever the user put it, is removed from the list, and is left
 // on disk untouched. Nothing here opens remote storage, so an S3 database is forgotten and its
 // bucket is left alone. The one thing that deletes files is the platform's reset-app-storage task,
 // which takes no path from anybody and can only reach the app's own two directories.
 //
 // Nothing here catches an error. A reset that only half happened must say so: a user who is handing
-// a phone on has to know their credentials are still on it.
+// a mobile on has to know their credentials are still on it.
 //
 
 import type { IDatabaseEntry, ISharedSecretEntry } from "../context/platform-context";
@@ -56,7 +56,7 @@ export interface IResetAppStorageOutcome {
 //
 export interface IResetDeviceOptions {
     //
-    // Closes the open database, if one is open. Called first: on a phone its files are about to go.
+    // Closes the open database, if one is open. Called first: on a mobile its files are about to go.
     //
     closeDatabase: () => Promise<void>;
 
@@ -86,7 +86,7 @@ export interface IResetDeviceOptions {
     settingsStore: IResetSettingsStore;
 
     //
-    // Empties the app's own config and cache directories, which on a phone are its storage sandbox,
+    // Empties the app's own config and cache directories, which on a mobile are its storage sandbox,
     // and reports what went.
     //
     resetAppStorage: () => Promise<IResetAppStorageOutcome>;

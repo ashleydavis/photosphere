@@ -2,7 +2,7 @@
 
 # Opens the sidebar and removes a recent database. On a desktop two databases are created with the CLI, databases.toml is seeded with
 # both as entries and state.json with both as recents, and the files are checked afterwards: the recent name is gone from state.json and
-# both entries remain in databases.toml. On a phone
+# both entries remain in databases.toml. On a mobile
 # the recent list lives on the device, so one database is copied into the sandbox, configured and opened, and only the removal is covered.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

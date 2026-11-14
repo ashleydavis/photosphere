@@ -2,7 +2,7 @@
 
 # Registers a source database on the Databases page and replicates it from the Replicate dialog, partial and then full. On a desktop
 # the source is created with the CLI with one asset, the replicas' files are checked on disk and each replica is opened and loads the
-# asset. On a phone the source is copied into the app's sandbox and the replica lives there too, out of the host's sight, so the files
+# asset. On a mobile the source is copied into the app's sandbox and the replica lives there too, out of the host's sight, so the files
 # are not checked on disk and a second replication of the same source covers the engine pool that once dropped it.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -25,7 +25,7 @@ case "$PLATFORM" in
         "${PLATFORM}_reset_path" "dest-full"
         log_info "Pre-creating an empty source database with the CLI..."
         create_database "$SOURCE_DB"
-        # A user on a phone types short names, which the app resolves into its own storage, where the source is seeded.
+        # A user on a mobile types short names, which the app resolves into its own storage, where the source is seeded.
         SOURCE_PATH="source-db"
         DEST_PARTIAL="dest-partial"
         DEST_FULL="dest-full"
@@ -54,7 +54,7 @@ wait_for_log "$TMP_DIR" "Databases page loaded"
 # Register the source database on the Manage Databases page.
 case "$PLATFORM" in
     android|ios)
-        # The Add button is in the page's actions menu on a phone.
+        # The Add button is in the page's actions menu on a mobile.
         send_command "$APP_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
         ;;
 esac

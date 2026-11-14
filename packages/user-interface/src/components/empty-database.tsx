@@ -12,7 +12,7 @@ import { useIsMobile } from "../lib/use-is-mobile";
 export function EmptyDatabase() {
     const navigate = useNavigate();
 
-    // Drives the phone layout: a full-width call to action rather than a centred pill.
+    // Drives the mobile layout: a full-width call to action rather than a centred pill.
     const isMobile = useIsMobile();
 
     return (

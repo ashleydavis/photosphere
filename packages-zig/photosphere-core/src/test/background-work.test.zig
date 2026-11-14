@@ -170,7 +170,7 @@ test "an import pass finishes the work when the plan says automatic import is sw
     try expectResult(1000, true, result);
 }
 
-test "an import pass runs the steps in order with the phone held awake, and asks for the gap the plan gave" {
+test "an import pass runs the steps in order with the mobile held awake, and asks for the gap the plan gave" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":7000,\"steps\":[{\"type\":\"create-default-database\",\"data\":{}},{\"type\":\"import-assets\",\"data\":{\"a\":1}}]}";
     var pass_services = newPassServices(&.{plan}, &.{ ok, ok });
     defer pass_services.deinit();
@@ -236,7 +236,7 @@ test "a sync pass tells the plan what the prefetch is doing, and says why it is 
     try expectResult(background_work.SYNC_FALLBACK_PAUSE_MS, false, result);
 }
 
-test "a sync pass runs the sync step with the phone held awake" {
+test "a sync pass runs the sync step with the mobile held awake" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":300,\"steps\":[{\"type\":\"sync-database\",\"data\":{}}]}";
     var pass_services = newPassServices(&.{plan}, &.{ok});
     defer pass_services.deinit();

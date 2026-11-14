@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # The whole real-world flow the app exists for, end to end: an encrypted database in an S3 bucket,
-# shared to the phone over the LAN with the CLI, opened on the phone, partially replicated onto the
+# shared to the mobile over the LAN with the CLI, opened on the mobile, partially replicated onto the
 # device, edited on the device, and synced back up to the bucket.
 #
 # Nothing else in the suite proves an edit made on device reaches an encrypted S3 origin. The s3-database-lifecycle test
 # creates an S3 database from the device and s3-sync-prefetch syncs against an S3 origin, but both build the
 # credentials on the device by hand and neither one is encrypted; receive-database receives a database over the
 # LAN but it is a plain local directory with nothing behind it. This is the first test where the S3
-# credentials and the encryption key arrive on the phone the way a user's would (inside a shared
+# credentials and the encryption key arrive on the mobile the way a user's would (inside a shared
 # payload from another machine) and are then used, from inside the app's background tasks, to read and
 # write a bucket.
 #
@@ -129,7 +129,7 @@ cli_expect_success "Adding a photo to the encrypted database" \
 # Syncing is off on a fresh install, so it is switched on before launch, where the app reads it.
 "${PLATFORM}_seed_sync_config" "true" "true" || exit 1
 
-# The path given to the replicate dialog. A user on a phone types the short name, which the app resolves into its own storage. A
+# The path given to the replicate dialog. A user on a mobile types the short name, which the app resolves into its own storage. A
 # desktop user types the full path, asked for after the reset, not before it, because a reset can move the app's data directory.
 case "$PLATFORM" in
     android|ios)

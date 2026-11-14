@@ -1,9 +1,9 @@
 //
 // The device photo library, presented as a media source.
 //
-// This is what lets the automatic import task run unchanged on a phone: the task only ever talks to IMediaSource, and this is the
-// phone's implementation of it, as FolderMediaSource is the desktop's. The library is reached through the native calls
-// mediaLibraryList, mediaLibraryOpen, mediaLibraryClose and mediaLibraryDelete, which the phone's native app handles.
+// This is what lets the automatic import task run unchanged on a mobile: the task only ever talks to IMediaSource, and this is the
+// mobile's implementation of it, as FolderMediaSource is the desktop's. The library is reached through the native calls
+// mediaLibraryList, mediaLibraryOpen, mediaLibraryClose and mediaLibraryDelete, which the mobile's native app handles.
 //
 
 const std = @import("std");
@@ -73,7 +73,7 @@ pub const DeviceMediaSource = struct {
     // The albums to take items from. Empty means the whole library.
     albumIds: []const []const u8,
 
-    // Asks the phone's native app for the library.
+    // Asks the mobile's native app for the library.
     nativeCaller: INativeCaller,
 
     //
@@ -149,7 +149,7 @@ pub const DeviceMediaSource = struct {
         const page = std.json.parseFromSliceLeaky(IListedPage, allocator, reply, .{
             .ignore_unknown_fields = true,
         }) catch {
-            return errors.throwError("The phone's answer to mediaLibraryList could not be read.", .{});
+            return errors.throwError("The mobile's answer to mediaLibraryList could not be read.", .{});
         };
         var items: std.ArrayList(IMediaItem) = .empty;
         for (page.items) |item| {
@@ -183,7 +183,7 @@ pub const DeviceMediaSource = struct {
         }, .{});
         const reply = try self.nativeCaller.call(io, allocator, "mediaLibraryOpen", request);
         const parsed = std.json.parseFromSliceLeaky([]const u8, allocator, reply, .{}) catch {
-            return errors.throwError("The phone's answer to mediaLibraryOpen could not be read.", .{});
+            return errors.throwError("The mobile's answer to mediaLibraryOpen could not be read.", .{});
         };
         return parsed;
     }
@@ -213,7 +213,7 @@ pub const DeviceMediaSource = struct {
         const reply = std.json.parseFromSliceLeaky(IDeleteReply, allocator, replyText, .{
             .ignore_unknown_fields = true,
         }) catch {
-            return errors.throwError("The phone's answer to mediaLibraryDelete could not be read.", .{});
+            return errors.throwError("The mobile's answer to mediaLibraryDelete could not be read.", .{});
         };
         if (reply.failedIds.len > 0) {
             return MediaSourceDeleteError.throw(reply.failedIds, "The photo library did not delete {d} item(s).", .{reply.failedIds.len});
@@ -259,7 +259,7 @@ pub const DeviceMediaSource = struct {
 //
 pub fn buildDeviceMediaSource(allocator: std.mem.Allocator, sources: []const IAutoImportSource, options: IMediaSourceBuildOptions) anyerror!IMediaSource {
     const nativeCaller = options.nativeCaller orelse {
-        return errors.throwError("The device photo library can only be read in the Photosphere app on a phone.", .{});
+        return errors.throwError("The device photo library can only be read in the Photosphere app on a mobile.", .{});
     };
     const source = try allocator.create(DeviceMediaSource);
     source.* = try DeviceMediaSource.init(allocator, sources, nativeCaller);

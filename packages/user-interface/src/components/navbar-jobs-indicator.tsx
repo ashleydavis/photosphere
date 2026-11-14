@@ -62,7 +62,7 @@ export function NavbarJobsIndicator() {
                     <CircularProgress size="sm" />
 
                     {/*
-                        The count is desktop only. A phone's navbar has no room to spare, and the
+                        The count is desktop only. A mobile's navbar has no room to spare, and the
                         spinner alone still says work is happening; how much and what it is are one
                         tap away in the dialog.
                     */}

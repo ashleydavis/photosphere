@@ -21,7 +21,7 @@ export interface IDatabaseSummaryDialogProps {
 //
 // Shows the summary of the open database: what is in it, where it lives, and its hashes.
 //
-// A modal on a desktop and a sheet on a phone, opened from the navbar's photo count. The count is
+// A modal on a desktop and a sheet on a mobile, opened from the navbar's photo count. The count is
 // the most glanced-at number in the app, so this is the detail behind it, one tap away rather than a
 // trip through the sidebar to the Database Summary page.
 //
@@ -38,7 +38,7 @@ export function DatabaseSummaryDialog({ open, onClose }: IDatabaseSummaryDialogP
 
             <DialogContent>
                 {/*
-                    Only while the dialog is open. On a phone the dialog is a Joy Drawer, which keeps
+                    Only while the dialog is open. On a mobile the dialog is a Joy Drawer, which keeps
                     its children mounted when closed, so an unconditional view here ran the
                     get-database-summary task every time a database opened, for a dialog nobody had
                     asked for. It also makes the two forms behave alike: the desktop Modal unmounts

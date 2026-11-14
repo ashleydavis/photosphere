@@ -4,7 +4,7 @@
     <!-- The asset server listens on the loopback address, and opening a socket needs this permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- The background sync asks what kind of connection the phone has, so it can keep to Wi-Fi when the user asked it to. -->
+    <!-- The background sync asks what kind of connection the mobile has, so it can keep to Wi-Fi when the user asked it to. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--
@@ -32,7 +32,7 @@
 
     <!--
       The background work holds a wake lock only while a pass is running, so the CPU keeps working with the screen off. It is
-      released between passes: held for the life of the service it would flatten a phone overnight.
+      released between passes: held for the life of the service it would flatten a mobile overnight.
     -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 

@@ -116,7 +116,7 @@ flowchart TD
   - `PlatformContext`: the `IPlatformContext` object (databases, vault, recents, pickers, tasks, sharing, menu actions, notifications, theme and network events).
   - `ConfigStoreContext` and `StateStoreContext`: key/value stores backed by the core's config file and state file, read through `useConfigStore()` and `useStateStore()`.
   - `UuidGenerator`.
-- Desktop versus phone differences are decided here from `platform.platformKind`, not in the shared UI.
+- Desktop versus mobile differences are decided here from `platform.platformKind`, not in the shared UI.
 
 ## The shared contexts
 

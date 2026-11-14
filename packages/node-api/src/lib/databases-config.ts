@@ -40,7 +40,7 @@ const DATABASES_FILE = path.join(getConfigDir(), "databases.toml");
 
 //
 // The path of that file, for the worker tasks that write it. They take the path as input because a
-// phone keeps the same file somewhere else, so they cannot work it out for themselves.
+// mobile keeps the same file somewhere else, so they cannot work it out for themselves.
 //
 export function getDatabasesConfigPath(): string {
     return DATABASES_FILE;

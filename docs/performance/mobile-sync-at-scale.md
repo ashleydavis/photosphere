@@ -1,8 +1,8 @@
-# Prefetch, syncing and importing on a phone, against a real library
+# Prefetch, syncing and importing on a mobile, against a real library
 
 ## What was measured
 
-What a phone actually does when it holds a partial replica of a database with thousands of photos in it: how long the first open takes, what the prefetch fetches and how long for, what a sync pass moves and how often one runs, whether syncing and the prefetch fetch the same files, and what automatic import does at that size.
+What a mobile actually does when it holds a partial replica of a database with thousands of photos in it: how long the first open takes, what the prefetch fetches and how long for, what a sync pass moves and how often one runs, whether syncing and the prefetch fetch the same files, and what automatic import does at that size.
 
 ## The short version
 
@@ -12,22 +12,22 @@ What a phone actually does when it holds a partial replica of a database with th
 - **A sync can never fill in a partial replica.** Not because of the partial-target filter, but because it decides what to copy from a merkle tree difference, and a partial replica's tree is already identical to the origin's. A missing file is invisible to it.
 - **Syncing and the prefetch do not contend for engine slots** (the pool has five and they use two between them) and **do contend hard for the network**.
 - **A batch of 250 photos takes sixteen minutes to write** into a database of 8,231, and the import does nothing else for the whole of it.
-- **A phone cannot push an original to an S3 origin at all.** Every attempt fails inside the AWS SDK's multipart upload with `not a function`, the sync catches it and carries on, and nothing tells the user. After 2 hours 18 minutes of importing, 441 photos were on the device and **not one byte had reached the origin**.
+- **A mobile cannot push an original to an S3 origin at all.** Every attempt fails inside the AWS SDK's multipart upload with `not a function`, the sync catches it and carries on, and nothing tells the user. After 2 hours 18 minutes of importing, 441 photos were on the device and **not one byte had reached the origin**.
 
 That was the first run. Four runs later the same three questions have different answers, and the sections at the end of this document say how each came about:
 
 - **The prefetch finishes.** 8,491 files in 59 minutes 21 seconds, re-verified in 31 seconds on a restart.
-- **The import finishes.** Every one of the 2,308 items in the phone's library is in the replica except the one that is not a photo or a video, at 7 to 9 seconds a photo once the read-back was gone, six hours a day being all the platform allows the service that does it.
-- **The sync carries the library.** A pass that had every original and display version to push moved 3,068 files and 6.4GB in 40 minutes 37 seconds, merged 500 records in under six, and the passes after it said the origin held everything the phone does. It did not, by 243 files, until the push stopped deciding with the merkle diff, which matches by hash and so never offers a file whose content is already at the far end under another name, and compared the trees by name instead.
+- **The import finishes.** Every one of the 2,308 items in the mobile's library is in the replica except the one that is not a photo or a video, at 7 to 9 seconds a photo once the read-back was gone, six hours a day being all the platform allows the service that does it.
+- **The sync carries the library.** A pass that had every original and display version to push moved 3,068 files and 6.4GB in 40 minutes 37 seconds, merged 500 records in under six, and the passes after it said the origin held everything the mobile does. It did not, by 243 files, until the push stopped deciding with the merkle diff, which matches by hash and so never offers a file whose content is already at the far end under another name, and compared the trees by name instead.
 
 Five bugs turned up on the way to taking these measurements. Two of them are the same mistake, a `retry` left on its thirty second default around work that legitimately takes longer, and `sync.ts` already carries a comment about having been bitten by it in a third place. Only the ones that blocked the measuring were fixed; the rest are recorded here as the evidence a later change would be written against.
 
 ## What it was measured against
 
-The real database was copied once, in full, into a local MinIO server, and the phone was pointed at the copy. The real bucket was read exactly once, to make that copy, and nothing here ever wrote to it or connected the phone to it.
+The real database was copied once, in full, into a local MinIO server, and the mobile was pointed at the copy. The real bucket was read exactly once, to make that copy, and nothing here ever wrote to it or connected the mobile to it.
 
 - **Device**: Pixel 6 (`oriole`), Android 16, attached over USB and on the same Wi-Fi network as the host.
-- **Origin**: MinIO `RELEASE.2025-09-07T16-13-09Z`, single node, started by `scripts/s3-emulator.sh`, serving the bucket `<test-bucket>` on the host's LAN address. The phone reached it over Wi-Fi, not through an `adb reverse`: a reverse carries every byte over USB, which is far faster than the connection a phone would really use and would make every number here meaningless.
+- **Origin**: MinIO `RELEASE.2025-09-07T16-13-09Z`, single node, started by `scripts/s3-emulator.sh`, serving the bucket `<test-bucket>` on the host's LAN address. The mobile reached it over Wi-Fi, not through an `adb reverse`: a reverse carries every byte over USB, which is far faster than the connection a mobile would really use and would make every number here meaningless.
 - **Database**: a full copy of a real photo library, encrypted with the same key as the original.
 - **Date**: 9 and 10 September 2026, in one session.
 
@@ -41,9 +41,9 @@ with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_ENDPOINT` on the comm
 
 **MinIO does not serve a directory of files as a bucket.** It stores every object as a directory containing `xl.meta`, so files written into its data directory are not objects and replicating into that directory produces nothing readable. The copy has to go through the S3 API.
 
-### How the phone was set up
+### How the mobile was set up
 
-Its own settings and keychain were saved first, the way `50-background-sync` does, so a real phone is never wiped. It turned out to have none: no `config.toml`, no `databases.toml` and no secure store, so there was nothing to borrow and nothing to hand back.
+Its own settings and keychain were saved first, the way `50-background-sync` does, so a real mobile is never wiped. It turned out to have none: no `config.toml`, no `databases.toml` and no secure store, so there was nothing to borrow and nothing to hand back.
 
 Two secrets went on:
 
@@ -71,7 +71,7 @@ The engine occupancy is logged from `QuickJsTaskEngine` rather than `EnginePool`
 
 `psi replicate` could not copy any file that takes longer than thirty seconds to move, so the first attempt at the copy died 165 MB in with `Operation timed out after 30000ms: () => copyAsset(...)`.
 
-`processMerkleNode` wrapped `copyAsset` in `retry(...)` with no timeout argument, so the default thirty seconds applied around the whole of it. The copy inside `copyAsset` already asks for `LARGE_FILE_TIMEOUT`, and that allowance can never be reached while a thirty second timer is running outside it. `sync.ts` passes the long timeout at exactly the same point in its own copy loop, having been bitten by the same thing on a phone.
+`processMerkleNode` wrapped `copyAsset` in `retry(...)` with no timeout argument, so the default thirty seconds applied around the whole of it. The copy inside `copyAsset` already asks for `LARGE_FILE_TIMEOUT`, and that allowance can never be reached while a thirty second timer is running outside it. `sync.ts` passes the long timeout at exactly the same point in its own copy loop, having been bitten by the same thing on a mobile.
 
 Fixed by passing `LARGE_FILE_TIMEOUT` to that outer retry, and to the periodic merkle tree save beside it. Covered by `copies a file that takes longer than the default retry timeout to read` in `packages/node-api/src/test/lib/replicate.test.ts`.
 
@@ -112,7 +112,7 @@ Full root hash:   c4d2a92dbc57801c7e98a6ea1bc451bf31b39fdd4406b3ff040dc41541dad6
 
 `psi verify` against the copy read all 24,260 files and reported 24,260 unmodified, 0 modified, 0 failures, 0 record mismatches, and 220 database files of 353 MiB all valid.
 
-The phone's replica is a partial one taken from that copy with `psi replicate --partial`, which is 3.7 MB and 109 files. **A partial replica is not merkle trees alone**: 104 of those 109 files are under `.db/bson`. What it does not have is the thumbnails, and most of the database index.
+The mobile's replica is a partial one taken from that copy with `psi replicate --partial`, which is 3.7 MB and 109 files. **A partial replica is not merkle trees alone**: 104 of those 109 files are under `.db/bson`. What it does not have is the thumbnails, and most of the database index.
 
 ## Opening the replica for the first time
 
@@ -136,7 +136,7 @@ The count climbs in eight jumps of about a thousand, roughly eighty seconds apar
 
 ## The prefetch
 
-`load-assets` queues the prefetch at the end of its own run, so on a first open the phone spends ten minutes reading records and only then starts fetching the thumbnails those records need. The two never overlap.
+`load-assets` queues the prefetch at the end of its own run, so on a first open the mobile spends ten minutes reading records and only then starts fetching the thumbnails those records need. The two never overlap.
 
 | | |
 |---|---|
@@ -160,9 +160,9 @@ After the thumbnails it moves on to `.db/bson`, and there it dies:
 
 The task ran for **38 minutes 27 seconds** and threw. It had fetched 8,289 files: every missing thumbnail, and 104 of the database files. It never reached the rest of the index.
 
-**This is the same bug as the first one, in a third place.** `prefetchDatabaseHandler` copies each file inside `retry(async () => { ... })` with no timeout argument, so the default thirty seconds applies. The metadata hash index at this scale is nine files totalling 118 MB, about 13 MB each, and the phone cannot pull one down and write it inside thirty seconds. Each times out, is retried, times out again, and crawls through on a later attempt at one file every four and a half minutes against the twenty-five seconds it should take, until one of them exhausts its three attempts and takes the whole prefetch with it.
+**This is the same bug as the first one, in a third place.** `prefetchDatabaseHandler` copies each file inside `retry(async () => { ... })` with no timeout argument, so the default thirty seconds applies. The metadata hash index at this scale is nine files totalling 118 MB, about 13 MB each, and the mobile cannot pull one down and write it inside thirty seconds. Each times out, is retried, times out again, and crawls through on a later attempt at one file every four and a half minutes against the twenty-five seconds it should take, until one of them exhausts its three attempts and takes the whole prefetch with it.
 
-Thumbnails are unaffected because a thumbnail is small. It is only the database files, which are exactly what a phone needs before it can do anything, that are big enough to hit it.
+Thumbnails are unaffected because a thumbnail is small. It is only the database files, which are exactly what a mobile needs before it can do anything, that are big enough to hit it.
 
 **Nothing re-queues a failed prefetch.** `load-assets` is the only thing that queues one, so the replica stays permanently short until the database is opened again.
 
@@ -180,7 +180,7 @@ So: a prefetch of eight thousand thumbnails takes twenty minutes, and a prefetch
 
 Five passes were captured. Every one decided `identical-content-hash` and moved nothing, in 83 to 154 ms.
 
-`docs/syncing.md` describes the cheap case as "two small file reads, one of them at the origin". That is exactly what it is, and 154 ms is what it costs on this phone against an S3 origin.
+`docs/syncing.md` describes the cheap case as "two small file reads, one of them at the origin". That is exactly what it is, and 154 ms is what it costs on this mobile against an S3 origin.
 
 ### The gap is not cut short
 
@@ -190,7 +190,7 @@ Every pause logged `askedMs=300000 waitedMs=300000 cutShortBy=nothing`. The "pas
 
 `copyFile` in `sync.ts` does copy thumbnails and root files into a partial target. But that code is never reached, because the early-out fires first: a partial replica made by `psi replicate` has the same content hash as its origin, since the content hash is of the merkle tree and the replica has the whole tree. Missing files do not change it.
 
-The consequence matters more than the mechanism: **a partial replica whose prefetch failed is never repaired by syncing.** Both sides go on saying they are identical for ever while the phone is missing the database index it needs.
+The consequence matters more than the mechanism: **a partial replica whose prefetch failed is never repaired by syncing.** Both sides go on saying they are identical for ever while the mobile is missing the database index it needs.
 
 ## Syncing and the prefetch together
 
@@ -244,7 +244,7 @@ That is one batch of 250 photos going into a database that already holds 8,231.
 
 ### For 68 minutes the origin received nothing
 
-Every sync pass before the batch write early-outed, because nothing had been committed to the local database so its content hash had not changed. The bucket sat at 24,484 objects. What the phone had done in that hour was take in, hash, generate derivatives for and store 251 photos that appeared in no gallery and existed on no other machine.
+Every sync pass before the batch write early-outed, because nothing had been committed to the local database so its content hash had not changed. The bucket sat at 24,484 objects. What the mobile had done in that hour was take in, hash, generate derivatives for and store 251 photos that appeared in no gallery and existed on no other machine.
 
 ### The sync that finally had something to do
 
@@ -267,7 +267,7 @@ Every sync pass before the batch write early-outed, because nothing had been com
 
 **A sync cannot see a missing file. It can only see a tree that differs.**
 
-### The fifth bug: a phone cannot push an original to S3 at all
+### The fifth bug: a mobile cannot push an original to S3 at all
 
 ```
 Failed to copy asset/1adf5a81-3acc-424f-8cc0-f9851d59d178, carrying on with the rest of the sync
@@ -285,7 +285,7 @@ The AWS SDK's multipart upload path calls something the embedded engine does not
 
 `syncDatabases` catches a failed file copy deliberately, so one bad file does not end a pass, and leaves it for the next pass. With this failure that means every pass tries every original and fails on every one, for ever, and nothing tells the user: the interface shows a sync that ran and completed.
 
-**This is what stops background import and syncing working at this scale.** The phone takes photos in perfectly well and then cannot push a single original off the device.
+**This is what stops background import and syncing working at this scale.** The mobile takes photos in perfectly well and then cannot push a single original off the device.
 
 ### Memory
 
@@ -309,7 +309,7 @@ An 83 MB allocation refused during the sync. Something in that path holds a whol
 | Origin size, start to end | 35 GB, unchanged |
 | Replica on the device, start to end | 186 MB to 1,438 MB |
 
-**The phone did 1.25 GB of work and the origin received none of it.**
+**The mobile did 1.25 GB of work and the origin received none of it.**
 
 441 photos in 138 minutes is 3.2 a minute, so the whole library would take about **12 hours**, plus a sixteen-minute batch write every 250 photos, and every one of those gets slower as the database grows.
 
@@ -317,22 +317,22 @@ The run was stopped there rather than left to finish. What it would do for the r
 
 ## What was not measured
 
-- **Deduplication against a database that already holds the phone's photos.** This is the case worth knowing about, and it could not be reached: the copied database and this phone's library turned out to have almost nothing in common, so all 2,308 items were new and every one the import processed was taken in rather than skipped. Nothing here says what happens when the database already holds them.
+- **Deduplication against a database that already holds the mobile's photos.** This is the case worth knowing about, and it could not be reached: the copied database and this mobile's library turned out to have almost nothing in common, so all 2,308 items were new and every one the import processed was taken in rather than skipped. Nothing here says what happens when the database already holds them.
 - **The import to completion.** Stopped at 441 of 2,308.
 - **The prefetch to completion in the both-running case.** Step 6 already established what happens when it reaches the database files, and the time was spent on the import instead.
 - **A second batch write.** Only one commit happened, so nothing here shows how the sixteen minutes grows as the database does.
 - **iOS.** Everything here is Android.
-- **A sync that actually moves a file.** Every attempt failed, so there is no measured cost for a successful push from a phone.
+- **A sync that actually moves a file.** Every attempt failed, so there is no measured cost for a successful push from a mobile.
 
 ## What is left behind
 
 On this machine:
 
 - The MinIO server, still running, and its data directory holding the 35 GB copy of the database, under the worktree's `tmp/minio-state`. Stop it with `bash scripts/s3-emulator.sh stop tmp/minio-state`; removing the data directory is what reclaims the 35 GB.
-- The two partial replicas the phone's copies were made from, `tmp/measure-replica` and `tmp/measure-replica-2`, and the raw captures under `tmp/measurements`.
+- The two partial replicas the mobile's copies were made from, `tmp/measure-replica` and `tmp/measure-replica-2`, and the raw captures under `tmp/measurements`.
 - Nothing in `~/.config/photosphere` and nothing in the OS keychain was created, changed or removed.
 
-On the phone:
+On the mobile:
 
 - Two test databases in the app's sandbox, `files/measure-replica` and `files/measure-replica-2`, the second holding 441 imported photos.
 - `files/databases.toml` naming those two and the test bucket, and `files/config.toml` with both features switched off.
@@ -346,10 +346,10 @@ The measurements above are what they were on the day. Four of the five faults th
 
 Fixed:
 
-- **A phone could not push an original to an encrypted S3 origin at all.** The mobile stream shim's `Transform` had no `Symbol.asyncIterator`, and on an encrypted database every upload goes through the AWS SDK's multipart uploader, which async-iterates the body. It has one now, and `56-large-asset-push` reads the object back out of the bucket to prove a photo imported on a device arrives byte for byte.
-- **The prefetch died on the database index files.** Each file was copied under `retry`'s thirty second default, which nine files of about 13 MB each cannot meet on a phone. They get `LARGE_FILE_TIMEOUT` now, as the same copy loops in `sync.ts` and `replicate.ts` already did.
+- **A mobile could not push an original to an encrypted S3 origin at all.** The mobile stream shim's `Transform` had no `Symbol.asyncIterator`, and on an encrypted database every upload goes through the AWS SDK's multipart uploader, which async-iterates the body. It has one now, and `56-large-asset-push` reads the object back out of the bucket to prove a photo imported on a device arrives byte for byte.
+- **The prefetch died on the database index files.** Each file was copied under `retry`'s thirty second default, which nine files of about 13 MB each cannot meet on a mobile. They get `LARGE_FILE_TIMEOUT` now, as the same copy loops in `sync.ts` and `replicate.ts` already did.
 - **A failed prefetch was never tried again.** It ran only when a database was opened. There is a background prefetch loop now, beside the import and sync loops, which retries until the replica is complete and then stops; `57-prefetch-retries` proves it fills a replica in with nothing having opened the database.
-- **A sync and a prefetch fetching the same files at once.** A periodic sync now waits while a prefetch of the same database is making progress, and stops waiting if that prefetch stalls, so a prefetch that cannot finish cannot stop a phone syncing. `58-sync-waits-for-prefetch` proves both halves.
+- **A sync and a prefetch fetching the same files at once.** A periodic sync now waits while a prefetch of the same database is making progress, and stops waiting if that prefetch stalls, so a prefetch that cannot finish cannot stop a mobile syncing. `58-sync-waits-for-prefetch` proves both halves.
 
 Still true, and not addressed:
 
@@ -362,12 +362,12 @@ The rest of what this section used to list as unaddressed has since been measure
 
 Everything above is the first session, in September 2026. The same three things were measured again against the same 35 GB copy of the same database, on the same Pixel 6, with the four fixes above in place. What follows replaces the first run's figures wherever the two disagree.
 
-The phone held a fresh partial replica of the copy, both secrets in its keychain, syncing on and nothing opening the database, which is the case the background prefetch loop exists for. Its library was 2,188 images and 120 videos, as before.
+The mobile held a fresh partial replica of the copy, both secrets in its keychain, syncing on and nothing opening the database, which is the case the background prefetch loop exists for. Its library was 2,188 images and 120 videos, as before.
 
 ### Three faults had to be fixed before a number could be taken
 
 - **The CLI could not read the copy back**, so no partial replica could be made: `getDefaultS3Config` read the vault's `default:s3` secret and nothing else, while every worker resolves a path the database list says nothing about from the `AWS_*` variables. The CLI's pre-flight and the worker doing the work were looking in two different accounts for one path. It reads the environment first now, which is the order the workers already use.
-- **The background prefetch could not read an encrypted replica, so on a real phone it never ran once.** `plan-prefetch` asked `isDatabasePartial` whether the replica was partial without passing any credentials, so the merkle tree it reads to answer that was read as the raw ciphertext it is on disk and every pass threw "Checksum mismatch". A phone's database is encrypted, so that was the loop not working at all in the only case that matters, behind a green test suite: `57-prefetch-retries` only ever used an unencrypted replica. `59-prefetch-encrypted-replica` is the test that closes it.
+- **The background prefetch could not read an encrypted replica, so on a real mobile it never ran once.** `plan-prefetch` asked `isDatabasePartial` whether the replica was partial without passing any credentials, so the merkle tree it reads to answer that was read as the raw ciphertext it is on disk and every pass threw "Checksum mismatch". A mobile's database is encrypted, so that was the loop not working at all in the only case that matters, behind a green test suite: `57-prefetch-retries` only ever used an unencrypted replica. `59-prefetch-encrypted-replica` is the test that closes it.
 - **A failed decryption was handed back as though the data had never been encrypted**, which is what sent the search for the fault above to the wrong place. `decryptBuffer` and `createDecryptionStream` both fell back to returning the bytes unchanged, so a missing or wrong key surfaced as a checksum mismatch reported from serialization. Both now throw when the data carries the `PSEN` tag. The genuine case the fallback exists for, a file that was never encrypted read through an encrypted storage, still works.
 
 ### The prefetch now finishes
@@ -384,7 +384,7 @@ The thumbnails cost the same both times, at a flat 6.7 files a second three at a
 
 **A fourth copy of the same timeout mistake turned up here.** `walkDirectory` wrapped both of its listings in `retry` with no timeout, so a pass died 35 minutes in on `storage.listDirs`. The listing was not slow: all three attempts expired inside the same 80 milliseconds, and the engine reported 193 seconds of task time with 81 milliseconds of pumping, because the engine thread sits inside synchronous host calls while it moves bytes and a wall-clock timeout then measures time the work was never given. The bound is now `DIRECTORY_LISTING_TIMEOUT`.
 
-**The loop recovered from it**, which is the thing it was built for: each pass skips what is already on the phone, so the second walked past all 8,231 thumbnails and fetched nine more index files, and the third finished the last one. Without the listing fault the same work is one pass of about 37 minutes.
+**The loop recovered from it**, which is the thing it was built for: each pass skips what is already on the mobile, so the second walked past all 8,231 thumbnails and fetched nine more index files, and the third finished the last one. Without the listing fault the same work is one pass of about 37 minutes.
 
 A confirming pass over a complete replica costs **24 to 36 seconds**: the whole walk of both directories plus a local existence check for every file, with nothing to fetch. That is the number behind the loop stopping rather than asking again every gap.
 
@@ -403,7 +403,7 @@ The import is faster because the prefetch had already finished and stopped, so n
 
 Its start and its commits are far slower, and for the same reason in reverse: the replica now holds the whole 595 MB database index locally, so the import reads, decrypts and rewrites the real thing. Six minutes of that is solid CPU on one core with nothing logged, and 17.3 of the commit's 44.6 minutes is the merkle tree save alone. Nine batches for the whole library is about six and a half hours of committing on top of the importing.
 
-Every one of the 2,308 items was new again, so **deduplication against a database that already holds the phone's photos is still unmeasured**.
+Every one of the 2,308 items was new again, so **deduplication against a database that already holds the mobile's photos is still unmeasured**.
 
 ### A video of 87 MB could not be imported at all
 
@@ -478,12 +478,12 @@ So collection is not what is short. Bounding it buys about forty per cent more t
 
 A third crash in the same session was different and is worth separating out: with the app left foregrounded for hours the WebView's renderer aborted on `VK_ERROR_DEVICE_LOST (RenderThread context): GPU fault`, not an engine thread. Backgrounding the app, which is what background sync is for, removed that one and left the memory abort as the only failure.
 
-**So the origin still receives nothing from a real library on a real phone, for a second and independent reason.** The `not a function` failure that stopped every upload in the first run is genuinely fixed, and `56-large-asset-push` proves a photo imported on a device arrives in the bucket byte for byte. What stops it at this scale now is memory, and it is the largest open fault the two runs have found.
+**So the origin still receives nothing from a real library on a real mobile, for a second and independent reason.** The `not a function` failure that stopped every upload in the first run is genuinely fixed, and `56-large-asset-push` proves a photo imported on a device arrives in the bucket byte for byte. What stops it at this scale now is memory, and it is the largest open fault the two runs have found.
 
 ### What was fixed during this run
 
 - **`walkDirectory`'s listings had `retry`'s thirty second default**, so a prefetch pass died 35 minutes in on a directory listing. `DIRECTORY_LISTING_TIMEOUT`.
-- **The background prefetch could not read an encrypted replica**, so it never ran on a real phone. Covered by `59-prefetch-encrypted-replica` and by unit tests against a genuinely encrypted replica.
+- **The background prefetch could not read an encrypted replica**, so it never ran on a real mobile. Covered by `59-prefetch-encrypted-replica` and by unit tests against a genuinely encrypted replica.
 - **A failed decryption was handed back as plaintext**, by both the buffer and the stream path. Both throw now when the data carries the encryption tag, and a key too small for the format is refused at the write rather than producing files nothing can read.
 - **`createWriteStream` handed whole files to the host in one call**, which is why an 87 MB video could not be imported. It flushes in 4 MB chunks through `fsAppendFile`.
 - **`psi` could not read a bucket the `AWS_*` variables name** when the database list said nothing about it.
@@ -491,16 +491,16 @@ A third crash in the same session was different and is worth separating out: wit
 
 ### Still open, in order of what it costs
 
-- **The engine exhausts native memory and the process aborts**, in both the sync's record merge and the import's database work, against a database of this size, three times in one session. This is what stops a phone backing up a real library. A GC threshold was tried and only delays it, so the next things to do are a memory limit, so the failure is something a task can report rather than an abort, and `dumpMemoryUsage` during a merge to find what is held.
+- **The engine exhausts native memory and the process aborts**, in both the sync's record merge and the import's database work, against a database of this size, three times in one session. This is what stops a mobile backing up a real library. A GC threshold was tried and only delays it, so the next things to do are a memory limit, so the failure is something a task can report rather than an abort, and `dumpMemoryUsage` during a merge to find what is held.
 - **The import needs six minutes of solid CPU to open a complete replica** before it finds anything.
 - **A batch of 250 photos costs 44 minutes to commit** into a database of 8,231, 17 minutes of which is saving the merkle tree.
 - **A media item that can never be read is retried on every pass for ever.** Cheap for a 794-byte stub, 5 minutes 47 seconds an attempt for the 87 MB video before it was fixed. The import has no notion of an item that is permanently unreadable.
 - **The prefetch deferral is worth almost nothing at this scale**, because it reads the last completed pass and a pass over a real library outlasts the interval it protects.
-- Everything under "What was not measured" above, and deduplication in particular, is still unmeasured: the copied database and this phone's library have almost nothing in common, so every item is new both times.
+- Everything under "What was not measured" above, and deduplication in particular, is still unmeasured: the copied database and this mobile's library have almost nothing in common, so every item is new both times.
 
 ## The third run: the sync finishes
 
-The same Pixel 6 and the same library of 2,308 items, against a replica of a copy of the database served by MinIO on the same LAN. The copy holds every thumbnail but only the originals and display versions the phone had already pushed, because it was rebuilt from the phone's own partial replica after the second run's origin was lost, so it is the case where the origin is missing nearly everything the phone holds.
+The same Pixel 6 and the same library of 2,308 items, against a replica of a copy of the database served by MinIO on the same LAN. The copy holds every thumbnail but only the originals and display versions the mobile had already pushed, because it was rebuilt from the mobile's own partial replica after the second run's origin was lost, so it is the case where the origin is missing nearly everything the mobile holds.
 
 ### The prefetch, again
 
@@ -532,9 +532,9 @@ The origin's thumbnail count went from 8,481 to 8,579, which is the 98 exactly. 
 
 | Step | Started | Took |
 |---|---|---|
-| Pull, origin to phone | 14:04:41 | 15 seconds, 0 files copied, all of it diffing |
-| Push, phone to origin | 14:04:56 | **1 minute 57 seconds, 98 files copied**, of which the final tree save was 30.6 seconds |
-| Merging the phone's records into the origin | 14:06:53 | **14 minutes for 27 records**, at 100% of one core |
+| Pull, origin to mobile | 14:04:41 | 15 seconds, 0 files copied, all of it diffing |
+| Push, mobile to origin | 14:04:56 | **1 minute 57 seconds, 98 files copied**, of which the final tree save was 30.6 seconds |
+| Merging the mobile's records into the origin | 14:06:53 | **14 minutes for 27 records**, at 100% of one core |
 | Committing the origin | 14:20:52 | still running at 14:41, when the app was redeployed |
 
 The commit rewrites index files under `.db/bson/indexes/metadata/hash_asc/`, six of them in the nineteen minutes observed, each as a three-part multipart upload of fifteen to twenty seconds. The file copy is now the cheap part of a sync; the record merge and the commit are where the time goes at this scale.
@@ -550,7 +550,7 @@ The upload-asset task reports where its time went. Across the 46 photos and vide
 | `otherMs`, unaccounted | about 7,000 | 472,240 |
 | everything else together | under 2,000 | 22,900 |
 
-`uploadMs` is the write into the encrypted replica, which is AES-256-CBC in `browserify-aes`, pure JavaScript, at about a fifth of a megabyte a second on this phone. `otherMs` is the read-back: the worker read each written file back out of the store and hashed it to fill the merkle tree, and a stream out of an encrypted store has no file behind it, so the native hasher was skipped and the bytes were decrypted and hashed in JavaScript at the same rate. The read-back was as long as the write it was checking.
+`uploadMs` is the write into the encrypted replica, which is AES-256-CBC in `browserify-aes`, pure JavaScript, at about a fifth of a megabyte a second on this mobile. `otherMs` is the read-back: the worker read each written file back out of the store and hashed it to fill the merkle tree, and a stream out of an encrypted store has no file behind it, so the native hasher was skipped and the bytes were decrypted and hashed in JavaScript at the same rate. The read-back was as long as the write it was checking.
 
 The store is not read back any more. The asset's hash is the one the import already had, taken natively from the file before the write, and the thumbnail and display versions are hashed natively from the files they were made into. A store that can say how long its copy reads is checked by length; an encrypted store cannot say and is not checked, which is the same trust the sync places in a store that cannot verify a write.
 
@@ -568,7 +568,7 @@ No abort in the 37 minutes the third build ran, with the sync's merge, the sync'
 
 ### Still open, in order of what it costs
 
-- **AES-256-CBC runs in pure JavaScript on the phone, at about a fifth of a megabyte a second, in both directions.** With the read-back gone it is the whole cost of writing into an encrypted replica: seven seconds a photo, seven and a half minutes for an 87 MB video. Native AES through a host function on both platforms is the lever.
+- **AES-256-CBC runs in pure JavaScript on the mobile, at about a fifth of a megabyte a second, in both directions.** With the read-back gone it is the whole cost of writing into an encrypted replica: seven seconds a photo, seven and a half minutes for an 87 MB video. Native AES through a host function on both platforms is the lever.
 - **The record merge takes fourteen minutes for 27 records**, at full CPU on one core.
 - **A commit of the origin rewrites index files of ten megabytes and more, as multipart uploads**, six of them in nineteen minutes for the same 27 records.
 - **The engine's native heap sits at 1.3 to 1.6 GB** and the allocator has started saying it cannot get pages. No abort this run, but nothing was changed that would have prevented one.
@@ -579,13 +579,13 @@ The third build was left importing overnight. Two things stopped it, and neither
 
 ### Six hours is all a foreground service gets
 
-At 20:41, six hours after launch, Android timed the `dataSync` foreground service out and the service stopped itself, which is what its `onTimeout` is written to do: an app targeting Android 15 gets six hours of that service type in any twenty-four. The import and the sync were both mid-task and both ended with `InterruptedException`, and the process then sat frozen as a cached process until the morning. Bringing the existing activity back to the front did not restart the service; only a cold start does. By then the phone had imported 1,678 more assets on that build, for a replica of 2,187 originals and 10,661 thumbnails, and the origin held 10,199 thumbnails and the same 250 originals it had started the day with.
+At 20:41, six hours after launch, Android timed the `dataSync` foreground service out and the service stopped itself, which is what its `onTimeout` is written to do: an app targeting Android 15 gets six hours of that service type in any twenty-four. The import and the sync were both mid-task and both ended with `InterruptedException`, and the process then sat frozen as a cached process until the morning. Bringing the existing activity back to the front did not restart the service; only a cold start does. By then the mobile had imported 1,678 more assets on that build, for a replica of 2,187 originals and 10,661 thumbnails, and the origin held 10,199 thumbnails and the same 250 originals it had started the day with.
 
 So an import that needs more than six hours in a day stops and stays stopped until the user opens the app again. That is the platform's rule and the service already obeys it; what is not there is anything that brings the loop back afterwards.
 
 ### The origin was marked partial, so it refused every original
 
-The origin held 250 originals after 1,937 had been imported and pushed because it was refusing them. A push copies only thumbnails and root files into a target whose tree says it is partial, and `psi summary` on the origin said `Mode: partial`. It was made with `psi replicate --full` from the phone's own partial replica, to rebuild an origin that had been lost, and full mode copied the source's metadata across whole, partial flag included. A full replica is full by definition, so full mode now writes the flag as false whatever the source's says, and the origin was rebuilt again with that change into a new bucket, ten minutes for 751 MiB on the same machine, and the phone pointed at it.
+The origin held 250 originals after 1,937 had been imported and pushed because it was refusing them. A push copies only thumbnails and root files into a target whose tree says it is partial, and `psi summary` on the origin said `Mode: partial`. It was made with `psi replicate --full` from the mobile's own partial replica, to rebuild an origin that had been lost, and full mode copied the source's metadata across whole, partial flag included. A full replica is full by definition, so full mode now writes the flag as false whatever the source's says, and the origin was rebuilt again with that change into a new bucket, ten minutes for 751 MiB on the same machine, and the mobile pointed at it.
 
 ### Pushing an original through the databases
 
@@ -595,9 +595,9 @@ With the origin accepting them, the first push of originals measured what the pa
 20 originals   48,054,976 bytes   472,488 ms   about 100KB/s
 ```
 
-The network carries 11.8MB/s from this phone. One video then held its upload past the ten minute request timeout and was retried. At that rate the phone's library of originals would take days, and the six hour limit above would cut every one of them short.
+The network carries 11.8MB/s from this mobile. One video then held its upload past the ten minute request timeout and was retried. At that rate the mobile's library of originals would take days, and the six hour limit above would cut every one of them short.
 
-Both databases are encrypted under the same key, and for that case there is no need to decrypt anything: the ciphertext the replica holds is exactly the ciphertext the origin would write. A sync now compares the two `.db/encryption.pub` files and, when they are the same, copies the stored bytes between the raw stores untouched, handing the origin a hash of those bytes taken natively from the replica's file, so the upload is one request with the file sent from disk to the socket natively. The first push after that change, on the same phone to the same origin:
+Both databases are encrypted under the same key, and for that case there is no need to decrypt anything: the ciphertext the replica holds is exactly the ciphertext the origin would write. A sync now compares the two `.db/encryption.pub` files and, when they are the same, copies the stored bytes between the raw stores untouched, handing the origin a hash of those bytes taken natively from the replica's file, so the upload is one request with the file sent from disk to the socket natively. The first push after that change, on the same mobile to the same origin:
 
 ```
 280 originals   1,042,563,888 bytes   213,771 ms   about 4.9MB/s
@@ -607,17 +607,17 @@ Fifty times the rate, and the time is now mostly the network's: `writeMs` was 97
 
 ### Two files that fail on every pass
 
-Of the 2,308 items in the library, two failed on every pass of every run. One is a 794-byte Messenger download named `.mp4`, which no tool can read and which the report now names correctly. The other is an animated GIF: ImageMagick writes one file per frame for those, named `-0`, `-1` and so on rather than the name it was given, and the phone looked only for the name it gave, so the resize was reported as "output not created" with an exit code of zero. The desktop already looked for both names; the phone now does too. With that fix in, the GIF imported and the 794-byte file is the only item in the library the phone does not hold.
+Of the 2,308 items in the library, two failed on every pass of every run. One is a 794-byte Messenger download named `.mp4`, which no tool can read and which the report now names correctly. The other is an animated GIF: ImageMagick writes one file per frame for those, named `-0`, `-1` and so on rather than the name it was given, and the mobile looked only for the name it gave, so the resize was reported as "output not created" with an exit code of zero. The desktop already looked for both names; the mobile now does too. With that fix in, the GIF imported and the 794-byte file is the only item in the library the mobile does not hold.
 
 ### The first pass that carried the library
 
-The first sync pass after the change to verbatim copies, with the import finishing beside it and the origin missing nearly every original and display version the phone held:
+The first sync pass after the change to verbatim copies, with the import finishing beside it and the origin missing nearly every original and display version the mobile held:
 
 | Step | Took |
 |---|---|
-| Pull, origin to phone | 17 seconds, nothing to copy |
-| Push, phone to origin | **40 minutes 37 seconds for 3,068 files and 6,482,830,768 bytes**, about 2.7MB/s over the whole pass, 0 left behind |
-| Merging the phone's records into the origin | **5 minutes 53 seconds for 500 records** |
+| Pull, origin to mobile | 17 seconds, nothing to copy |
+| Push, mobile to origin | **40 minutes 37 seconds for 3,068 files and 6,482,830,768 bytes**, about 2.7MB/s over the whole pass, 0 left behind |
+| Merging the mobile's records into the origin | **5 minutes 53 seconds for 500 records** |
 | Committing the origin | **4 minutes 19 seconds** |
 | The whole pass | **53 minutes 26 seconds** |
 
@@ -629,7 +629,7 @@ writeMs 745,223   treeSaveMs 1,407,113   treeUpdateMs 127,158   openSourceMs 38,
 
 The uploads themselves were 745 seconds, about 8.7MB/s. **The saves of the merkle tree were 1,407 seconds, more than half the pass.** The tree is saved every hundred files so an interrupted push does not start again from nothing, and on a tree of this size each save is the whole tree, over a megabyte, encrypted in the engine's JavaScript and sent as a multipart upload: 31 saves at about 45 seconds each. Hashing every file natively before it went was 38 seconds for 6.4GB, and updating the tree in memory 127.
 
-The merge went nine times faster than the day before's 14 minutes for 27 records, on the same phone against the same records, with nothing changed in it: the difference is what else the phone was doing, which the day before was the import at full CPU and the read-back of every file it wrote.
+The merge went nine times faster than the day before's 14 minutes for 27 records, on the same mobile against the same records, with nothing changed in it: the difference is what else the mobile was doing, which the day before was the import at full CPU and the read-back of every file it wrote.
 
 ### Memory, again
 
@@ -639,10 +639,10 @@ With the read-back gone the fourth build ran at 842MB PSS, of which 736MB was na
 
 - **A full replica of a partial one came out marked partial**, so an origin rebuilt that way refused every original pushed at it. Full mode writes the flag as false now.
 - **Originals were decrypted and encrypted again on the way to an origin under the same key**, at about 100KB/s. The stored bytes go across as they are, at network speed.
-- **The replication's tree save fired per leaf while the copied count rested on a multiple**, the fault the push had, in the code the phone's prefetch runs.
-- **Animated GIFs could not be imported on a phone**, because the resize looked for one of the two names ImageMagick writes.
+- **The replication's tree save fired per leaf while the copied count rested on a multiple**, the fault the push had, in the code the mobile's prefetch runs.
+- **Animated GIFs could not be imported on a mobile**, because the resize looked for one of the two names ImageMagick writes.
 - **A slow open's bookkeeping re-opened a database the user had since closed**, which is what smoke test 45 saw as a menu vanishing from under a tap.
-- **The S3 emulator's MinIO is fetched from its GitHub release**, since MinIO archived the project and dl.min.io answers 410 for every release. Not a phone fault, but it took out every S3 test on every CI runner the same morning.
+- **The S3 emulator's MinIO is fetched from its GitHub release**, since MinIO archived the project and dl.min.io answers 410 for every release. Not a mobile fault, but it took out every S3 test on every CI runner the same morning.
 
 ### Still open, in order of what it costs
 
@@ -650,11 +650,11 @@ With the read-back gone the fourth build ran at 842MB PSS, of which 736MB was na
 - **Six hours a day is all the foreground service gets**, and nothing brings the loops back afterwards until the app is opened again. The platform's rule stands; what is missing is a way back that does not need the user.
 - **AES-256-CBC in pure JavaScript is still every write into an encrypted replica**: seven seconds a photo on import, and every merkle tree save above. Native AES through a host function on both platforms is the lever for what is left.
 - **The record merge and the origin commit are minutes each per pass** even with nothing else running: 5 minutes 53 seconds for 500 records here, and a commit that rewrites index files of ten megabytes and more as multipart uploads.
-- **An import run that is stopped before its batch fills leaves the batch's originals on the replica's disk and nowhere else.** They are uploaded and processed, then never written to the tree or the import record, so the next run imports them again under new ids and the first copies stay behind as files nothing describes. The service being timed out, the app being redeployed and the phone being restarted each did this once during these runs, and once the last batch had landed the replica held 347 originals, 313 display versions and 500 thumbnails on disk that its tree does not describe. The trade is deliberate and documented at `DATABASE_BATCH_SIZE`; what is not covered is clearing up after it.
+- **An import run that is stopped before its batch fills leaves the batch's originals on the replica's disk and nowhere else.** They are uploaded and processed, then never written to the tree or the import record, so the next run imports them again under new ids and the first copies stay behind as files nothing describes. The service being timed out, the app being redeployed and the mobile being restarted each did this once during these runs, and once the last batch had landed the replica held 347 originals, 313 display versions and 500 thumbnails on disk that its tree does not describe. The trade is deliberate and documented at `DATABASE_BATCH_SIZE`; what is not covered is clearing up after it.
 
 ### Where it ended
 
-Five passes after the phone was pointed at the rebuilt origin, the origin's tree described 15,491 files, 9.19GiB, and held an object for every one of them: 2,436 originals, 2,300 display versions and 10,754 thumbnails. The sync said the phone's tree described nothing the origin lacked, and its import had nothing left to bring in but the one file that is not a photo or a video. The sync was wrong about the first part, as the next section says. The passes that carried it:
+Five passes after the mobile was pointed at the rebuilt origin, the origin's tree described 15,491 files, 9.19GiB, and held an object for every one of them: 2,436 originals, 2,300 display versions and 10,754 thumbnails. The sync said the mobile's tree described nothing the origin lacked, and its import had nothing left to bring in but the one file that is not a photo or a video. The sync was wrong about the first part, as the next section says. The passes that carried it:
 
 | Pass | Started | Pushed | Took |
 |---|---|---|---|
@@ -668,10 +668,10 @@ Passes 3 and 5 carried the import's last two batches as they landed, and pass 4 
 
 ### What the origin was still missing
 
-Pulling the phone's tree down and walking it against the origin's name by name found 243 files of 101 assets that the phone's tree described and the origin's did not, after the five passes above had each reported nothing left behind. Every one of the 243 has content the origin already held under another name. That is what a photo imported twice leaves behind: an import run stopped before its batch is written imports the same photos again under new ids on its next run, which is the last item under Still open, and the phone's tree ended the runs with 752 hashes appearing more than once.
+Pulling the mobile's tree down and walking it against the origin's name by name found 243 files of 101 assets that the mobile's tree described and the origin's did not, after the five passes above had each reported nothing left behind. Every one of the 243 has content the origin already held under another name. That is what a photo imported twice leaves behind: an import run stopped before its batch is written imports the same photos again under new ids on its next run, which is the last item under Still open, and the mobile's tree ended the runs with 752 hashes appearing more than once.
 
-The push decided what to copy with the merkle diff, and the merkle diff matches leaves by hash. It counts each hash on one side and matches the other side's leaves against the count in the order it visits them, so of two same-content leaves the one it called already present was whichever it visited first, whether or not that was the one the origin had. When the origin held the other one, the one it lacked was matched away and never offered, and the one it held was offered and copied nothing. No pass could ever carry those files, and the pass reported nothing left behind because a file that is never offered is never counted. The replication's copy and its prune decided the same way, so a phone prefetching from an origin holding duplicates would have fetched or pruned the wrong one of each pair, and `psi compare` decided the same way too: run against these two trees it named 141 files the origin had as missing and none of the 243 it lacked.
+The push decided what to copy with the merkle diff, and the merkle diff matches leaves by hash. It counts each hash on one side and matches the other side's leaves against the count in the order it visits them, so of two same-content leaves the one it called already present was whichever it visited first, whether or not that was the one the origin had. When the origin held the other one, the one it lacked was matched away and never offered, and the one it held was offered and copied nothing. No pass could ever carry those files, and the pass reported nothing left behind because a file that is never offered is never counted. The replication's copy and its prune decided the same way, so a mobile prefetching from an origin holding duplicates would have fetched or pruned the wrong one of each pair, and `psi compare` decided the same way too: run against these two trees it named 141 files the origin had as missing and none of the 243 it lacked.
 
 All three now compare the trees name by name and take their lists from that. On trees already in memory it is two walks and a map of one side's names, and the identical-roots shortcut is kept.
 
-With the fix deployed and the app cold-started, the first pass found the 243 by name and pushed them all: 215,325,412 bytes in 2 minutes 49 seconds, of which 38 seconds was copying and 2 minutes 10 seconds was the three saves of the origin's tree along the way. `psi compare` between the phone's tree and the origin's then reported no differences, and the origin's summary described 15,734 files and 9.39GiB, which is what the phone's tree describes. The whole pass, from the cold start at 16:01:13 to its completion line at 16:09:29, took a little over eight minutes, most of it in the record merge and the origin commit as before.
+With the fix deployed and the app cold-started, the first pass found the 243 by name and pushed them all: 215,325,412 bytes in 2 minutes 49 seconds, of which 38 seconds was copying and 2 minutes 10 seconds was the three saves of the origin's tree along the way. `psi compare` between the mobile's tree and the origin's then reported no differences, and the origin's summary described 15,734 files and 9.39GiB, which is what the mobile's tree describes. The whole pass, from the cold start at 16:01:13 to its completion line at 16:09:29, took a little over eight minutes, most of it in the record merge and the origin commit as before.

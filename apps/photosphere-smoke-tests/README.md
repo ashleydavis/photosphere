@@ -17,7 +17,7 @@ To run one scenario, name it: `PHOTOSPHERE_SMOKE_SCENARIO=<number or name> bun r
 ## Scenarios
 
 - One directory per scenario at the top of this directory, named `<n>-<name>`, with a `test.sh` inside. The runner runs them in the order of their numbers. Exit code 77 means skipped.
-- Every scenario is offered to every platform. A scenario is platform-neutral and runs on desktop and mobile, with a platform check only where the behaviour differs. A scenario that cannot run on a platform exits with the skipped code itself, as the MCP server and menu scenarios do on a phone and the automatic import permission scenarios do on a desktop.
+- Every scenario is offered to every platform. A scenario is platform-neutral and runs on desktop and mobile, with a platform check only where the behaviour differs. A scenario that cannot run on a platform exits with the skipped code itself, as the MCP server and menu scenarios do on a mobile and the automatic import permission scenarios do on a desktop.
 - `lib/common.sh` holds the helpers every scenario sources, and `lib/<platform>.sh` puts the app in place, starts it and stops it on one platform.
 - No marker files. A runner learns what it needs to know from the test itself.
 
@@ -33,7 +33,7 @@ Every scenario must survive running beside copies of itself and beside every oth
 
 Through the test hooks described in the "Remote control" section of the architecture document, and nothing else. Each app instance has a [remote control server](https://github.com/ashleydavis/ziggy/blob/main/tools/remote-control-server/README.md) of its own: the app is started with `--remote-control` and connects out to it. The scenario talks to the server's script port. State is otherwise set up from outside the app (config files and data placed on disk).
 
-A step that types into the app types what a user types (a simple name on a phone, see [Database names and paths](../../docs/database-names-and-paths.md)), and `${PLATFORM}_app_path` is only for what the test does from outside the app.
+A step that types into the app types what a user types (a simple name on a mobile, see [Database names and paths](../../docs/database-names-and-paths.md)), and `${PLATFORM}_app_path` is only for what the test does from outside the app.
 
 ## Manual scenarios
 

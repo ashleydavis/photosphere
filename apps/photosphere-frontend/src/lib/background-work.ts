@@ -2,7 +2,7 @@ import type { ISyncFile, ISyncSettings } from "api/src/lib/sync-settings";
 import { INITIAL_SYNC_SETTINGS, normaliseSyncSettings, resolveSyncPauseMs } from "api/src/lib/sync-settings";
 
 //
-// What a phone runs in the background, and the decisions the page takes about it: whether to start the work, whether the photo
+// What a mobile runs in the background, and the decisions the page takes about it: whether to start the work, whether the photo
 // library permission lets automatic import stay on, and what the syncing settings of a fresh install and of a newly opened database
 // should be. They are plain functions so they can be tested.
 //
@@ -21,7 +21,7 @@ export interface IBackgroundWorkInputs {
     syncEnabled: boolean;
 
     // Whether there is a database for the background sync to push at all. Syncing being switched on is not by itself a reason to run
-    // anything: a phone that has never opened a database has nothing to push, and starting the work for it would put an ongoing
+    // anything: a mobile that has never opened a database has nothing to push, and starting the work for it would put an ongoing
     // notification on the screen of every fresh install to do nothing.
     hasDatabaseToSync: boolean;
 }
@@ -34,7 +34,7 @@ export interface IBackgroundWorkDecision {
     shouldRun: boolean;
 
     // Whether the photo library permission has to be granted before it starts. Only automatic import reads the photo library. Syncing
-    // moves what is already in the database, so a phone that only syncs is never asked for access to its photos.
+    // moves what is already in the database, so a mobile that only syncs is never asked for access to its photos.
     needsMediaPermission: boolean;
 }
 
@@ -51,7 +51,7 @@ export function planBackgroundWork(inputs: IBackgroundWorkInputs): IBackgroundWo
 }
 
 //
-// What the phone said when asked for the photo library permission.
+// What the mobile said when asked for the photo library permission.
 //
 export type MediaPermissionState = "granted" | "partial" | "denied" | "unavailable";
 
@@ -122,7 +122,7 @@ export function resolveMediaPermission(state: MediaPermissionState): IMediaPermi
 }
 
 //
-// The answer to the permission request as the phone gives it, before it has been checked.
+// The answer to the permission request as the mobile gives it, before it has been checked.
 //
 export interface IRawPermissionResult {
     // Whether the user granted the photo library permission.
@@ -133,7 +133,7 @@ export interface IRawPermissionResult {
 }
 
 //
-// Reads a permission answer out of whatever the phone returned. An answer that is not one of the states it is supposed to return is
+// Reads a permission answer out of whatever the mobile returned. An answer that is not one of the states it is supposed to return is
 // treated as a refusal rather than as permission: reading "granted" into an answer nobody understood is how an app ends up trying to
 // read photos it was never allowed to see.
 //

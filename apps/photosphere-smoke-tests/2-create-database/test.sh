@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Drives the new-database flow from the left sidebar and creates a new empty database. On a desktop the path is absolute and the database
-# is checked on disk. On a phone the short name a user types is given, and the app resolves it into its own storage sandbox, the only
+# is checked on disk. On a mobile the short name a user types is given, and the app resolves it into its own storage sandbox, the only
 # place the app may write.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,7 +14,7 @@ trap 'cleanup_apps "$TMP_DIR"' EXIT
 case "$PLATFORM" in
     android|ios)
         "${PLATFORM}_reset_app_state" || exit 1
-        # A user on a phone types the short name, which the app resolves into its own storage.
+        # A user on a mobile types the short name, which the app resolves into its own storage.
         DATABASE_PATH="test-db"
         ;;
     *)

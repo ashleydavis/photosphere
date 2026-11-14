@@ -4,17 +4,17 @@
 #
 # This is not part of any normal run. It lives under manual/ so an unfiltered run never sweeps
 # it up, and it is selected only by naming it. It measures the device's own photo library, so how
-# long it takes and what it finds depend entirely on what is on the phone, which is exactly what a
+# long it takes and what it finds depend entirely on what is on the mobile, which is exactly what a
 # measurement wants and exactly what a test suite cannot have.
 #
 # What it does, twice:
 #
 #   Cold: the hash cache is deleted, so every photo the run reaches is exported out of the library
-#   and hashed. This is what a first backup of a phone does, and it is the pass a faster hash is
+#   and hashed. This is what a first backup of a mobile does, and it is the pass a faster hash is
 #   aimed at.
 #
 #   Warm: run straight after, with the cache the cold pass left behind. Nothing is exported and
-#   nothing is hashed. This is what the phone does on every run after the first.
+#   nothing is hashed. This is what the mobile does on every run after the first.
 #
 # Each pass is time-boxed, because a cold import of a real library takes hours and this has to be
 # repeatable four times over to compare a before against an after. What is compared is the rate and
@@ -27,7 +27,7 @@
 # ends, which removes the app's own databases and settings, and nothing outside the app.
 #
 # The screen has to stay on for the whole run. The foreground service only keeps the scan up once it has started, so
-# a phone that sleeps before then stops importing and the measurement is void.
+# a mobile that sleeps before then stops importing and the measurement is void.
 #
 # Usage, naming it explicitly and raising the per-test timeout well above the default:
 #
@@ -117,13 +117,13 @@ KEEP_AWAKE_PID=""
 #
 # Keeps the device awake for the length of the run by waking it every few seconds.
 #
-# A phone left to itself sleeps within seconds, and a sleeping phone leaves the app un-resumed, which
+# A mobile left to itself sleeps within seconds, and a sleeping mobile leaves the app un-resumed, which
 # makes Android refuse the foreground service automatic import is started by and kills the app. The
 # import survives the screen going off once its service is running; it is getting the service started
 # that needs the app in front.
 #
 # Wake events rather than a settings change: this alters nothing on the device that outlives the run,
-# where `svc power stayon` would leave the phone configured differently than it was found.
+# where `svc power stayon` would leave the mobile configured differently than it was found.
 #
 start_keeping_device_awake() {
     (
@@ -145,7 +145,7 @@ on_exit() {
 }
 trap on_exit EXIT
 
-# Refuse to run against a phone that is already importing on its own: an import running beside this
+# Refuse to run against a mobile that is already importing on its own: an import running beside this
 # one takes the same photos and throws both sets of numbers out.
 log_info "Measuring automatic import on the attached device, ${PERF_IMPORT_SECONDS}s per pass."
 
@@ -164,7 +164,7 @@ start_keeping_device_awake
 #
 # The pass is started by clicking the toggle, which works because the app has just been launched and
 # its interface is awake. It is ended by force-stopping the app over adb, NOT by clicking the toggle
-# again: by then the phone has been sitting on its lockscreen for minutes and Android has paused the
+# again: by then the mobile has been sitting on its lockscreen for minutes and Android has paused the
 # WebView, so a command sent to the interface is never answered and the pass is lost. Nothing is
 # asked of the interface after the first click.
 #
@@ -212,10 +212,10 @@ already_importing() {
 AUTO_START_WAIT_SECONDS=15
 
 #
-# The phone's battery temperature in degrees, as a decimal. Android reports it in tenths.
+# The mobile's battery temperature in degrees, as a decimal. Android reports it in tenths.
 #
 # Recorded with every pass because it decides whether two measurements can be compared at all. Half
-# an hour of sustained image work warms this phone by several degrees, and a pass started warm is
+# an hour of sustained image work warms this mobile by several degrees, and a pass started warm is
 # slower than the same pass started cool by about as much as the changes being measured are worth.
 #
 device_temperature() {
@@ -251,7 +251,7 @@ run_one_pass() {
     # Android refuses a foreground service started by an app it considers backgrounded, and an app
     # behind a locked keyguard is backgrounded however awake the screen is. The device-idle temporary
     # allowlist is one of the exemptions Android documents for that check. It is scoped to this app,
-    # lasts minutes, and expires by itself, so the phone is left as it was found.
+    # lasts minutes, and expires by itself, so the mobile is left as it was found.
     photosphere_adb shell cmd deviceidle tempwhitelist -d 900000 "$ANDROID_APP_ID" >/dev/null 2>&1 || true
 
     # Turned on only when it is not on already. A pass ends by force-stopping the app, which leaves

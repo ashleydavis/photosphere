@@ -83,7 +83,7 @@ fn jsonString(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
 // Callers pass explicit `encryptionKey` and/or `s3Key` when the path is not in databases.json
 // (for example the destination of a replicate task) or to override the registered values.
 //
-// The host is how the phone vault reaches the phone's keychain. It is null where there is no phone shell, and the phone vault then
+// The host is how the mobile vault reaches the mobile's keychain. It is null where there is no mobile shell, and the mobile vault then
 // fails when it is chosen.
 //
 pub fn resolveStorageCredentials(

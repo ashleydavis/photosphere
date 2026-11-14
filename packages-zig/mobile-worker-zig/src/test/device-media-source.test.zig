@@ -217,7 +217,7 @@ test "DeviceMediaSource: deleteItems names the items the shell did not delete" {
     try std.testing.expectEqualStrings("3", MediaSourceDeleteError.sourceIds()[1]);
 }
 
-test "buildDeviceMediaSource: without a host requester it is an error naming the phone" {
+test "buildDeviceMediaSource: without a host requester it is an error naming the mobile" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var generator: utils.test_uuid_generator.TestUuidGenerator = .{};
@@ -226,7 +226,7 @@ test "buildDeviceMediaSource: without a host requester it is an error naming the
         .uuidGenerator = generator.uuidGenerator(),
         .nativeCaller = null,
     }));
-    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "on a phone") != null);
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "on a mobile") != null);
 }
 
 test "maps a library page into media items" {

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Adds a database entry, edits its origin and saves. On a desktop the saved origin is read back from the database's own
-# .db/config.json. On a phone the database lives in the app's sandbox, so only the UI flow is covered.
+# .db/config.json. On a mobile the database lives in the app's sandbox, so only the UI flow is covered.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -15,7 +15,7 @@ trap 'cleanup_apps "$TMP_DIR"' EXIT
 case "$PLATFORM" in
     android|ios)
         "${PLATFORM}_reset_app_state" || exit 1
-        # A user on a phone types the short name, which the app resolves into its own storage, where the database is seeded.
+        # A user on a mobile types the short name, which the app resolves into its own storage, where the database is seeded.
         DATABASE_PATH="test-db"
         ;;
     *)

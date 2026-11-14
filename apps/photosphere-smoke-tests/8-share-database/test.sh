@@ -3,7 +3,7 @@
 # Shares a database entry over the LAN through the real Share Database dialog. On a desktop two copies of the app run side by side: the
 # sender holds a database entry that names an S3 credentials secret and an encryption key, the receiver types the sender's pairing
 # code, reviews what arrived and saves it, and the receiver's databases list, databases.toml and vault then hold the entry and both
-# secrets it carried. A phone cannot run two copies of the app on one device, so there only the sender side is driven: it registers a
+# secrets it carried. A mobile cannot run two copies of the app on one device, so there only the sender side is driven: it registers a
 # database, opens the share dialog and presses Send, and the pairing code appears.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

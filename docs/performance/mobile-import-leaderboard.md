@@ -2,9 +2,9 @@
 
 ## What this is
 
-Every stage of an automatic import on a phone, ranked by what it costs, with a record of every attempt to make each one faster and whether it worked. The target is a full import of the device's library in under two hours.
+Every stage of an automatic import on a mobile, ranked by what it costs, with a record of every attempt to make each one faster and whether it worked. The target is a full import of the device's library in under two hours.
 
-**Every figure here is measured on a physical Pixel 6.** None is from an emulator. The emulator has misled this work once already: it reported hashing at 24.7% of an import where the phone reports under 2%, because the emulator library was seeded photos with no videos and the phone's library is real.
+**Every figure here is measured on a physical Pixel 6.** None is from an emulator. The emulator has misled this work once already: it reported hashing at 24.7% of an import where the mobile reports under 2%, because the emulator library was seeded photos with no videos and the mobile's library is real.
 
 The measurement is `apps/smoke-tests/tests/manual/90-perf-import/test.sh`, run by name:
 
@@ -82,7 +82,7 @@ Before changing anything, `databaseWrite` was split into what it was actually do
 | treeLoad + treeSave | 5.2 s | 1.8% |
 | flush, lockWait, stamp | 1.2 s | 0.4% |
 
-**37 batches for 42 photos.** The trigger for a database write was a one second trailing throttle, meant to coalesce completions arriving together. On a phone an asset takes over ten seconds to become ready, so nothing ever coalesced and almost every photo paid for a full database commit of its own.
+**37 batches for 42 photos.** The trigger for a database write was a one second trailing throttle, meant to coalesce completions arriving together. On a mobile an asset takes over ten seconds to become ready, so nothing ever coalesced and almost every photo paid for a full database commit of its own.
 
 The change holds finished assets until `DATABASE_BATCH_SIZE` of them have piled up, with an escape when the scanner reports itself caught up so a part-filled batch is never stranded.
 
@@ -190,7 +190,7 @@ The three derivative images together are 32.3%, which is now the largest thing o
 
 ### the derivative images, attempt 1: produce each from the one before it. KEPT.
 
-Micro, thumbnail and display each decoded the full size original again, so a phone decoded every photo three times to make three small images. Together they were 32.3% of the import.
+Micro, thumbnail and display each decoded the full size original again, so a mobile decoded every photo three times to make three small images. Together they were 32.3% of the import.
 
 They are now produced largest first, each from the one before it: display from the original, thumbnail from the display, micro from the thumbnail. The aspect ratio is preserved by every step, so the target dimensions are still computed from the original's resolution and come out the same; what changes is how much image each decode has to read.
 
@@ -220,7 +220,7 @@ A batch of a hundred could not be judged. No batch of a hundred completes inside
 | display | 322 ms | 331 ms |
 | Total | 5.60 s | 6.84 s |
 
-The stage it targets improved 2.15x and **the total got worse**, along with export and display, which the change does not touch. A phone doing sustained image work for half an hour throttles, so a thirty minute pass is not comparable with a ten minute one. Not kept: the rule is that the total must fall, and this cannot show that it does.
+The stage it targets improved 2.15x and **the total got worse**, along with export and display, which the change does not touch. A mobile doing sustained image work for half an hour throttles, so a thirty minute pass is not comparable with a ten minute one. Not kept: the rule is that the total must fall, and this cannot show that it does.
 
 ### databaseWrite, attempt 3: a batch of fifty. KEPT.
 
@@ -341,7 +341,7 @@ The write loop had no breakdown, so it got one first: the merkle tree adds, the 
 
 The inserts also grow: 338 ms a record in the cold pass, 904 ms in the warm pass that continued it, against a batch size that does not change. So does commit: 55 s a batch, then 66 s.
 
-A benchmark of the same inserts on a desktop (`bun run --filter=bdb perf`, added for this) runs them at 0.04 ms a record, three thousand times faster, so whatever the phone is paying for is not arithmetic. That benchmark also counts what each insert asks of storage, and found the same two calls every time, forever: a `dirExists` and a `listDirs`, asking which sort indexes the collection has, per record.
+A benchmark of the same inserts on a desktop (`bun run --filter=bdb perf`, added for this) runs them at 0.04 ms a record, three thousand times faster, so whatever the mobile is paying for is not arithmetic. That benchmark also counts what each insert asks of storage, and found the same two calls every time, forever: a `dirExists` and a `listDirs`, asking which sort indexes the collection has, per record.
 
 Remembering that answer removed both calls, which the benchmark confirms. On the device it changed nothing:
 
@@ -355,13 +355,13 @@ Not kept, and reverted. The two calls were not what an insert was paying for, an
 
 What it did establish: the cost is not the merkle tree, not arithmetic, and not those two calls. The next thing to rule out is what an insert does that a desktop does not, which is why the insert is now counted apart from the hash cache write that follows it.
 
-### The phone gets hotter as the measurements go on, and that has been in the numbers
+### The mobile gets hotter as the measurements go on, and that has been in the numbers
 
-Three cold passes were run back to back, each half an hour of sustained image work, and the phone was 26.7 °C at the start of the first and 33.4 °C by the end of the third. Wall clock per item across those three: 1.82 s, 1.90 s, 2.03 s. The two changes measured in the second and third are both small, and a seven degree rise on this phone is enough to account for a drift of that size on its own.
+Three cold passes were run back to back, each half an hour of sustained image work, and the mobile was 26.7 °C at the start of the first and 33.4 °C by the end of the third. Wall clock per item across those three: 1.82 s, 1.90 s, 2.03 s. The two changes measured in the second and third are both small, and a seven degree rise on this mobile is enough to account for a drift of that size on its own.
 
-So neither of those two runs proves what it looked like it proved. Both changes are unproven rather than disproven, and unproven does not earn a commit either, so both were reverted. What it does mean is that any two measurements taken half an hour apart are not comparable unless the phone started them at the same temperature.
+So neither of those two runs proves what it looked like it proved. Both changes are unproven rather than disproven, and unproven does not earn a commit either, so both were reverted. What it does mean is that any two measurements taken half an hour apart are not comparable unless the mobile started them at the same temperature.
 
-From here every measurement records the phone's temperature beside it, and a comparison is only made between passes that started within a couple of degrees of each other.
+From here every measurement records the mobile's temperature beside it, and a comparison is only made between passes that started within a couple of degrees of each other.
 
 ### databaseWrite, attempt 5: stop dropping the database's cached pages before every batch
 
@@ -387,7 +387,7 @@ It now runs under the lock, and only when the database's own modified stamp diff
 | databaseWrite | 369.1 s | 241.8 s |
 | Wall clock per item | 2.03 s | 1.52 s |
 
-**Seven times less time spent inserting records.** The after pass started at 31.6 degrees against 26.7 for the earliest baseline, so it was measured on a hotter phone than the numbers it beats.
+**Seven times less time spent inserting records.** The after pass started at 31.6 degrees against 26.7 for the earliest baseline, so it was measured on a hotter mobile than the numbers it beats.
 
 `commit` is now what a database write mostly is: 178.6 s of the 241.8 s, and about a third of the whole import.
 
@@ -450,7 +450,7 @@ It could not be measured on the device. Three passes in a row, of fifteen, thirt
 
 `ffmpeg -i file -ss T` is an output seek: ffmpeg decodes the video from its start up to T and throws every frame away to keep one, so a frame from the middle of a video costs half the video. `ffmpeg -ss T -i file` jumps to the nearest keyframe first. That is a real difference and the reason this looked promising.
 
-Measured against the same code with the seek moved back, on the same phone within a few degrees:
+Measured against the same code with the seek moved back, on the same mobile within a few degrees:
 
 | Per video | Seek after the input | Seek before it |
 | --- | --- | --- |

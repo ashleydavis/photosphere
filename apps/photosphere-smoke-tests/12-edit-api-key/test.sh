@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Edits an api-key secret and saves it unchanged. On a desktop the vault is seeded with a raw key (no JSON envelope) and checked to
-# still hold exactly that key. On a phone the vault cannot be written from the host, so the secret is added through the Add Secret
+# still hold exactly that key. On a mobile the vault cannot be written from the host, so the secret is added through the Add Secret
 # dialog and only the add-then-edit path is covered.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -33,7 +33,7 @@ wait_for_log "$TMP_DIR" "Secrets page loaded"
 case "$PLATFORM" in
     android|ios)
         add_secret_via_ui "$APP_PORT" "api-key" "api-key" "the-api-key-value" || exit 1
-        # The secret's actions are in its card's menu on a phone.
+        # The secret's actions are in its card's menu on a mobile.
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
         ;;
 esac

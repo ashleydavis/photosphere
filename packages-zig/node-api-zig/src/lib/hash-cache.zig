@@ -105,12 +105,12 @@ fn isUpdateContentionError(err: anyerror) bool {
 // rare.
 //
 // It sits in this machine's cache directory for that database, which outlives a restart on the
-// desktop, the CLI and a phone alike while still telling the operating system, the backup tool and
+// desktop, the CLI and a mobile alike while still telling the operating system, the backup tool and
 // the disk cleaner that everything in it can be thrown away. See getDatabaseCacheDir and getCacheDir.
 //
 // It used to sit under the process temp directory, and that was wrong everywhere rather than only on
 // one platform: Linux clears /tmp at boot and sweeps old files out of it, macOS reaps /var/folders
-// after a few days of not being touched, and a phone's "temp" is a directory the app itself is free
+// after a few days of not being touched, and a mobile's "temp" is a directory the app itself is free
 // to clear. Everything the cache exists to avoid, which for a photo library is a full copy and a full
 // hash of every photo already imported, was being paid again after whichever of those happened first,
 // and nothing announced it.
@@ -1153,7 +1153,7 @@ pub const HashCache = struct {
     // stored "photos/one.jpg" never matched the live "/photos/one.jpg" on Linux or macOS, nor
     // "C:/photos/one.jpg" the live "C:\photos\one.jpg" on Windows, so every entry automatic import
     // had written read as dead and was swept at the end of the very run that wrote it. The desktop
-    // and the CLI therefore re-hashed the whole watched folder on every run, while a phone was
+    // and the CLI therefore re-hashed the whole watched folder on every run, while a mobile was
     // unaffected because a photo library id has neither a leading slash nor a backslash in it.
     //
     pub fn removeSourceEntriesNotIn(self: *HashCache, liveSourceIds: []const []const u8) !usize {

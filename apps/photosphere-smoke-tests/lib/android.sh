@@ -7,7 +7,7 @@
 # databases and settings) and the PHOTOSPHERE_* extras below are honoured. The release APK is not debuggable and would allow neither.
 # The APK is the one build-android.sh copies into the build directory PHOTOSPHERE_SMOKE_BUILD names, or else one it builds here.
 #
-# A phone passes no environment to an app, so the settings the desktop sets through PHOTOSPHERE_* variables go in as string Intent
+# A mobile passes no environment to an app, so the settings the desktop sets through PHOTOSPHERE_* variables go in as string Intent
 # extras of the same names, which the activity (MainActivity) puts into the process environment before the core is created. They are
 # honoured only by a debuggable build.
 #
@@ -228,9 +228,9 @@ photosphere_android_claim_device() {
 }
 
 #
-# Refuses to wipe the app's data on a real phone unless the run was told it may, the way the mobile suite does: an emulator holds
-# nothing but what a test put there, and a phone holds whatever its owner imported. Set PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 to say the
-# phone is yours to wipe.
+# Refuses to wipe the app's data on a real mobile unless the run was told it may, the way the mobile suite does: an emulator holds
+# nothing but what a test put there, and a mobile holds whatever its owner imported. Set PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 to say the
+# mobile is yours to wipe.
 #
 photosphere_android_require_wipe_allowed() {
     case "$ANDROID_SERIAL_CLAIMED" in
@@ -241,7 +241,7 @@ photosphere_android_require_wipe_allowed() {
     if [ "${PHOTOSPHERE_ALLOW_DEVICE_WIPE:-}" = "1" ]; then
         return 0
     fi
-    echo "Refusing to wipe the app's data on $ANDROID_SERIAL_CLAIMED, which is a real phone and may hold an imported library. Run this against the emulator pool, or set PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 if the phone's data is yours to destroy." >&2
+    echo "Refusing to wipe the app's data on $ANDROID_SERIAL_CLAIMED, which is a real mobile and may hold an imported library. Run this against the emulator pool, or set PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 if the mobile's data is yours to destroy." >&2
     return 1
 }
 
@@ -564,7 +564,7 @@ android_host_address() {
 
 #
 # Makes a port the host is listening on reachable from the device at the address android_host_address prints. On a real device that is
-# `adb reverse`, so 127.0.0.1 on the phone is this host. On an emulator it does nothing, because the guest reaches the host directly.
+# `adb reverse`, so 127.0.0.1 on the mobile is this host. On an emulator it does nothing, because the guest reaches the host directly.
 # Claims the device, which must be done in the scenario's own shell and not in a $(...) subshell.
 # Usage: android_expose_host_port <port>
 #
@@ -788,8 +788,8 @@ photosphere_android_grant_notification_permission() {
 }
 
 #
-# True when this target's app data may be wiped, which is every emulator and no phone, unless PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 says the
-# phone is the person's to wipe. Needs a claimed device. Usage: android_may_wipe_app_data
+# True when this target's app data may be wiped, which is every emulator and no mobile, unless PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 says the
+# mobile is the person's to wipe. Needs a claimed device. Usage: android_may_wipe_app_data
 #
 android_may_wipe_app_data() {
     photosphere_android_claim_device || return 1
@@ -808,7 +808,7 @@ ANDROID_MEDIA_DIR="/sdcard/DCIM/Camera"
 # about them until it is told. `cmd media rescan` is not available on the emulator image (there is no "media" service), so the scan goes
 # through the provider's own scan_file method, which is. A directory can be named to put the photo somewhere other than the camera
 # folder. MediaStore groups items into albums by the directory they sit in, so a scenario that gives its photos their own directory gets
-# its own album, and can point automatic import at that album alone. On a phone holding somebody else's photo library that is the
+# its own album, and can point automatic import at that album alone. On a mobile holding somebody else's photo library that is the
 # difference between importing two photos and importing all of them.
 # Usage: android_seed_media <host_file> <remote_name> [remote_dir]
 #
@@ -1017,7 +1017,7 @@ android_grant_partial_media_permission() {
 # Writes the automatic import settings into the auto_import section of the app's config.toml in its settings directory, keeping every
 # other section the file already has. This is how a scenario starts with automatic import already on, writing into a database it
 # seeded itself, or off with the album it should watch already chosen. An album id restricts the import to that one album, which is
-# what makes a scenario runnable against a phone with a real photo library. The default database path must be a path the app can
+# what makes a scenario runnable against a mobile with a real photo library. The default database path must be a path the app can
 # open, so a scenario passes android_app_path of the database. Left out, the app makes its own default database. The pause between
 # passes is left out, so the app's default applies, when none is given.
 # Usage: android_seed_auto_import_config <enabled true|false> [default_database_path] [pause_ms] [album_id]
@@ -1071,8 +1071,8 @@ android_seed_auto_import_config() {
 
 #
 # Copies a file of the app's private data directory (a path under /data/data/<app id>) onto this machine, so a scenario can put it back
-# afterwards. This is what lets a scenario run against a real phone without wiping it: `pm clear` is the clean start an emulator gets,
-# and it is not available on a phone that holds somebody's photo library, so a device run borrows the settings and hands them back.
+# afterwards. This is what lets a scenario run against a real mobile without wiping it: `pm clear` is the clean start an emulator gets,
+# and it is not available on a mobile that holds somebody's photo library, so a device run borrows the settings and hands them back.
 # Writes the file to the given local path, or removes that path when the device has no such file, so the caller can tell "there was one"
 # from "there was not" by whether the file exists afterwards. A file that is there and cannot be copied fails, because a restore that
 # took that for an absent file would delete the device's own.
@@ -1235,7 +1235,7 @@ android_path_exists() {
 
 #
 # Writes a PNG of the claimed device's screen to a host path, with adb screencap. The app cannot do this itself, because a path it was
-# given is a path on the phone. Fails when nothing was written or what was written is not a PNG.
+# given is a path on the mobile. Fails when nothing was written or what was written is not a PNG.
 # Usage: photosphere_platform_screenshot <output_path>
 #
 photosphere_platform_screenshot() {
@@ -1276,7 +1276,7 @@ android_wait_for_background_service_gone() {
 }
 
 #
-# Makes the next download end as the user cancelling it. A phone hands a download to the system share sheet, which a test cannot tap, so
+# Makes the next download end as the user cancelling it. A mobile hands a download to the system share sheet, which a test cannot tap, so
 # the sheet's outcome is staged as cancelled. Usage: android_cancel_next_download <port>
 #
 android_cancel_next_download() {
@@ -1285,7 +1285,7 @@ android_cancel_next_download() {
 
 #
 # The photo library helpers below are the names a scenario calls to give the app photos to take in, so one scenario body runs on every
-# platform. A "library" is the folder a scenario puts its photos in and points automatic import at, and nothing else: on a phone watching
+# platform. A "library" is the folder a scenario puts its photos in and points automatic import at, and nothing else: on a mobile watching
 # the whole library would import somebody's photo collection, and a folder of the scenario's own is an album of its own.
 #
 
@@ -1318,7 +1318,7 @@ android_library_add() {
 }
 
 #
-# Takes the named photos out of the library and then the library itself, so a phone is left as it was found. Plain file deletes and an
+# Takes the named photos out of the library and then the library itself, so a mobile is left as it was found. Plain file deletes and an
 # empty-directory removal, never a recursive one. Usage: android_library_remove <library> [name ...]
 #
 android_library_remove() {
@@ -1373,7 +1373,7 @@ android_send_app_to_background() {
 }
 
 #
-# Succeeds when what keeps the background work alive while the app is off screen is running: on a phone, the foreground service.
+# Succeeds when what keeps the background work alive while the app is off screen is running: on a mobile, the foreground service.
 # Usage: android_background_work_running
 #
 android_background_work_running() {
@@ -1430,7 +1430,7 @@ android_claim_device() {
 }
 
 #
-# Succeeds when this run is on a real phone rather than an emulator. Needs a claimed device. Usage: android_is_real_device
+# Succeeds when this run is on a real mobile rather than an emulator. Needs a claimed device. Usage: android_is_real_device
 #
 android_is_real_device() {
     case "$ANDROID_SERIAL_CLAIMED" in
@@ -1453,7 +1453,7 @@ android_device_is_locked() {
 #
 # Fails, saying so, when the device shows a lock screen that cannot be dismissed from here. From Android 12 an app that is not in the
 # foreground may not start a foreground service, and an app launched behind a lock screen is not in the foreground however visible it
-# looks, so nothing would be imported or synced. An emulator, and a phone with no secure lock, are dismissed by waking the screen and
+# looks, so nothing would be imported or synced. An emulator, and a mobile with no secure lock, are dismissed by waking the screen and
 # swiping up, which is tried first. Usage: android_require_unlocked
 #
 android_require_unlocked() {
@@ -1529,9 +1529,9 @@ android_sync_stopped_log() {
 }
 
 #
-# Saves the settings files and the keychain of a real phone, so a scenario that changes them can hand them back instead of wiping the
-# phone, which may hold somebody's imported library. The app is stopped so the settings written next are read at its next launch rather
-# than fought over by a copy running with the phone's own. Usage: android_borrow_app_settings <local_dir>
+# Saves the settings files and the keychain of a real mobile, so a scenario that changes them can hand them back instead of wiping the
+# mobile, which may hold somebody's imported library. The app is stopped so the settings written next are read at its next launch rather
+# than fought over by a copy running with the mobile's own. Usage: android_borrow_app_settings <local_dir>
 #
 android_borrow_app_settings() {
     local saved_dir="$1"
@@ -1544,8 +1544,8 @@ android_borrow_app_settings() {
 }
 
 #
-# Hands a real phone the settings android_borrow_app_settings saved, and takes the S3 credentials the scenario added with the keychain.
-# The app offers no way to delete a secret, so this is the only way not to leave one on somebody's phone.
+# Hands a real mobile the settings android_borrow_app_settings saved, and takes the S3 credentials the scenario added with the keychain.
+# The app offers no way to delete a secret, so this is the only way not to leave one on somebody's mobile.
 # Usage: android_return_app_settings <local_dir>
 #
 android_return_app_settings() {
@@ -1557,7 +1557,7 @@ android_return_app_settings() {
 }
 
 #
-# Makes the app notice a settings file that was changed from outside it. The phone's background loops read the file again on every
+# Makes the app notice a settings file that was changed from outside it. The mobile's background loops read the file again on every
 # pass, so there is nothing to do. Usage: android_apply_settings_change
 #
 android_apply_settings_change() {
@@ -1565,7 +1565,7 @@ android_apply_settings_change() {
 }
 
 #
-# Has the app open the given database when it starts. A phone's background loops work on the database the settings name, and need no
+# Has the app open the given database when it starts. A mobile's background loops work on the database the settings name, and need no
 # database open in the page, so there is nothing to do. Usage: android_open_database_on_launch <database_path>
 #
 android_open_database_on_launch() {
@@ -1587,7 +1587,7 @@ android_auto_import_stopped_log() {
 }
 
 #
-# Asks for the open database to be synced now. A phone's background sync loop pushes what an import added on its own, every pass, so there
+# Asks for the open database to be synced now. A mobile's background sync loop pushes what an import added on its own, every pass, so there
 # is nothing to ask for. Usage: android_request_sync <port>
 #
 android_request_sync() {

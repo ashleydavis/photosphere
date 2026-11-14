@@ -1,6 +1,6 @@
 # Delivering the Android app to testers
 
-Tester builds of the Android app go out through [Firebase App Distribution](https://firebase.google.com/docs/app-distribution). It takes an APK, emails the testers you have added, and installs onto their phones through the Firebase App Tester app. There is no store listing and no review, so a tester has the build a couple of minutes after the upload finishes. It is free on Firebase's Spark plan.
+Tester builds of the Android app go out through [Firebase App Distribution](https://firebase.google.com/docs/app-distribution). It takes an APK, emails the testers you have added, and installs onto their mobiles through the Firebase App Tester app. There is no store listing and no review, so a tester has the build a couple of minutes after the upload finishes. It is free on Firebase's Spark plan.
 
 This covers Android only. iOS distribution is not set up. The tester build is the Photosphere App on Ziggy (`apps/photosphere`), distributed with `bun run distribute:ziggy:android` (see `apps/photosphere/scripts/distribute-android.md`).
 
@@ -53,13 +53,13 @@ bun run distribute:ziggy:android -- --groups testers,family
 
 The script builds the release APK that `bun run --filter=ziggy package:android` produces, for arm64, signed with the debug key because the app has no release signing set up. It installs and runs, so testing works, with this consequence:
 
-- Android's Play Protect shows "Unsafe app blocked" on install. On a recent phone the reason given is that the app "was built for an older version of Android and doesn't include the latest privacy protections", which is about `targetSdkVersion` in `native/android/variables.gradle`, and not about the signing. A debug-signed build can draw the warning on its own too. Some phones offer **More details** and then **Install anyway**. Others offer only **OK**, and the build cannot be installed until Play Protect's app scanning is turned off in the Play Store (profile icon > Play Protect > settings).
+- Android's Play Protect shows "Unsafe app blocked" on install. On a recent mobile the reason given is that the app "was built for an older version of Android and doesn't include the latest privacy protections", which is about `targetSdkVersion` in `native/android/variables.gradle`, and not about the signing. A debug-signed build can draw the warning on its own too. Some mobiles offer **More details** and then **Install anyway**. Others offer only **OK**, and the build cannot be installed until Play Protect's app scanning is turned off in the Play Store (profile icon > Play Protect > settings).
 
 Getting past it means signing release builds: a release keystore created with `keytool`, and a `signingConfig` in `native/android/app/build.gradle` reading the keystore path and passwords from a file kept out of git. That is a change to the build, not a step in this doc, and it is not done.
 
 ## How the build is versioned
 
-The version name comes from `--version-name`, such as a release tag without its `v`. Without it the script uses the version in `apps/photosphere/package.json` followed by `-dev.` and the UTC time of the build. The version code beside it is minutes since the epoch, so every upload's number is higher than the one before and a phone treats the new build as an update rather than a reinstall.
+The version name comes from `--version-name`, such as a release tag without its `v`. Without it the script uses the version in `apps/photosphere/package.json` followed by `-dev.` and the UTC time of the build. The version code beside it is minutes since the epoch, so every upload's number is higher than the one before and a mobile treats the new build as an update rather than a reinstall.
 
 ## Adding a tester
 
@@ -67,21 +67,21 @@ In the Firebase console, on App Distribution's Testers & Groups tab, open the `t
 
 They are invited by email as soon as they are added. If they open App Tester and find nothing to install, run `bun run distribute:ziggy:android`: a release sent to the group they are in always reaches them.
 
-To stop sending builds to someone, remove them from the group. The builds they already installed stay on their phone.
+To stop sending builds to someone, remove them from the group. The builds they already installed stay on their mobile.
 
 ## What a tester does
 
 The first time:
 
 1. They get an invitation email from Firebase App Distribution and tap Get started in it.
-2. That downloads `app-tester.apk`. They tap the downloaded file to install it, and Android refuses with "your phone currently isn't allowed to install unknown apps from this source", naming whatever app did the download, their browser or their files app. They tap Settings on that prompt and turn on "Allow from this source", which brings up the install itself, so they tap Install and then Open. That prompt is Android's, and there is no way around it for a build that does not come from the Play Store.
+2. That downloads `app-tester.apk`. They tap the downloaded file to install it, and Android refuses with "your mobile currently isn't allowed to install unknown apps from this source", naming whatever app did the download, their browser or their files app. They tap Settings on that prompt and turn on "Allow from this source", which brings up the install itself, so they tap Install and then Open. That prompt is Android's, and there is no way around it for a build that does not come from the Play Store.
 3. They open App Tester, which shows no releases until they sign in with the Google account the invitation was sent to. They open Photosphere in it, tick the checkbox and tap "Start testing on this device", then tap Download on the release. Installing that build brings the same unknown-apps prompt again, this time naming App Tester: Settings, "Allow from this source", then "Install this app?" and Install.
 
 After that each new build arrives as a notification in App Tester and they tap to install.
 
-There is also a browser route, where a tester opens a release link on the phone, signs in and downloads the APK without App Tester. It has not been tried for this project, and it gives them no notification when a build goes out, so they would need a fresh link every time.
+There is also a browser route, where a tester opens a release link on the mobile, signs in and downloads the APK without App Tester. It has not been tried for this project, and it gives them no notification when a build goes out, so they would need a fresh link every time.
 
-A tester who already has a Photosphere build signed with a different key, such as one sideloaded over adb from another machine or from a checkout with a different debug keystore, has to uninstall it first. Android refuses an update whose signature does not match, and the refusal does not always say so: on a phone plugged in over USB it is plain (`adb install` reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match`), but through App Tester it can surface as Play Protect's "Unsafe app blocked" with no explanation of the real cause.
+A tester who already has a Photosphere build signed with a different key, such as one sideloaded over adb from another machine or from a checkout with a different debug keystore, has to uninstall it first. Android refuses an update whose signature does not match, and the refusal does not always say so: on a mobile plugged in over USB it is plain (`adb install` reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match`), but through App Tester it can surface as Play Protect's "Unsafe app blocked" with no explanation of the real cause.
 
 `adb shell dumpsys package au.com.codecapers.photosphere.ziggy` says whether a build is already installed and which version it is, which is worth checking before believing any other explanation.
 
@@ -93,5 +93,5 @@ A tester who already has a Photosphere build signed with a different key, such a
 | The upload is rejected as an app that does not exist | The Firebase project named by `--project` is not the one the testers are in, or the CLI is signed in to an account without access to it. |
 | `Failed to authenticate` | The login has expired or is for the wrong account. Run `firebase login` again. |
 | A tester sees no new build | The group you released to is not the group they are in. Check Testers & Groups in the console. |
-| "Unsafe app blocked" on the tester's phone | Play Protect, usually objecting to the app's `targetSdkVersion`. Tap **More details** then **Install anyway** if the dialog offers them. If the only option is **OK**, turn off app scanning in the Play Store (profile icon > Play Protect > settings) and install again. |
-| `App not installed` on the tester's phone | They have an older build signed with a different key. Uninstall it, then install again. |
+| "Unsafe app blocked" on the tester's mobile | Play Protect, usually objecting to the app's `targetSdkVersion`. Tap **More details** then **Install anyway** if the dialog offers them. If the only option is **OK**, turn off app scanning in the Play Store (profile icon > Play Protect > settings) and install again. |
+| `App not installed` on the tester's mobile | They have an older build signed with a different key. Uninstall it, then install again. |

@@ -6,7 +6,7 @@ Test removing a database entry from the app, and that a database whose files hav
 
 ## Prep
 
-- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
+- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real mobile, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
 - `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
 - `bun run android:1` and `bun run ios:1` put the `1-asset` test database on the device as `test-1-asset` and open it on launch.
 - The test needs two databases listed. After the app starts, open the menu, choose **New database** and name it `manual-test-2`.

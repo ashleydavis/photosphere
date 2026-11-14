@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Exercises the asset-export cancel path: the save dialog (a desktop) or the export share sheet (a phone) is cancelled, and
+# Exercises the asset-export cancel path: the save dialog (a desktop) or the export share sheet (a mobile) is cancelled, and
 # downloadAsset aborts without reporting a completed download. Neither can be tapped by an automated test, so the outcome is staged
-# with ${PLATFORM}_cancel_next_download; on a phone the native temp-copy cleanup on each exit is covered by the platform ExportTemp unit
+# with ${PLATFORM}_cancel_next_download; on a mobile the native temp-copy cleanup on each exit is covered by the platform ExportTemp unit
 # tests. The export SUCCESS path (single and batch) is covered by tests 19 and 20. Were the export to echo its input, the file would
 # land in app-private storage and a success toast would fire even though nothing was handed out.
 

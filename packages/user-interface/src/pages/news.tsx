@@ -203,7 +203,7 @@ export function NewsPage() {
 
                 {/* The version card leads with whether there is an update, because that is the one
                     thing anybody opens this page to find out. The download is a full-width button
-                    on a phone rather than an underlined link. */}
+                    on a mobile rather than an underlined link. */}
                 <Card
                     variant={hasUpdate ? 'soft' : 'outlined'}
                     color={hasUpdate ? 'success' : 'neutral'}

@@ -293,8 +293,8 @@ const LONG_PRESS_HOLD_MS = 700;
 //
 // This is not doLongPressClick, which releases immediately so a long-press component treats it as a
 // short click. It is the opposite gesture, and it is the only way to drive selection mode on a
-// phone: the gallery reveals its selection checkboxes only once a long press has turned selecting on
-// (gallery-image.tsx), or on hover, which a phone does not have.
+// mobile: the gallery reveals its selection checkboxes only once a long press has turned selecting on
+// (gallery-image.tsx), or on hover, which a mobile does not have.
 //
 export async function doLongPress(dataId: string, nth?: number): Promise<void> {
     const index = nth ?? 0;

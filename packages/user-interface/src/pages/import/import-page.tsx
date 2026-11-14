@@ -96,7 +96,7 @@ export function ImportPage() {
     const platform = usePlatform();
     const { status, importItems, recordTruncated, startImportDirectories, startImportFiles, isPicking, cancelImport, clearImport } = useImport();
 
-    // Drives the phone layout: stacked full-width import buttons, chips for the summary.
+    // Drives the mobile layout: stacked full-width import buttons, chips for the summary.
     const isMobile = useIsMobile();
 
     // True while files are being dragged over the drop zone.
@@ -249,7 +249,7 @@ export function ImportPage() {
                             bgcolor: isDragOver ? "primary.softBg" : undefined,
                         }}
                     >
-                        {/* On a phone the import buttons stack and run the full width of the
+                        {/* On a mobile the import buttons stack and run the full width of the
                             screen: a row of two "lg" buttons is what clipped this page's actions
                             at the edges before, and a single obvious target beats two small ones. */}
                         <Box sx={{ textAlign: "center", width: "100%", px: isMobile ? 3 : 0 }}>
@@ -323,7 +323,7 @@ export function ImportPage() {
                     <Box className="flex flex-col flex-grow overflow-hidden">
 
                         {/* Summary (only when done). Chips in a wrapping row, so the outcome reads at
-                            a glance on a phone instead of as four stacked lines of small text. */}
+                            a glance on a mobile instead of as four stacked lines of small text. */}
                         {(status === 'completed' || status === 'cancelled') && (
                             <Box
                                 sx={{
@@ -374,7 +374,7 @@ export function ImportPage() {
                             )}
                         </Box>
 
-                        {/* Clear button. Full width at the bottom of a phone screen, under the thumb. */}
+                        {/* Clear button. Full width at the bottom of a mobile screen, under the thumb. */}
                         {(status === 'completed' || status === 'cancelled') && (
                             <Box
                                 sx={{

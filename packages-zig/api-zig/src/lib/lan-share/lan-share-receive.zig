@@ -23,7 +23,7 @@ const IVaultSecretStoreContext = struct {
     // The Io the vault calls are made with.
     io: std.Io,
 
-    // Reaches the phone's keychain when the phone vault is the default, or null where there is no phone shell.
+    // Reaches the mobile's keychain when the mobile vault is the default, or null where there is no mobile shell.
     host: ?INativeCaller,
 };
 

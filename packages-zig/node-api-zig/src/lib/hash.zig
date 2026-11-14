@@ -105,7 +105,7 @@ pub fn computeAssetHash(allocator: std.mem.Allocator, stream: *std.Io.Reader, fi
     // This is the same choice `computeFileHash` makes, and it is here for the same reason it is
     // there. Every asset written to storage is read back and hashed to put its hash in the merkle
     // tree, three times per photo for the original, the thumbnail and the display version. On a
-    // phone that was the pure-JS SHA-256 over bytes fetched across the engine bridge as base64: it
+    // mobile that was the pure-JS SHA-256 over bytes fetched across the engine bridge as base64: it
     // was 54% of an import, and it was invisible until the unmeasured remainder was given a counter.
     //
     // Both paths produce the same digest, which is what makes choosing between them safe: these are

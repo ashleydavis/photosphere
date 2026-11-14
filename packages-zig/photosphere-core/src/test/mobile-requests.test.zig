@@ -15,7 +15,7 @@ fn expectForwarded(app: *TestApp, message_type: []const u8, request_json: []cons
     try std.testing.expectEqualStrings(expected_request, (try app.lastNativeCall(calls.allocator())).?.request);
 }
 
-test "requestMediaPermission asks the phone and passes its answer on" {
+test "requestMediaPermission asks the mobile and passes its answer on" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -24,7 +24,7 @@ test "requestMediaPermission asks the phone and passes its answer on" {
     try expectForwarded(&app, "requestMediaPermission", "null", "{\"granted\":false,\"partial\":true}", "requestMediaPermission", "null");
 }
 
-test "exportFile passes the path and the staged test outcome to the phone and its answer on" {
+test "exportFile passes the path and the staged test outcome to the mobile and its answer on" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -42,7 +42,7 @@ test "exportFile passes on a cancelled sheet" {
     try expectForwarded(&app, "exportFile", "{\"path\":\"tmp/photo.jpg\"}", "{\"path\":null}", "exportFile", "{\"path\":\"tmp/photo.jpg\"}");
 }
 
-test "exportFiles passes the paths to the phone and its answer on" {
+test "exportFiles passes the paths to the mobile and its answer on" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -51,7 +51,7 @@ test "exportFiles passes the paths to the phone and its answer on" {
     try expectForwarded(&app, "exportFiles", "{\"paths\":[\"a.jpg\",\"b.jpg\"],\"testOutcome\":\"cancelled\"}", "{\"paths\":[\"a.jpg\",\"b.jpg\"]}", "exportFiles", "{\"paths\":[\"a.jpg\",\"b.jpg\"],\"testOutcome\":\"cancelled\"}");
 }
 
-test "exportTempFolder asks the phone to make the folder and passes the absolute path on" {
+test "exportTempFolder asks the mobile to make the folder and passes the absolute path on" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -72,7 +72,7 @@ test "exportFile refuses a test outcome that is not text" {
     try std.testing.expect((try app.lastNativeCall(calls.allocator())) == null);
 }
 
-test "startBackgroundImport asks the phone for the notification permission first, and fails with the reason when it cannot" {
+test "startBackgroundImport asks the mobile for the notification permission first, and fails with the reason when it cannot" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -94,10 +94,10 @@ test "startBackgroundImport refuses a notification answer it cannot read" {
     app.setNativeCallResult(true, "{\"allowed\":true}");
     const reply = try app.requestError("startBackgroundImport", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The phone's answer to requestNotificationPermission could not be read.", reply);
+    try std.testing.expectEqualStrings("The mobile's answer to requestNotificationPermission could not be read.", reply);
 }
 
-test "stopBackgroundImport with nothing running replies null and asks the phone for nothing" {
+test "stopBackgroundImport with nothing running replies null and asks the mobile for nothing" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -109,7 +109,7 @@ test "stopBackgroundImport with nothing running replies null and asks the phone 
     try std.testing.expect((try app.lastNativeCall(calls.allocator())) == null);
 }
 
-test "the secure store requests ask the phone's keychain and pass its answers on" {
+test "the secure store requests ask the mobile's keychain and pass its answers on" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -121,7 +121,7 @@ test "the secure store requests ask the phone's keychain and pass its answers on
     try expectForwarded(&app, "secureStoreKeys", "null", "{\"keys\":[\"secret:one\",\"secret:two\"]}", "secureStoreKeys", "null");
 }
 
-test "a request the phone could not do is an error reply with the reason it gave" {
+test "a request the mobile could not do is an error reply with the reason it gave" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -133,7 +133,7 @@ test "a request the phone could not do is an error reply with the reason it gave
     try std.testing.expectEqualStrings("The photo library cannot be reached.", reply);
 }
 
-test "an answer from the phone that is not JSON is an error reply that says so" {
+test "an answer from the mobile that is not JSON is an error reply that says so" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -142,10 +142,10 @@ test "an answer from the phone that is not JSON is an error reply that says so" 
     app.setNativeCallResult(true, "not json at all");
     const reply = try app.requestError("exportFile", "{\"path\":\"a.jpg\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The phone's answer to exportFile could not be read.", reply);
+    try std.testing.expectEqualStrings("The mobile's answer to exportFile could not be read.", reply);
 }
 
-test "on a platform with no host request callback every request says it is only available on a phone" {
+test "on a platform with no host request callback every request says it is only available on a mobile" {
     var app: TestApp = undefined;
     try app.startWithoutNativeCall();
     defer app.stop();
@@ -153,10 +153,10 @@ test "on a platform with no host request callback every request says it is only 
     defer calls.deinit();
     const reply = try app.requestError("secureStoreGet", "{\"key\":\"k\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("secureStoreGet is only available in the Photosphere app on a phone.", reply);
+    try std.testing.expectEqualStrings("secureStoreGet is only available in the Photosphere app on a mobile.", reply);
     const export_reply = try app.requestError("exportFile", "{\"path\":\"a.jpg\"}");
     defer std.testing.allocator.free(export_reply);
-    try std.testing.expectEqualStrings("exportFile is only available in the Photosphere app on a phone.", export_reply);
+    try std.testing.expectEqualStrings("exportFile is only available in the Photosphere app on a mobile.", export_reply);
 }
 
 test "requests with a field missing are error replies that name the field" {
@@ -198,7 +198,7 @@ test "on Windows and MacOS, whose shells have no host request callback, the core
     if (builtin.os.tag != .windows and builtin.os.tag != .macos) {
         const refused = try app.requestError("startBackgroundImport", "null");
         defer std.testing.allocator.free(refused);
-        try std.testing.expectEqualStrings("requestNotificationPermission is only available in the Photosphere app on a phone.", refused);
+        try std.testing.expectEqualStrings("requestNotificationPermission is only available in the Photosphere app on a mobile.", refused);
         return;
     }
     const started = try app.requestOk("startBackgroundImport", "null");

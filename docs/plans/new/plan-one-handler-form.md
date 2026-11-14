@@ -194,7 +194,7 @@ Photosphere:
 
 - Ziggy `bun run test:smoke`: `1-reply` drives the converted `ping` handler; `11-menu-ui-actions`, `12-menu-view` and `14-menu-quit` drive the five test app items, now actions; the child task scenarios drive `queueChild`, `awaitTask` and `runChild` on the services interface.
 - Ziggy template `bun run --filter=ziggy-template test:smoke`: `hello-menu` chooses `hello-from-ui`, now an action and waits for the same log line; `hello-world-app` drives the converted message handler and the task.
-- Ziggy `test:smoke:android` and `test:zig:android`: the core on a phone.
+- Ziggy `test:smoke:android` and `test:zig:android`: the core on a mobile.
 - Photosphere `test:cli:zig`: imports, checks, verifies and replicates through the converted handlers, with `import-assets` running its children through `takeEndedChild` on the CLI's pool.
 - Photosphere `test:ziggy` and `test:ziggy:and`: the app's imports (including `33-import-cancel`), loading partial databases (the prefetch started with `addTask`), the vault and pickers through the converted raw handlers and `61-desktop-menu` choosing an item that is now an action.
 

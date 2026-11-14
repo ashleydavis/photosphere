@@ -19,7 +19,7 @@ trips people up (cables, USB mode, and `adb` on your PATH).
 ## 1. Enable Developer Options on the device
 
 1. Open **Settings**.
-2. Go to **About phone** (may be under **System → About phone**).
+2. Go to **About mobile** (may be under **System → About mobile**).
 3. Find **Build number** (sometimes under **Software information**).
 4. Tap **Build number** seven times.
 5. Enter your PIN/password if prompted.
@@ -133,10 +133,10 @@ Once a wired connection works, you can switch to wireless:
 
 ```bash
 adb tcpip 5555
-adb connect <phone-ip>:5555
+adb connect <mobile-ip>:5555
 ```
 
-Find `<phone-ip>` under **Settings → About phone → IP address** (or in your
+Find `<mobile-ip>` under **Settings → About mobile → IP address** (or in your
 Wi-Fi network details). After connecting, you can unplug the cable and deploy
 over the network. To return to USB mode later, run `adb usb`.
 

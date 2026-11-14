@@ -731,7 +731,7 @@ test "scans a zip whose entries are compressed" {
     try context.init();
     defer context.deinit(log);
     const allocator = context.arena.allocator();
-    // (The checked in test archive is compressed with DEFLATE, the method the zips a camera or a phone writes
+    // (The checked in test archive is compressed with DEFLATE, the method the zips a camera or a mobile writes
     // use, so the scan inflates each entry.)
     const zipPath = try context.write("test-archive.zip", try test_files.readFile(allocator, std.testing.io, "../test/multiple-files/test-archive.zip"));
 

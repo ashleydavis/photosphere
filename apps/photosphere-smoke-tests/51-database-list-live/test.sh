@@ -2,7 +2,7 @@
 
 # A database created while the open-database dialog is showing appears in its list.
 #
-# On a phone and on a desktop the app creates a database without being asked: switching automatic import on makes the first pass create the default
+# On a mobile and on a desktop the app creates a database without being asked: switching automatic import on makes the first pass create the default
 # database and record it. That happens inside the worker, which writes both config files itself, so nothing in the web view is on the
 # path and the interface used to find out only when it was next restarted. The dialog is opened before automatic import is switched on
 # and is never closed, so the entry it ends up showing cannot have come from the read it did as it opened, because that read is
@@ -17,7 +17,7 @@ print_test_header 51 "database-list-live"
 DEFAULT_DATABASE_NAME="My Photos"
 
 # The folder this scenario's photo goes in, which is what automatic import is pointed at. A desktop imports from folders and has none
-# by default, and an Android phone would otherwise watch the whole photo library, so both are given this scenario's own.
+# by default, and an Android mobile would otherwise watch the whole photo library, so both are given this scenario's own.
 #
 # Not on iOS. The iOS native app lists every library item with no album, so automatic import there cannot be pointed at one and always
 # watches the whole library, and the simulator has no supported way to take a seeded photo back out of its library, so a photo put in

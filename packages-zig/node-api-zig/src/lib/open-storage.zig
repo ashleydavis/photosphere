@@ -61,7 +61,7 @@ pub const IOpenStorageResult = struct {
 // the path is not in databases.json (e.g. the destination of a replicate task) or to override
 // the registered values.
 // A caller with nothing to supply passes null.
-// host reaches the phone's keychain when the phone vault holds the credentials, and is null where there is no phone shell.
+// host reaches the mobile's keychain when the mobile vault holds the credentials, and is null where there is no mobile shell.
 // baseDir is the directory a relative databasePath is resolved against (see createStorage): the dbs directory of the app's data directory, or empty for
 // the working directory.
 //

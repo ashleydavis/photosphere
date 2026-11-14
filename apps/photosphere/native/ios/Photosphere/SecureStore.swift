@@ -1,5 +1,5 @@
 //
-// The device keychain behind the secureStore host requests. It keeps the secrets Photosphere holds on a phone in the iOS keychain, so
+// The device keychain behind the secureStore host requests. It keeps the secrets Photosphere holds on a mobile in the iOS keychain, so
 // they match the operating system keychain a desktop uses.
 //
 // Items are stored as kSecClassGenericPassword under a fixed service, with the accessibility attribute

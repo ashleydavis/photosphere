@@ -11,7 +11,7 @@
 // timer goes on starting passes with the app off screen. Each pass is also a task whose type is registered as keep-alive.
 //
 // The decisions of a pass are in the functions that take a PassServices, a plain interface over everything that needs the platform or the
-// core, so they are tested with no core and no phone. The passes report what they are doing to the native app, which writes it to the
+// core, so they are tested with no core and no mobile. The passes report what they are doing to the native app, which writes it to the
 // system log: the app's own log file is written through the page, which is suspended exactly when this work matters.
 //
 
@@ -119,7 +119,7 @@ pub const IPassResult = struct {
 // progress.
 //
 // A sync that runs while a prefetch is working does the same work slowly and gets in its own way. What a sync must never do is wait for
-// a prefetch that cannot finish, because a phone that has stopped syncing silently is the failure this exists to remove. So the states
+// a prefetch that cannot finish, because a mobile that has stopped syncing silently is the failure this exists to remove. So the states
 // say whether the prefetch is making progress, not whether it is finished, and only one of them holds a sync back.
 //
 pub const ReplicaState = enum(u8) {
@@ -174,7 +174,7 @@ pub const IPlan = struct {
 
 //
 // Everything a pass needs that it cannot do itself: running the planning task and the steps, keeping the CPU awake, and saying what
-// happened. An interface so the passes' decisions are tested with no core and no phone.
+// happened. An interface so the passes' decisions are tested with no core and no mobile.
 //
 pub const PassServices = struct {
     // The implementation.
@@ -370,11 +370,11 @@ pub fn runImportPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers, p
         };
     }
     pass_services.holdAwake(io, allocator, timers, true) catch |err| {
-        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the phone awake for automatic import: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the mobile awake for automatic import: {s}", .{describe(allocator, err)}) catch "Could not keep the mobile awake.");
         return ran;
     };
     defer pass_services.holdAwake(io, allocator, timers, false) catch |err| {
-        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the phone sleep again after automatic import: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the mobile sleep again after automatic import: {s}", .{describe(allocator, err)}) catch "Could not let the mobile sleep again.");
     };
     pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "Automatic import running into \"{s}\".", .{plan.database_path}) catch "Automatic import running.");
     var results: std.ArrayList(IStepResult) = .empty;
@@ -384,7 +384,7 @@ pub fn runImportPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers, p
 
 //
 // The name a replica state has on the wire, which the sync plan reads. Lower case because it is a wire value, and a value the plan does
-// not recognise is read as "unknown", which allows syncing: a value nobody understood must not be able to stop a phone syncing.
+// not recognise is read as "unknown", which allows syncing: a value nobody understood must not be able to stop a mobile syncing.
 //
 fn replicaStateName(state: ReplicaState) []const u8 {
     return @tagName(state);
@@ -432,11 +432,11 @@ pub fn runSyncPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers, pas
         return ran;
     }
     pass_services.holdAwake(io, allocator, timers, true) catch |err| {
-        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the phone awake for a sync: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the mobile awake for a sync: {s}", .{describe(allocator, err)}) catch "Could not keep the mobile awake.");
         return ran;
     };
     defer pass_services.holdAwake(io, allocator, timers, false) catch |err| {
-        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the phone sleep again after a sync: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the mobile sleep again after a sync: {s}", .{describe(allocator, err)}) catch "Could not let the mobile sleep again.");
     };
     pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "Syncing \"{s}\".", .{plan.database_path}) catch "Syncing.");
     var results: std.ArrayList(IStepResult) = .empty;
@@ -470,11 +470,11 @@ pub fn runPrefetchPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers,
         return ran;
     }
     pass_services.holdAwake(io, allocator, timers, true) catch |err| {
-        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the phone awake for the prefetch: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the mobile awake for the prefetch: {s}", .{describe(allocator, err)}) catch "Could not keep the mobile awake.");
         return ran;
     };
     defer pass_services.holdAwake(io, allocator, timers, false) catch |err| {
-        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the phone sleep again after the prefetch: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the mobile sleep again after the prefetch: {s}", .{describe(allocator, err)}) catch "Could not let the mobile sleep again.");
     };
     pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "Filling in \"{s}\".", .{plan.database_path}) catch "Filling in a replica.");
 
@@ -690,7 +690,7 @@ pub fn callNativeApp(services: TaskServices, io: std.Io, allocator: std.mem.Allo
 // Makes a native call when the native app has no native call callback. Ziggy's Windows native app and MacOS bridge have none, so on
 // Windows and MacOS the task makes the calls a desktop can do itself (windows-native-calls.zig, macos-native-calls.zig): the constant
 // results here, on the task's thread, and holdAwake on the main thread, which keeps the hold, through a task event of
-// HOLD_AWAKE_EVENT_TYPE. Anywhere else, and for a call only a phone can make, it is an error that names the method.
+// HOLD_AWAKE_EVENT_TYPE. Anywhere else, and for a call only a mobile can make, it is an error that names the method.
 //
 pub fn callOnDesktop(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) ![]const u8 {
     if (builtin.os.tag == .windows or builtin.os.tag == .macos) {
@@ -718,7 +718,7 @@ pub fn callOnDesktop(services: TaskServices, io: std.Io, allocator: std.mem.Allo
             return result;
         }
     }
-    return utils.errors.throwError("{s} is only available in the Photosphere app on a phone.", .{method});
+    return utils.errors.throwError("{s} is only available in the Photosphere app on a mobile.", .{method});
 }
 
 //

@@ -8,7 +8,7 @@
         // The frontend package takes the same checkout (apps/photosphere-frontend/package.json); the remote control server, the Xcode
         // projects and native/android/app/build.gradle stay at v0.0.23 until Photosphere moves every part to one Ziggy release.
         .ziggy = .{
-            .path = "../ziggy",
+            .path = "../../../../ziggy/.claude/worktrees/frontend-shortcuts",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon" },

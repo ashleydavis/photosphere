@@ -45,7 +45,7 @@ test "MacosNativeCalls refuses a background report it cannot read" {
     try std.testing.expectEqualStrings("backgroundLog needs {\"error\": true or false, \"message\": text}, and was given {\"message\":3}.", utils.errors.lastErrorMessage());
 }
 
-test "MacosNativeCalls does not know a native call only a phone can make" {
+test "MacosNativeCalls does not know a native call only a mobile can make" {
     var native_calls = MacosNativeCalls.init();
     defer native_calls.deinit();
     try std.testing.expect((try native_calls.call(std.testing.allocator, "exportFile", "{\"path\":\"a.jpg\"}")) == null);

@@ -59,7 +59,7 @@ public final class MainActivity extends Activity {
     }
 
     // Puts into the process environment what the core reads its settings from, which it does when the native app creates it, so
-    // this runs before the native app starts. A phone passes no environment to an app, so the home directory is the app's
+    // this runs before the native app starts. A mobile passes no environment to an app, so the home directory is the app's
     // files directory (the settings go in the app's private storage, as the sandbox of the Capacitor app held them) and the
     // temporary directory is its cache directory. A debuggable build, which is the only one a test can install, also takes every
     // string extra of the launching Intent whose name starts with PHOTOSPHERE_ as an environment variable of that name, which is

@@ -23,7 +23,7 @@ export function NoDatabaseLoaded() {
     const platform = usePlatform();
     const { openDatabase, isOpening } = useAssetDatabase();
 
-    // Drives the phone layout: stacked full-width actions rather than a row of three.
+    // Drives the mobile layout: stacked full-width actions rather than a row of three.
     const isMobile = useIsMobile();
 
     // The path of the recent database the user tapped, so the spinner shows on that one alone.
@@ -44,9 +44,9 @@ export function NoDatabaseLoaded() {
 
     return (
         <>
-            {/* The app's first screen. On a phone it is laid out as an onboarding screen: a large
+            {/* The app's first screen. On a mobile it is laid out as an onboarding screen: a large
                 icon, the pitch, then one full-width primary action with the alternatives under it.
-                Three side-by-side buttons is a desktop shape, and at phone width it clipped the
+                Three side-by-side buttons is a desktop shape, and at mobile width it clipped the
                 outer two off both edges of the screen. */}
             <Box
                 data-id="no-database-loaded"

@@ -228,7 +228,7 @@ test "succeeds when the directories do not exist yet" {
     try std.testing.expectEqual(@as(u64, 0), result.entriesRemoved);
 }
 
-test "empties a phone's data directory as well, where the databases are, when it is neither the config nor the cache directory" {
+test "empties a mobile's data directory as well, where the databases are, when it is neither the config nor the cache directory" {
     const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -258,7 +258,7 @@ test "empties a phone's data directory as well, where the databases are, when it
     try std.testing.expectEqualStrings(dataDir, result.directoriesCleared[2]);
 }
 
-test "empties a phone's data directory once when the cache directory is the same place" {
+test "empties a mobile's data directory once when the cache directory is the same place" {
     const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// The device keychain the phone's secrets are kept in. They are stored encrypted at rest, so they match what the OS keychain gives a
+// The device keychain the mobile's secrets are kept in. They are stored encrypted at rest, so they match what the OS keychain gives a
 // desktop instead of sitting in a plain file.
 //
 // The storage logic is written against a small Backing interface so it is unit-testable on a plain JVM with an in-memory backing.

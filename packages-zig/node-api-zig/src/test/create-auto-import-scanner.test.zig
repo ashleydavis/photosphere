@@ -29,8 +29,8 @@ const storage_factory = @import("storage-zig").storage_factory;
 // What decides whether a photo already in the database is copied and hashed a second time.
 //
 // This is the whole cost of a run over a library that has already been imported, on every platform:
-// a watched folder on the desktop and the CLI, and the device photo library on a phone. An item the
-// cache answers for is never opened, so on a phone it is never copied out of the library and never
+// a watched folder on the desktop and the CLI, and the device photo library on a mobile. An item the
+// cache answers for is never opened, so on a mobile it is never copied out of the library and never
 // read back, and on the desktop it is never read or hashed.
 //
 // The tests drive a real folder source and a real hash cache, because the question they are asking

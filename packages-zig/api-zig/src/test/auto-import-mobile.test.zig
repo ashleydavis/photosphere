@@ -136,7 +136,7 @@ test "the gap between background import passes: no gap at all means the default"
     try std.testing.expectEqual(@as(i64, DEFAULT_AUTO_IMPORT_PAUSE_MS), resolveAutoImportPauseMs(null).integer);
 }
 
-// Zero is a loop that starts a fresh pass the instant the last one ends, which on a phone is a flat battery rather
+// Zero is a loop that starts a fresh pass the instant the last one ends, which on a mobile is a flat battery rather
 // than a fast backup.
 test "the gap between background import passes: a gap of zero falls back to the default rather than spinning" {
     try std.testing.expectEqual(@as(i64, DEFAULT_AUTO_IMPORT_PAUSE_MS), resolveAutoImportPauseMs(.{

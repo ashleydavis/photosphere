@@ -81,7 +81,7 @@ fn plan(sandbox: *Sandbox, log: ILog) !std.json.Value {
     }, sandbox.context());
 }
 
-// A phone that has never switched automatic import on. Nothing must run, and nothing must be handed back for the service to run
+// A mobile that has never switched automatic import on. Nothing must run, and nothing must be handed back for the service to run
 // either.
 test "plan-auto-import says not to run when there is no settings file at all" {
     var sandbox: Sandbox = undefined;

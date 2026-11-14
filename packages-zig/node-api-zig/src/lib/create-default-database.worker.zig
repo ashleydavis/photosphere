@@ -31,7 +31,7 @@ const IDatabasesConfig = databases_config.IDatabasesConfig;
 // nowhere is created again on the next pass, on top of the one that is already there.
 //
 // Every platform runs this same task, so the default database comes to exist one way rather than one
-// way per platform. On a phone the background import's pass queues it, and neither file it writes is
+// way per platform. On a mobile the background import's pass queues it, and neither file it writes is
 // reachable from the WebView or from native code; on the desktop the main process queues it on the
 // worker pool.
 //

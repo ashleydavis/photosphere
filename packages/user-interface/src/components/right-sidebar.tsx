@@ -219,7 +219,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
     const theme = useTheme();
 
     //
-    // Drives the phone layout of the menu: taller rows and larger buttons, because every row here is
+    // Drives the mobile layout of the menu: taller rows and larger buttons, because every row here is
     // a thumb target rather than a mouse target.
     //
     const isMobile = useIsMobile();
@@ -365,7 +365,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
         <>
             {/* Fills the drawer rather than forcing a full viewport height, and scrolls when the
                 sections (selection, searches, content, close database) run past the bottom. With a
-                fixed 100vh and no scrolling, the lower sections were unreachable on a phone. */}
+                fixed 100vh and no scrolling, the lower sections were unreachable on a mobile. */}
             <div
                 className="flex flex-col h-full overflow-y-auto"
                 style={{

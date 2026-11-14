@@ -37,7 +37,7 @@ const buildMediaSource = media_source_registry.buildMediaSource;
 // Deleting the photos a device still holds that the database already has.
 //
 // This used to happen inside automatic import, on whatever one batch had just confirmed. That tied
-// the number of deletions per request to the size of an import batch, and on a phone every request
+// the number of deletions per request to the size of an import batch, and on a mobile every request
 // raises a system confirmation dialog, so the user was asked once per handful of photos. It is now
 // its own operation, run when the user asks for it: one walk, one set of dialogs, at a moment they
 // chose.

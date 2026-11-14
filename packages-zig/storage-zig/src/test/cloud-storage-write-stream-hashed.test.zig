@@ -97,12 +97,12 @@ fn hashBase64(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 //
-// Every file a phone library holds must go up as one request.
+// Every file a mobile library holds must go up as one request.
 //
 // A multipart upload cannot be handed a file: its uploader reads the stream into a buffer per
-// part, and on a phone bytes reach a buffer only by crossing the host bridge as base64, twice.
+// part, and on a mobile bytes reach a buffer only by crossing the host bridge as base64, twice.
 // Measured on a Pixel 6 against MinIO on the same LAN, with the network proven to carry 11.8MB/s
-// from that phone, every five megabyte part took 2.2 to 2.5 seconds to send and about as long
+// from that mobile, every five megabyte part took 2.2 to 2.5 seconds to send and about as long
 // again to read in, while whole files under the old ceiling went up in under a second each.
 //
 test "a video sized body goes up as one request carrying the whole object hash" {

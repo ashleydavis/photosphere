@@ -101,7 +101,7 @@ body.mobile #navbar {
  * The middle of the nav bar, between the two sidebar buttons, which are pinned to the edges.
  *
  * Everything that can pile up in the bar lives in here: the page links, the loading and syncing
- * spinners, the jobs indicator, the photo count, the update badge. On a phone there is not room for
+ * spinners, the jobs indicator, the photo count, the update badge. On a mobile there is not room for
  * all of it at once, and when it overflowed the whole bar it pushed the right sidebar button off the
  * screen, leaving no way to open that sidebar at all. Scrolling this part sideways means the bar
  * runs out of room here rather than at the edges, so both sidebar buttons stay reachable however
@@ -273,7 +273,7 @@ body.mobile #navbar {
    appear instantly. They are animated here rather than through an `sx` prop so that every dialog
    picks it up, including the few that do not use `desktopDialogSx`.
 
-   This covers the desktop form only. On a phone a dialog is a Joy Drawer, which slides itself;
+   This covers the desktop form only. On a mobile a dialog is a Joy Drawer, which slides itself;
    see `mobileSheetDrawerSx`. There is no matching exit animation because Joy's Modal unmounts the
    moment it closes, leaving nothing to animate out. */
 

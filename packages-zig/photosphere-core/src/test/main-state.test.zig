@@ -83,7 +83,7 @@ const CountedServices = struct {
         .dataDir = dataDir,
         .configPath = configPath,
         .statePath = statePath,
-        .isPhone = isPhone,
+        .isMobile = isMobile,
         .nativeCallbacks = nativeCallbacks,
         .configureLog = configureLog,
     };
@@ -144,8 +144,8 @@ const CountedServices = struct {
         unexpected("statePath");
     }
 
-    fn isPhone(_: *anyopaque) bool {
-        unexpected("isPhone");
+    fn isMobile(_: *anyopaque) bool {
+        unexpected("isMobile");
     }
 
     fn configureLog(_: *anyopaque, _: ziggy.log.ILogOptions) anyerror!void {

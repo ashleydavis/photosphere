@@ -51,7 +51,7 @@ fi
 LOCAL_APP_PATH="$("${PLATFORM}_app_path" "local-db")"
 SECOND_APP_PATH="$("${PLATFORM}_app_path" "second-db")"
 
-# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+# A user on a mobile types the short name, which the app resolves into its own storage. A desktop user types the full path.
 case "$PLATFORM" in
     android|ios)
         REMOTE_APP_PATH="remote-db"

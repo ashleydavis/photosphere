@@ -36,7 +36,7 @@ export function DatabasesPage() {
     const { openDatabase } = useAssetDatabase();
     const navigate = useNavigate();
 
-    // On a phone-width screen there is no room for the secondary columns (description, path,
+    // On a mobile-width screen there is no room for the secondary columns (description, path,
     // origin), so the table shows just the name and the actions. The full detail is still one tap
     // away in the view-database dialog.
     const isMobile = useIsMobile();
@@ -248,7 +248,7 @@ export function DatabasesPage() {
                 </Box>
             }
 
-            {/* A phone gets a list of cards: the name has the whole width, the supporting detail is
+            {/* A mobile gets a list of cards: the name has the whole width, the supporting detail is
                 stacked under it, and the six per-row actions live in the card's ⋮ menu. The table is
                 kept for wide screens, where the columns fit and are worth having. */}
             {databases.length > 0 && isMobile

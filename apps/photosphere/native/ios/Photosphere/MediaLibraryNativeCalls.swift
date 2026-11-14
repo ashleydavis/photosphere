@@ -62,7 +62,7 @@ final class MediaLibraryNativeCalls: ZiggyNativeCallHandler {
         if #available(iOS 14.0, *), status == .limited {
             return
         }
-        throw ZiggyNativeCallError("\(method) needs permission to read the photo library, and the app does not have it. Allow access to Photos for Photosphere in the phone's Settings.")
+        throw ZiggyNativeCallError("\(method) needs permission to read the photo library, and the app does not have it. Allow access to Photos for Photosphere in the mobile's Settings.")
     }
 
     // Every image and video in the library, newest first, so a backfill that is interrupted has brought in the photos the user is most

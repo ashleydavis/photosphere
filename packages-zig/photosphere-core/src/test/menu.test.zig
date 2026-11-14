@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const menu = @import("photosphere-core").menu;
 const actions = @import("photosphere-core").actions;
@@ -81,7 +82,10 @@ test "the menu entries show Open Database with its action's label, name and shor
         if (entry.action) |action| {
             if (std.mem.eql(u8, std.mem.span(action), "open-database")) {
                 try std.testing.expectEqualStrings("Open Database...", std.mem.span(entry.label.?));
-                try std.testing.expectEqualStrings("CmdOrCtrl+O", std.mem.span(entry.shortcut.?));
+                // A menu entry shows the shortcut as the platform does, not as the menu writes it.
+                var shortcut_buffer: [64]u8 = undefined;
+                const expected_shortcut = try ziggy.shortcut.writeDisplayText(&shortcut_buffer, try ziggy.shortcut.parse("CmdOrCtrl+O"), builtin.os.tag);
+                try std.testing.expectEqualStrings(expected_shortcut, std.mem.span(entry.shortcut.?));
                 found = true;
             }
         }

@@ -1202,7 +1202,7 @@ const OpenAndCheckMerkleTreeOperation = struct {
     // The path of the database to look for.
     databasePath: []const u8,
 
-    // Reaches the phone's keychain for the credentials, or null where there is no phone shell.
+    // Reaches the mobile's keychain for the credentials, or null where there is no mobile shell.
     host: ?utils.native_caller.INativeCaller,
 
     //
@@ -1237,9 +1237,9 @@ pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, log: ILog, 
     // Bounded, because nothing else bounds it. One attempt, because this is a question a user is
     // waiting on the answer to rather than work worth retrying: the app tells them the database
     // cannot be reached, and pressing it again is the retry. Without the bound the wait fell through
-    // to the S3 client's ten minute request ceiling, which is set for a phone pushing a large video
+    // to the S3 client's ten minute request ceiling, which is set for a mobile pushing a large video
     // and leaves someone opening a database looking at a screen that never resolves. It only bites
-    // where a connection is accepted and then answers nothing, which is what a phone reaching a
+    // where a connection is accepted and then answers nothing, which is what a mobile reaching a
     // stopped server through an `adb reverse` forward gets, and is why this was invisible on an
     // emulator, where the same server refuses the connection at once.
     //

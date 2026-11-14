@@ -8,7 +8,7 @@
 #
 # The description input is bound to React state that onUpdateDescription sets before the POST is even sent, so reading it in place
 # passes whether or not a single byte reached the disk. On a desktop the database is read back with the CLI, which is a separate
-# process opening the database from scratch. On a phone the database cannot be read from the host, so the database is closed and
+# process opening the database from scratch. On a mobile the database cannot be read from the host, so the database is closed and
 # opened again, which throws the React state away and loads the record from storage. Either way only a persisted edit passes.
 #
 # The AssetView is closed before the check because that is what flushes the write: the description goes through a 500ms debounce, and

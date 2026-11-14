@@ -2,7 +2,7 @@
 // The abstraction the auto-import task scans through.
 //
 // A media source is somewhere media arrives: a folder on a desktop machine, or the device photo
-// library on a phone. The auto-import task only ever talks to this interface, so the same task runs
+// library on a mobile. The auto-import task only ever talks to this interface, so the same task runs
 // unchanged on the CLI, on the desktop and on mobile, and adding a new kind of source does not touch
 // the task at all.
 //

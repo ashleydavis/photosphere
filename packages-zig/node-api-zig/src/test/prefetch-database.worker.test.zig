@@ -424,7 +424,7 @@ test "fails with the error of a file it could not fetch" {
 //
 // How long the one file takes to come out of the origin, in milliseconds. Comfortably over retry's 30 second default and far
 // under the long timeout a file copy is meant to get, so it separates the two: with the default the copy is abandoned, with the
-// long one it finishes. The metadata hash index of a real database is nine files of about 13 MB each, and a phone cannot pull one
+// long one it finishes. The metadata hash index of a real database is nine files of about 13 MB each, and a mobile cannot pull one
 // of those down and write it inside thirty seconds.
 //
 const SLOW_READ_DELAY_MS: i64 = 45_000;

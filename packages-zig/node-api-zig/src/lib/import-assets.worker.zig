@@ -115,7 +115,7 @@ pub const CACHE_FLUSH_SIZE = 100;
 // The cost is that a photo waits longer to appear in the gallery during a bulk backfill, and that a
 // run interrupted before a batch fills loses the assets in it from the database, having already paid
 // to upload and process them. That is the right trade for a first backup of a whole library, which
-// is what this number is for; the scanner's caught-up escape means a phone that has finished
+// is what this number is for; the scanner's caught-up escape means a mobile that has finished
 // backfilling still writes a photo it has just taken without waiting for the rest of a batch.
 //
 pub const DATABASE_BATCH_SIZE = 250;
@@ -686,7 +686,7 @@ const ImportRun = struct {
         // Dropping them unconditionally, which is what this used to do, makes every batch read back
         // what it already had: about one and three quarter reads per record, against none when the
         // caches are kept, and those reads grow with the database because an index page holds every
-        // record in it. On a phone each one crosses the embedded engine bridge.
+        // record in it. On a mobile each one crosses the embedded engine bridge.
         //
         // The check is the database.'s own modified stamp, which every writer updates under this
         // same lock, compared against what this run wrote when it last held the lock. It is read here
@@ -862,7 +862,7 @@ const ImportRun = struct {
         // dry, in which case what is waiting is all there is ever going to be.
         //
         // The timer (scheduleProcessQueue) coalesces completions that arrive within a second of each other, which
-        // does nothing at all on a phone: an item there takes over ten seconds to reach this point,
+        // does nothing at all on a mobile: an item there takes over ten seconds to reach this point,
         // so every item got a batch to itself. Measured on a Pixel 6, that was 37 batches for 42
         // photos, and each batch pays for a full database commit whatever its size. Committing is
         // 47% of the write stage and the write stage is half the import.
@@ -1136,13 +1136,13 @@ const ImportRun = struct {
         // Save the hash cache and the import record once there is nothing left to import.
         //
         // Saving on a count alone only works for an import that ends, and this one may not:
-        // automatic import brings in a handful of photos and then waits, so without this a phone
+        // automatic import brings in a handful of photos and then waits, so without this a mobile
         // that imported five photos and stayed running saved none of those entries, and the next run
         // hashed and copied the same photos again. Being caught up is the moment that matters, and
         // the moment it costs nothing: nothing more is coming, and hours may pass before anything is.
         //
         // It is deliberately not a timer. This task runs inside an embedded engine on a
-        // phone, where a timer fires outside the task's own control flow, can overlap the task's own
+        // mobile, where a timer fires outside the task's own control flow, can overlap the task's own
         // writes, and outlives the task if a clear is ever missed. This runs on the scanner's own
         // loop instead. Both writes cost nothing when nothing has changed, so repeating it on every
         // idle tick is free.
@@ -1611,7 +1611,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, timers: Tim
     // Every other progress report goes out on a scanner tick, and the scanner stops ticking the
     // moment it has read the source to the end, which is well before the last photo it pushed
     // has been hashed, uploaded and written. Without this the run's final report says nothing
-    // was imported and is never corrected, which is exactly what a phone importing one photo
+    // was imported and is never corrected, which is exactly what a mobile importing one photo
     // looked like: `0 imported` repeatedly, and then the run ended.
     try run.sendImportProgress(log, null);
 

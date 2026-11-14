@@ -32,7 +32,7 @@ export interface IOpenDatabaseModalProps {
 export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
     // The list comes from the app context rather than a read of its own. The context holds it in
     // memory and re-reads it whenever the platform says the configured databases changed, so a
-    // database created while this dialog is showing (automatic import creates one on a phone)
+    // database created while this dialog is showing (automatic import creates one on a mobile)
     // appears in the list instead of the dialog having to be closed and opened again.
     const { dbs, refreshDbs } = useApp();
     const { openDatabase, databasePath, isOpening } = useAssetDatabase();
@@ -156,7 +156,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                             )
                         }
                     </DialogContent>
-                    {/* The four actions do not fit one row at phone width, so they wrap instead of
+                    {/* The four actions do not fit one row at mobile width, so they wrap instead of
                         squeezing until their labels break mid-button. */}
                     <DialogActions sx={{ flexWrap: 'wrap' }}>
                         <Button data-id="open-database-modal-cancel" variant="plain" onClick={onClose}>Cancel</Button>

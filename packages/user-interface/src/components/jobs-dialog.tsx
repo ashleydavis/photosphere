@@ -43,7 +43,7 @@ export interface IJobsDialogProps {
 //
 // Shows the background work running right now, and offers to stop it.
 //
-// A modal on a desktop and a sheet on a phone, opened from the navbar spinner. It lives here rather
+// A modal on a desktop and a sheet on a mobile, opened from the navbar spinner. It lives here rather
 // than in the sidebar because the sidebar is a navigation menu and this is not navigation: it is a
 // place to look at what is happening and stop it.
 //

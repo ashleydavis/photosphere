@@ -10,7 +10,7 @@ import { MockProviders } from "../mocks";
 import type { IStory } from "../types";
 
 //
-// Stories for the EntityCard: the card that replaces a table row on a phone.
+// Stories for the EntityCard: the card that replaces a table row on a mobile.
 //
 export const stories: IStory[] = [
     {
@@ -63,7 +63,7 @@ export const stories: IStory[] = [
             <MockProviders>
                 <EntityCard
                     title="A database with a very long name that cannot possibly fit on one line"
-                    subtitle="A description that is also far too long to fit across a phone screen in one go"
+                    subtitle="A description that is also far too long to fit across a mobile screen in one go"
                     detail="s3:some-very-long-bucket-name:/deeply/nested/path/to/the/database/root"
                     icon={<Storage />}
                     onClick={() => {}}

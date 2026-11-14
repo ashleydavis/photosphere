@@ -38,7 +38,7 @@ Documented: the `DragEvent` constructor accepts a `dataTransfer` option and has 
 
 ## Android and iOS
 
-A phone has no file drop. The inject script's drop handling never fires there.
+A mobile has no file drop. The inject script's drop handling never fires there.
 
 ## How it is tested
 

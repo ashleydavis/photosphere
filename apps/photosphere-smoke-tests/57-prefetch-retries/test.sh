@@ -95,7 +95,7 @@ run_zig_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
 run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/multiple-files/test-1.jpeg" --db "$S3_ORIGIN_PATH" --yes || exit 1
 run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/multiple-files/test-2.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
 
-# --- 2. The phone's database, which is a partial replica of that origin. ---
+# --- 2. The mobile's database, which is a partial replica of that origin. ---
 
 LOCAL_REPLICA="$TMP_DIR/$DB_NAME"
 run_zig_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
@@ -114,7 +114,7 @@ if [ -d "$LOCAL_REPLICA/thumb" ]; then
 fi
 log_info "The partial replica holds no thumbnails, which is what the background loop has to fix"
 
-# --- 3. Put it on the phone, with syncing on and automatic import off. ---
+# --- 3. Put it on the mobile, with syncing on and automatic import off. ---
 
 # Wipe everything the app has stored on the device, so this test starts from a known state and, in
 # particular, from a state where no database has ever been opened.

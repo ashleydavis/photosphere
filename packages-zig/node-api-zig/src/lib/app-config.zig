@@ -14,7 +14,7 @@ const fs = node_utils.fs;
 // a key belongs to.
 //
 // What the keys mean is not decided here. app-config-format.zig owns that, and is where the flat view
-// and its conversions live, so the phone's worker can be handed the same definition without dragging
+// and its conversions live, so the mobile's worker can be handed the same definition without dragging
 // the filesystem in with it. This module is the file half: loading it, and changing it. Everything
 // there is re-exported from here so a caller that wants both does not have to know they are two
 // modules.

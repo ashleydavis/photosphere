@@ -3,7 +3,7 @@
 //
 // The stored bytes go across as they are. The ciphertext one database holds is exactly the
 // ciphertext the other would write, so decrypting it on the way out and encrypting it again on the
-// way in changes nothing but the time it takes, and on a phone that time is the whole cost of
+// way in changes nothing but the time it takes, and on a mobile that time is the whole cost of
 // pushing an original: AES-256-CBC is slow there, for bytes the network carries in a few seconds.
 //
 

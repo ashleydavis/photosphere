@@ -48,7 +48,7 @@ This plan adds the ids and smoke checks that click three of them.
     - A comment saying the location is chosen with **Select this location**, which closes the browser and fills the path with the bucket in `s3:<bucket>/<prefix>` form.
     - `send_command "$APP_PORT" click '{"dataId":"s3-browser-select"}' || exit 1`
     - `wait_for_value "$APP_PORT" database-path-input "s3:$S3_EMULATOR_BUCKET/"`
-    - Cancel the dialog under it with the same `case "$PLATFORM"` as `close_s3_browser` (`add-database-cancel` on a phone, `create-database-cancel` on a desktop). Factor that `case` into a function `cancel_add_dialog` with a comment and call it from `close_s3_browser` and from here.
+    - Cancel the dialog under it with the same `case "$PLATFORM"` as `close_s3_browser` (`add-database-cancel` on a mobile, `create-database-cancel` on a desktop). Factor that `case` into a function `cancel_add_dialog` with a comment and call it from `close_s3_browser` and from here.
     - `log_success "Select this location fills the path with the chosen bucket"`.
     - Run `PHOTOSPHERE_SMOKE_SCENARIO=25 bun run test:ziggy` and `PHOTOSPHERE_SMOKE_SCENARIO=25 bun run test:ziggy:and` and see both exit 0.
 

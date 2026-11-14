@@ -2,7 +2,7 @@
 
 ## Overview
 
-Sync merges records field by field and resolves conflicts by comparing wall-clock timestamps taken from whichever machine made each write (`mergeValues` in `packages/bdb/src/lib/merge-records.ts`). Those clocks are not the same clock. A phone 26 seconds behind the desktop that wrote the origin can make an edit *after* that write and have it stamped *before* it, so the edit loses a merge it should win, silently and with no error anywhere. Nothing in the design bounds that skew, so the failure is not a bug to be found and removed but a property of using wall time as the ordering. This plan replaces the ordering with one that does not depend on clocks agreeing: either vector clocks or hybrid logical clocks. Both options are written up here; the choice is deliberately left open.
+Sync merges records field by field and resolves conflicts by comparing wall-clock timestamps taken from whichever machine made each write (`mergeValues` in `packages/bdb/src/lib/merge-records.ts`). Those clocks are not the same clock. A mobile 26 seconds behind the desktop that wrote the origin can make an edit *after* that write and have it stamped *before* it, so the edit loses a merge it should win, silently and with no error anywhere. Nothing in the design bounds that skew, so the failure is not a bug to be found and removed but a property of using wall time as the ordering. This plan replaces the ordering with one that does not depend on clocks agreeing: either vector clocks or hybrid logical clocks. Both options are written up here; the choice is deliberately left open.
 
 ## Issues
 

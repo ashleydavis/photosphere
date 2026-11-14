@@ -8,7 +8,7 @@
 #
 # The database is populated on a live server first, so the empty gallery this test is looking out for would definitely be wrong. On a
 # desktop it is built through the app, then the emulator is stopped and the app restarted, so nothing in the process can be serving the
-# assets from memory. On a phone it is built in the bucket from the host with the CLI and registered on the device, and the emulator is
+# assets from memory. On a mobile it is built in the bucket from the host with the CLI and registered on the device, and the emulator is
 # stopped before the app ever opens it, so nothing on the device can be serving it from a cache.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

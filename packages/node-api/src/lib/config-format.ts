@@ -2,7 +2,7 @@
 // The on-disk contents of config.yaml and the conversions between it and the in-memory type.
 //
 // One file holds every setting the app remembers, on every platform: ~/.config/photosphere/config.yaml
-// for the CLI and the desktop app, and config.yaml at the root of the storage sandbox on a phone. One
+// for the CLI and the desktop app, and config.yaml at the root of the storage sandbox on a mobile. One
 // file means one format definition, so a setting means the same thing whichever platform wrote it.
 // The wiki page "Configuration-File" documents the file for users.
 //
@@ -275,7 +275,7 @@ function yamlToSyncFile(section: IYamlSyncSection | undefined): ISyncFile {
 //
 // A file that is not there arrives here as undefined and comes back as the defaults, which have both
 // automatic import and syncing switched off. That is the whole point of the defaults being what they
-// are: a phone that cannot read its settings must not start pushing over a metered connection.
+// are: a mobile that cannot read its settings must not start pushing over a metered connection.
 //
 // A section that is malformed falls back to that section's own defaults without discarding the
 // sections that did parse, and a key nothing recognises is ignored rather than rejected. One
@@ -456,7 +456,7 @@ export interface IParsedConfigFile {
 // Parses the text of a config file, reporting whether it was readable.
 //
 // Text that will not parse as YAML comes back as the defaults rather than throwing, for the same
-// reason an absent file does: this runs on a phone whose only copy of the file may have been
+// reason an absent file does: this runs on a mobile whose only copy of the file may have been
 // hand-edited, and refusing to start is a worse answer than starting with syncing switched off. The
 // caller is told, so the failure reaches the log instead of being silent.
 //

@@ -4,7 +4,7 @@
 // Tests for the connection-type host function.
 //
 // computeSyncAllowed treats "cellular" as the one type to refuse and "unknown" as permitted, so what
-// this mapping does with a value it does not recognise decides whether a phone reporting something
+// this mapping does with a value it does not recognise decides whether a mobile reporting something
 // new stops syncing altogether or carries on. It carries on.
 //
 // There is no test for reading with no host installed: the host is a value the caller passes in, so it cannot be missing.

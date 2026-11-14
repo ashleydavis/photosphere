@@ -40,7 +40,7 @@ pub fn readStateSetting(comptime T: type, arena: std.mem.Allocator, io: std.Io, 
 // Reading and writing state.json where there is a filesystem: the CLI and the desktop app.
 //
 // The sibling of config-file.zig, and it works the same way. The mobile apps read and write the same
-// document through worker tasks instead, because a phone's WebView has no
+// document through worker tasks instead, because a mobile's WebView has no
 // filesystem of its own. Both go through state-format.zig, so the file means the same thing whichever
 // wrote it.
 //

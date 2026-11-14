@@ -172,7 +172,7 @@ Detect things the user might not want shown in slideshows or shared: faces of ch
 ## 5. Editing and Enhancement
 
 ### 5.1 Super-Resolution and Restoration
-- **Upscaling**: Real-ESRGAN, SwinIR, HAT, BSRGAN. Bring 480p phone snaps from 2008 to 4K.
+- **Upscaling**: Real-ESRGAN, SwinIR, HAT, BSRGAN. Bring 480p mobile snaps from 2008 to 4K.
 - **Face restoration**: GFPGAN, CodeFormer, restore-old-photos pipelines.
 - **Denoising**: NAFNet, Restormer.
 - **Scratch / damage removal** for scanned old photos: Bringing-Old-Photos-Back-to-Life (Microsoft).
@@ -302,7 +302,7 @@ Realistic options:
 - **Heavy work delegated to the desktop server** over LAN: full CLIP indexing, vision LLM captioning, restoration, video processing. Mobile just renders results.
 - **Capture-time AI**: classify photos as they are taken, scan business cards / receipts on capture, suggest sharing right after the shutter.
 - **On-device search index** of just the user's recent / favourite subset, so search works offline.
-- **MCP / chat client on phone**: the mobile app could host a chat panel that talks to the desktop MCP server when on the same network.
+- **MCP / chat client on mobile**: the mobile app could host a chat panel that talks to the desktop MCP server when on the same network.
 
 **Audit & sources for section 9**:
 - "Apple Photos runs all of its face / scene / OCR locally" — widely-stated but not specifically cited here. Apple Vision and Core ML are real frameworks.

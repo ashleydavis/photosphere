@@ -17,7 +17,7 @@ const pathJoin = storage_factory.pathJoin;
 // missing index files, and then ended on "Operation timed out after 30000ms: () =>
 // storage.listDirs(dirPath, 1000, next)".
 //
-// The listing was not slow. The walk runs interleaved with the copies it feeds, and on the phone
+// The listing was not slow. The walk runs interleaved with the copies it feeds, and on the mobile
 // those copies held the thread inside long blocking calls: the failing task
 // reported 193 seconds of run time with 81 milliseconds of pumping and 14 of waiting for events, so
 // for most of those three minutes the walk did not run at all. A wall-clock timeout then measures time

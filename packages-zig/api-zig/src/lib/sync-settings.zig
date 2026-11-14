@@ -29,7 +29,7 @@ pub const ISyncSettings = struct {
 //
 // Syncing off, deliberately. A file that is missing or will not parse is not a user saying "sync
 // over anything you like": the app writes this file, so a copy nobody can read means something is
-// wrong, and the safe answer to "should this phone start pushing photos over its cellular
+// wrong, and the safe answer to "should this mobile start pushing photos over its cellular
 // connection?" is no. The interface seeds the file with its own defaults the first time it runs,
 // which is what stops a fresh install sitting here.
 //
@@ -113,8 +113,8 @@ pub const ISyncFile = struct {
 //
 // The same five minutes the desktop's periodic sync uses, and what the mobile WebView scheduler used
 // before the loop moved to the native side. A pass where nothing has changed still costs a small
-// read at the origin, which on a phone is a network request and a little battery, so the gap is what
-// keeps an idle phone from paying for that every few seconds.
+// read at the origin, which on a mobile is a network request and a little battery, so the gap is what
+// keeps an idle mobile from paying for that every few seconds.
 //
 pub const DEFAULT_SYNC_PAUSE_MS = 5 * 60 * 1000;
 
@@ -135,7 +135,7 @@ fn numberAsFloat(value: std.json.Value) ?f64 {
 //
 // Zero, a negative number, and anything that is not a finite number all fall back to the default.
 // The value is read from a file a user may edit, and a gap of zero is a loop that starts a fresh
-// pass the instant the last one ends, which on a phone is a flat battery rather than a fast backup.
+// pass the instant the last one ends, which on a mobile is a flat battery rather than a fast backup.
 //
 pub fn resolveSyncPauseMs(pauseMs: ?std.json.Value) std.json.Value {
     const value = pauseMs orelse {

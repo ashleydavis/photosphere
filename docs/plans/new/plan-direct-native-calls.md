@@ -4,7 +4,7 @@
 
 Photosphere's background tasks run on Ziggy worker threads and reach the platform through `callNativeApp` (`packages-zig/photosphere-core/src/lib/background-work.zig`). It sends the method name and a JSON request to the main thread, which hands them to the native app. The native app replies with JSON text, and the task parses that text back.
 
-On a phone that trip is needed, because the answer comes from Java or Swift. On a desktop it is waste:
+On a mobile that trip is needed, because the answer comes from Java or Swift. On a desktop it is waste:
 
 - **`requestNotificationPermission`** and **`networkConnectionType`** always give the same answer on a desktop (`{"granted":true}` and `"unknown"`). Yet:
   - Linux sends a message to its Zig native app (`apps/photosphere/native/linux/src/main.zig`) to get them.
@@ -12,35 +12,35 @@ On a phone that trip is needed, because the answer comes from Java or Swift. On 
 - **`backgroundLog`** on a desktop only prints a line. Linux sends it to the native app to print, and Windows and MacOS route it through the same string dispatch with a JSON encode and parse.
 - **`holdAwake`** on Windows and MacOS must cross to the main thread, which owns the power request. But the task wraps a JSON request inside the event, `main-process.zig` stringifies that request again, and `main-state.zig` hands it to the string dispatch, which parses it a third time.
 
-This plan has desktops answer the constant calls and the log on the task's own thread with plain Zig calls. The Windows and MacOS hold travels as a plain boolean in its event. Every phone path stays exactly as it is. On Linux, `holdAwake` stays a native call, because the hold belongs to the GTK main thread.
+This plan has desktops answer the constant calls and the log on the task's own thread with plain Zig calls. The Windows and MacOS hold travels as a plain boolean in its event. Every mobile path stays exactly as it is. On Linux, `holdAwake` stays a native call, because the hold belongs to the GTK main thread.
 
 ## Issues
 
 ## Steps
 
-1. **A shared phone check** (`packages-zig/photosphere-core/src/lib/background-work.zig`).
-   - Add `pub const is_phone = builtin.os.tag == .ios or builtin.abi.isAndroid();` with a comment: the calls only a phone's native app can answer go through `callNativeApp`, and a desktop answers them itself.
+1. **A shared mobile check** (`packages-zig/photosphere-core/src/lib/background-work.zig`).
+   - Add `pub const is_mobile = builtin.os.tag == .ios or builtin.abi.isAndroid();` with a comment: the calls only a mobile's native app can answer go through `callNativeApp`, and a desktop answers them itself.
    - Make the code compile with `mise exec -- zig build test -Dtest-file=photosphere-core/mobile-requests.test.zig -Dcli-test-file=none --summary all`.
 
 2. **Notification permission** (`packages-zig/photosphere-core/src/lib/mobile-requests.zig`, `startBackgroundImportHandler`).
-   - Add `pub fn readNotificationPermission(allocator: std.mem.Allocator, reply: []const u8) !bool`. It parses the reply and returns `granted`. It throws "The phone's answer to requestNotificationPermission could not be read." when the reply is not JSON, not an object, or has no boolean `granted`, the same message the handler throws today.
+   - Add `pub fn readNotificationPermission(allocator: std.mem.Allocator, reply: []const u8) !bool`. It parses the reply and returns `granted`. It throws "The mobile's answer to requestNotificationPermission could not be read." when the reply is not JSON, not an object, or has no boolean `granted`, the same message the handler throws today.
    - In the handler:
-     - when `background_work.is_phone`, call `callNativeApp(..., "requestNotificationPermission", "null")` and pass the reply to `readNotificationPermission`;
+     - when `background_work.is_mobile`, call `callNativeApp(..., "requestNotificationPermission", "null")` and pass the reply to `readNotificationPermission`;
      - otherwise take `granted` as `true` with no call.
      - Keep the "Notifications were refused" log line for `false`.
    - Compile and run the mobile-requests tests (see Unit Tests).
 
 3. **Connection type** (`packages-zig/photosphere-core/src/lib/mobile-planning.zig`, `networkConnectionTypeOfTask`).
    - Add `pub fn readNetworkConnectionType(allocator: std.mem.Allocator, reply: []const u8) ![]const u8`. It holds the parse and the two errors from today's function, worded exactly as now:
-     - "The phone's answer to networkConnectionType could not be read."
-     - "The phone's answer to networkConnectionType was not text."
-   - In `networkConnectionTypeOfTask`: when `background_work.is_phone`, make the native call and pass the reply to `readNetworkConnectionType`. Otherwise return `"unknown"` with no call.
+     - "The mobile's answer to networkConnectionType could not be read."
+     - "The mobile's answer to networkConnectionType was not text."
+   - In `networkConnectionTypeOfTask`: when `background_work.is_mobile`, make the native call and pass the reply to `readNetworkConnectionType`. Otherwise return `"unknown"` with no call.
    - Update the function's comment, which today says Windows makes the call itself.
    - Compile and run the mobile-planning tests.
 
 4. **Background log** (`background-work.zig`, `sendBackgroundLog`).
-   - When not `is_phone`, write `message` with `utils.console.@"error"(message)` and return. That is the line the Windows and MacOS dispatch wrote, and the Linux native app wrote it to standard error too.
-   - Keep the JSON request and `callNativeApp` for phones.
+   - When not `is_mobile`, write `message` with `utils.console.@"error"(message)` and return. That is the line the Windows and MacOS dispatch wrote, and the Linux native app wrote it to standard error too.
+   - Keep the JSON request and `callNativeApp` for mobiles.
    - Compile and run the photosphere-core tests named under Unit Tests.
 
 5. **Hold awake event** (`background-work.zig`, `holdAwakeOfTask`, `HOLD_AWAKE_EVENT_TYPE`; `main-process.zig` hold-awake branch; `main-state.zig`, `holdAwake`).
@@ -56,7 +56,7 @@ This plan has desktops answer the constant calls and the log on the task's own t
      - change the struct comment to say it holds the computer awake for the main thread.
    - In `background-work.zig`:
      - delete `callOnDesktop` and its comment;
-     - in `callNativeApp`, replace the `error.NativeCallMissing` branch with `return utils.errors.throwError("{s} is only available in the Photosphere app on a phone.", .{method});`;
+     - in `callNativeApp`, replace the `error.NativeCallMissing` branch with `return utils.errors.throwError("{s} is only available in the Photosphere app on a mobile.", .{method});`;
      - remove the `windows_native_calls` and `macos_native_calls` imports if nothing else in the file uses them.
    - Compile for the host and run the Windows compile check from step 5.
 
@@ -73,14 +73,14 @@ This plan has desktops answer the constant calls and the log on the task's own t
 
 ## Unit Tests
 
-- **`mobile-requests.test.zig`.** These tests ran the phone path on the Linux host, where the core now answers itself. Their phone-path assertions move to the pure functions, with the same messages.
-  - Replace "startBackgroundImport asks the phone for the notification permission first, and fails with the reason when it cannot" with:
+- **`mobile-requests.test.zig`.** These tests ran the mobile path on the Linux host, where the core now answers itself. Their mobile-path assertions move to the pure functions, with the same messages.
+  - Replace "startBackgroundImport asks the mobile for the notification permission first, and fails with the reason when it cannot" with:
     - `readNotificationPermission` returns `true` for `{"granted":true}` and `false` for `{"granted":false}`.
-    - A phone's error reply still reaches the user with its reason. "a request the phone could not do is an error reply with the reason it gave" already covers that path through `callNativeApp`.
-  - Replace "startBackgroundImport refuses a notification answer it cannot read" with: `readNotificationPermission` throws "The phone's answer to requestNotificationPermission could not be read." for `{"allowed":true}` and for `not json`.
+    - A mobile's error reply still reaches the user with its reason. "a request the mobile could not do is an error reply with the reason it gave" already covers that path through `callNativeApp`.
+  - Replace "startBackgroundImport refuses a notification answer it cannot read" with: `readNotificationPermission` throws "The mobile's answer to requestNotificationPermission could not be read." for `{"allowed":true}` and for `not json`.
   - Rename "on Windows and MacOS, whose shells have no host request callback, the core starts and stops the background work itself" to "on a desktop the core starts and stops the background work itself, without asking the native app". Delete its non-Windows, non-MacOS early branch, so every desktop runs the start and stop assertions. Add `try std.testing.expect((try app.lastNativeCall(calls.allocator())) == null);` after the start.
-  - Keep "on a platform with no host request callback every request says it is only available on a phone": its message now comes from `callNativeApp` directly.
-- **`mobile-planning.test.zig`.** Replace "plan-sync asks the phone for the connection type when syncing is switched on, and a phone that cannot answer is an error that says so" with three tests:
+  - Keep "on a platform with no host request callback every request says it is only available on a mobile": its message now comes from `callNativeApp` directly.
+- **`mobile-planning.test.zig`.** Replace "plan-sync asks the mobile for the connection type when syncing is switched on, and a mobile that cannot answer is an error that says so" with three tests:
   - `readNetworkConnectionType` returns `wifi` for `"wifi"`.
   - `readNetworkConnectionType` throws "could not be read." for `not json`.
   - `readNetworkConnectionType` throws "was not text." for `3`.
@@ -94,7 +94,7 @@ This plan has desktops answer the constant calls and the log on the task's own t
 ## Smoke Tests
 
 - `bun run test:ziggy` exercises the Linux desktop app, including background passes that take and release the hold through the native app.
-- `bun run test:ziggy:and` exercises the phone path, which keeps sending all four calls to the Java native app.
+- `bun run test:ziggy:and` exercises the mobile path, which keeps sending all four calls to the Java native app.
 
 ## Verify
 
@@ -108,8 +108,8 @@ This plan has desktops answer the constant calls and the log on the task's own t
 
 ## Notes
 
-- **Phone paths are unchanged.** Android and iOS still answer all four calls in `PhotosphereNativeCalls.java` and `PhotosphereNativeCalls.swift`. Calling those APIs directly from Zig would need AI-written JNI and Objective-C runtime bindings, and the Android permission prompt must run on the UI thread anyway, so this plan leaves phones on messages.
+- **Mobile paths are unchanged.** Android and iOS still answer all four calls in `PhotosphereNativeCalls.java` and `PhotosphereNativeCalls.swift`. Calling those APIs directly from Zig would need AI-written JNI and Objective-C runtime bindings, and the Android permission prompt must run on the UI thread anyway, so this plan leaves mobiles on messages.
 - **What stays a message.** The Linux `holdAwake` and the Windows and MacOS hold event both stay messages. They cross from a worker thread to the main thread, and the project rule makes JSON messages the only thing that crosses threads.
-- **Which tests change.** The phone-path tests in `mobile-requests.test.zig` and `mobile-planning.test.zig` ran on the Linux host through the fake native call. Once the Linux host is a desktop that answers itself, those paths do not run on the host. Their reply-reading assertions move, unchanged in wording, to `readNotificationPermission` and `readNetworkConnectionType`, and on-device coverage stays with `test:ziggy:and`.
-- **How desktop and phone are told apart.** `is_phone` uses the same `builtin` test the core already uses in `main-state.zig`, `main-process.zig` and `config-and-state.zig`. No runtime flag or test-only switch is added.
+- **Which tests change.** The mobile-path tests in `mobile-requests.test.zig` and `mobile-planning.test.zig` ran on the Linux host through the fake native call. Once the Linux host is a desktop that answers itself, those paths do not run on the host. Their reply-reading assertions move, unchanged in wording, to `readNotificationPermission` and `readNetworkConnectionType`, and on-device coverage stays with `test:ziggy:and`.
+- **How desktop and mobile are told apart.** `is_mobile` uses the same `builtin` test the core already uses in `main-state.zig`, `main-process.zig` and `config-and-state.zig`. No runtime flag or test-only switch is added.
 - **`backgroundLog` keeps its behaviour.** On a desktop it keeps writing to standard error, which is what all three desktops did before.

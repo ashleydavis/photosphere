@@ -142,7 +142,7 @@ export interface IImportProgressEvent {
     skipped: number;
 
     // How many of those were recognised before the file was opened at all, which is the part that
-    // costs nothing: opening an item on a phone copies the whole photo out of the library and then
+    // costs nothing: opening an item on a mobile copies the whole photo out of the library and then
     // hashes it, so an item answered here is never copied and never hashed. Reported apart from
     // `skipped` because the two say very different things about what a pass just spent.
     skippedBeforeOpening: number;

@@ -207,7 +207,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
 
     const browseDisabled = form.storageType === 's3' && !form.s3Key;
 
-    // A phone has no folder dialog for a database location: the user types the database's name into the Path field instead.
+    // A mobile has no folder dialog for a database location: the user types the database's name into the Path field instead.
     const showBrowse = form.storageType === 's3' || platform.platformKind === "desktop";
 
     return (

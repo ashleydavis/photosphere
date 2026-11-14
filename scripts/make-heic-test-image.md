@@ -7,7 +7,7 @@ bun scripts/make-heic-test-image.ts --output <file.heic> --width <pixels> --heig
 ```
 
 - `--output`: the HEIC file to write.
-- `--width`, `--height`: the picture's size in pixels, up to 65535 each. A size that is not a multiple of 512 gives a grid that is trimmed, as a phone's is.
+- `--width`, `--height`: the picture's size in pixels, up to 65535 each. A size that is not a multiple of 512 gives a grid that is trimmed, as a mobile's is.
 - `--date`: the EXIF DateTimeOriginal and CreateDate, written as EXIF writes dates.
 - `--latitude`, `--longitude`: the EXIF GPS position, in degrees, north and east positive.
 - `--orientation`: the EXIF Orientation, 1 (upright) when it is not given.

@@ -18,7 +18,7 @@ const ILog = @import("utils-zig").log.ILog;
 // searches that were merely run, how the gallery was sorted, which sidebar sections are collapsed.
 //
 // What the state keys mean is not decided here. app-state-format.zig owns that, and is where the flat
-// view and its conversions live, so the phone's worker can be handed the same definition without
+// view and its conversions live, so the mobile's worker can be handed the same definition without
 // dragging the filesystem in with it. This module is the file half: loading it, and changing it.
 //
 

@@ -5,7 +5,7 @@
 // first copy looks for the file on its timer, removes it and brings its window to the front.
 //
 // The rule does not apply to a build that has no version (the copies a developer runs side by side), to a test (each test runs its own
-// copy) or to a phone (its operating system runs one copy).
+// copy) or to a mobile (its operating system runs one copy).
 //
 
 const std = @import("std");
@@ -69,7 +69,7 @@ pub const Acquisition = union(enum) {
 };
 
 //
-// Whether the rule applies to this copy: the app is packaged (it has been given a version), it is not a test, and it is not a phone.
+// Whether the rule applies to this copy: the app is packaged (it has been given a version), it is not a test, and it is not a mobile.
 //
 pub fn ruleApplies() bool {
     if (builtin.os.tag == .ios or builtin.abi.isAndroid()) {

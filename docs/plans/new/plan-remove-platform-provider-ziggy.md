@@ -24,7 +24,7 @@ Read this before changing anything. Line numbers are from `apps/photosphere-fron
 - What it fills `IPlatformContext` with:
   - Request wrappers (lines 545-896): most members are one `ziggy.invoke` or `ziggy.send` (databases, recents, vault secrets, S3 folders, share import, update and news marks, folder and file pickers, task cancel, sync allowed).
   - Event subscriptions (lines 323-501): one bridge listener per channel hands each event to a set of callbacks. Some events also start in the page itself: `notifyDatabaseOpened` (line 589), the close-database menu item (line 524) and the test events (line 913).
-  - Desktop or phone choices from `platform.platformKind` and `platform.os`: `openDatabase`, `openFolder`, `checkTools`, `copyToClipboard`, `toggleDevTools` (a phone uses the in-page Eruda console), `saveDownloadedFiles` (a phone uses the share sheet), `getPathForFile`, `supportsDragAndDropImport`, `backgroundImportDescription`.
+  - Desktop or mobile choices from `platform.platformKind` and `platform.os`: `openDatabase`, `openFolder`, `checkTools`, `copyToClipboard`, `toggleDevTools` (a mobile uses the in-page Eruda console), `saveDownloadedFiles` (a mobile uses the share sheet), `getPathForFile`, `supportsDragAndDropImport`, `backgroundImportDescription`.
   - Network status: calls `readBrowserNetworkStatus` and `subscribeBrowserNetworkStatus` from `user-interface`.
   - LAN share members: taken from `useLanShareTasks()` (`packages/user-interface/src/lib/use-lan-share-tasks.ts`).
   - Config and state stores (lines 1039-1058) over `get-config`/`set-config` and `get-state`/`set-state`. The config writer also re-plans the background work when a key in `BACKGROUND_WORK_CONFIG_KEYS` changes (line 1046).
@@ -65,7 +65,7 @@ Read this before changing anything. Line numbers are from `apps/photosphere-fron
     - Move `apps/photosphere-frontend/src/lib/to-json-value.ts` and its test into this folder, since these functions use it.
     - Unit tests for every function with `FakeZiggy`, asserting the channel, the data sent and the value returned. `bun run compile` and `bun run test` pass.
 
-7. Move the download saving. Move `apps/photosphere-frontend/src/lib/mobile-export.ts` and `src/test/mobile-export.test.ts` into `packages/user-interface/src/lib/core/`. Add `saveDownloadedFiles(ziggy, platform, uuidGenerator, exportTestState, items, databasePath)` to `files.ts` with the body of lines 742-774. `IExportTestState` holds `stagedOutcome: ExportTestOutcome | undefined`, read and cleared by each export as today. Unit test both the desktop and the phone path. `bun run compile` and `bun run test` pass.
+7. Move the download saving. Move `apps/photosphere-frontend/src/lib/mobile-export.ts` and `src/test/mobile-export.test.ts` into `packages/user-interface/src/lib/core/`. Add `saveDownloadedFiles(ziggy, platform, uuidGenerator, exportTestState, items, databasePath)` to `files.ts` with the body of lines 742-774. `IExportTestState` holds `stagedOutcome: ExportTestOutcome | undefined`, read and cleared by each export as today. Unit test both the desktop and the mobile path. `bun run compile` and `bun run test` pass.
 
 8. Add the app components in `apps/photosphere-frontend/src/lib`:
     - `background-work-runner.tsx`: `BackgroundWorkRunner` with no children. It holds the effects of lines 171-174, 179-291 and 296-321 unchanged, reading `ziggy`, `platform` and `events` from `useCore()`. Where the provider called `autoImportChangedRef.current` it re-plans when `events` emits `config-changed` with a key in `BACKGROUND_WORK_CONFIG_KEYS` (which moves here), and when `database-chosen` arrives it calls `recordSyncDatabase` and then re-plans (lines 580-586). It subscribes to `task-message` for the progress log.
@@ -93,18 +93,18 @@ Read this before changing anything. Line numbers are from `apps/photosphere-fron
 
 ## Unit Tests
 
-- `platform-info.test.ts`: `backgroundImportDescription` for desktop, iOS and Android. `supportsDragAndDropImport` for desktop and phone.
+- `platform-info.test.ts`: `backgroundImportDescription` for desktop, iOS and Android. `supportsDragAndDropImport` for desktop and mobile.
 - `core-events.test.ts`: one bridge listener per channel however many callbacks subscribe. A bridge event reaches every callback through `deliver`. Unsubscribe stops one callback and leaves the rest. `emit` reaches the callbacks of a channel without touching the bridge. A page-only channel never registers a bridge listener. `removeAllListeners` is never called.
-- `databases.test.ts`, `recents.test.ts`, `vault.test.ts`, `share.test.ts`, `marks.test.ts`, `main-commands.test.ts`: for each function, the channel and data sent and the value returned, including `null` replies turned into `undefined`. `notifyDatabaseOpened` emits `database-chosen` and `database-opened` after the invoke. `addSecret` throws when the name exists. `updateSecret` sets before it deletes, and does nothing without a value. `openDatabase` does nothing on a phone.
-- `files.test.ts`: `openFolder` and `checkTools` on desktop and phone. `copyToClipboard` does nothing on a phone. `saveDownloadedFiles` sends `save-assets` on a desktop, and on a phone uses the share sheet path and clears the staged test outcome after one export.
-- `dev-tools.test.ts`: desktop sends `toggle-devtools` on `main-command`. A phone starts the console once and then shows and hides it in turn.
+- `databases.test.ts`, `recents.test.ts`, `vault.test.ts`, `share.test.ts`, `marks.test.ts`, `main-commands.test.ts`: for each function, the channel and data sent and the value returned, including `null` replies turned into `undefined`. `notifyDatabaseOpened` emits `database-chosen` and `database-opened` after the invoke. `addSecret` throws when the name exists. `updateSecret` sets before it deletes, and does nothing without a value. `openDatabase` does nothing on a mobile.
+- `files.test.ts`: `openFolder` and `checkTools` on desktop and mobile. `copyToClipboard` does nothing on a mobile. `saveDownloadedFiles` sends `save-assets` on a desktop, and on a mobile uses the share sheet path and clears the staged test outcome after one export.
+- `dev-tools.test.ts`: desktop sends `toggle-devtools` on `main-command`. A mobile starts the console once and then shows and hides it in turn.
 - The existing tests moved with their files (`dropped-file-path`, `to-json-value`, `mobile-export`) pass unchanged in their new place.
 - `import-context.test.ts`: updated for the new parameter type, same assertions.
 
 ## Smoke Tests
 
 - `bun run test:ziggy` on the host: every scenario passes. This covers the components, the context and every consumer moved in step 10, none of which are unit tested.
-- `bun run test:ziggy:and` on the Android emulator pool, and `bun run test:ziggy:ios` on macOS: every scenario passes. These cover the phone-only paths (share sheet saving, Eruda, background work, the reload when the app comes back on screen).
+- `bun run test:ziggy:and` on the Android emulator pool, and `bun run test:ziggy:ios` on macOS: every scenario passes. These cover the mobile-only paths (share sheet saving, Eruda, background work, the reload when the app comes back on screen).
 - Scenarios that depend on the moved ordering: the update and news toasts after `page-loaded`, and every scenario at all in test mode, since none can start before `signalTestPageReady`.
 - `bun run stories:ziggy -- --headless`: every story renders with `mockCore`.
 

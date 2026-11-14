@@ -19,7 +19,7 @@
 #       --remote-control "$PHOTOSPHERE_REMOTE_CONTROL" (the ziggy.remoteControl extra on Android), recording what it started through
 #       launch_in_process_group, with its settings, vault, logs and data inside the scenario's directory. Its output goes to
 #       <test_dir>/app.log. Returns non-zero when the app did not start. With keep-data it starts the app again on the data the last
-#       run left, on a phone on the same install.
+#       run left, on a mobile on the same install.
 #
 #   photosphere_platform_stop <test_dir>
 #       Stops the app and everything it started.
@@ -32,12 +32,12 @@
 #
 #   photosphere_platform_screenshot <output_path>        (optional)
 #       Writes a PNG of the app's screen to the host path. Defined only by a platform whose app cannot write to a host path, which is a
-#       phone: send_command then takes the screenshot command from the host instead of sending it to the app. A platform that does not
+#       mobile: send_command then takes the screenshot command from the host instead of sending it to the app. A platform that does not
 #       define it has the app write the PNG itself.
 #
 #   photosphere_platform_reset_app_state
 #       Clears everything the app has stored, for a deterministic start. A desktop does nothing, because the scenario's directory is
-#       fresh. A phone wipes the app's storage and keychain. Call it before the start. Returns non-zero when the wipe failed or was refused.
+#       fresh. A mobile wipes the app's storage and keychain. Call it before the start. Returns non-zero when the wipe failed or was refused.
 
 set -u
 
@@ -259,7 +259,7 @@ control_command() {
 }
 
 #
-# Clears everything the app has stored (on a phone its storage, the web view's data and the keychain), so a scenario starts from a known
+# Clears everything the app has stored (on a mobile its storage, the web view's data and the keychain), so a scenario starts from a known
 # state. Call it before start_app. A failure to clear fails the scenario rather than letting it run on state an earlier one left.
 # Usage: reset_app_state
 #
@@ -697,7 +697,7 @@ send_command() {
         log_error "The body of the $endpoint command is not JSON: $body"
         return 1
     }
-    # A platform whose app cannot write a file where the host can read it (a phone's path is on the phone) takes the screenshot from the
+    # A platform whose app cannot write a file where the host can read it (a mobile's path is on the mobile) takes the screenshot from the
     # host and writes the PNG to the path the command names.
     if [ "$endpoint" = "screenshot" ] && declare -F photosphere_platform_screenshot > /dev/null; then
         local output_path
@@ -719,6 +719,16 @@ send_command() {
         return 1
     fi
     return 0
+}
+
+#
+# Presses a key as a user does, through the native app. The key is written as a shortcut, such as CmdOrCtrl+O.
+# Usage: press_key <port> <key>
+#
+press_key() {
+    local body
+    body="$(jq -nc --arg key "$2" '{key: $key}')"
+    send_command "$1" press-key "$body"
 }
 
 #
@@ -765,7 +775,7 @@ start_s3_emulator() {
     local host_address="127.0.0.1"
     case "$PLATFORM" in
         android|ios)
-            # The server runs on the host, so a phone reaches it at the address the host has for the phone, never at loopback, which on
+            # The server runs on the host, so a mobile reaches it at the address the host has for the mobile, never at loopback, which on
             # a device means the device itself. A real Android device reaches the host only through an adb reverse, so the port is
             # exposed first; that is a no-op on an emulator and on the iOS simulator.
             "${PLATFORM}_expose_host_port" "$S3_EMULATOR_PORT" || exit 1
@@ -928,7 +938,7 @@ write_vault_secret_from_file() {
 
 #
 # Creates a database at the given path through the CLI, importing any image files passed after the path. Every CLI call is checked and
-# its output printed on failure, so a failed import is reported where it happens and not as an empty gallery later. A phone seeds the
+# its output printed on failure, so a failed import is reported where it happens and not as an empty gallery later. A mobile seeds the
 # result onto the device with ${PLATFORM}_seed_database.
 # Usage: create_database <db_path> [image ...]
 #
@@ -954,7 +964,7 @@ create_database() {
 }
 
 #
-# Adds a secret through the real Add Secret dialog, so a test that needs a pre-existing secret on a phone (where the vault cannot be
+# Adds a secret through the real Add Secret dialog, so a test that needs a pre-existing secret on a mobile (where the vault cannot be
 # written from the host) creates it the way a user would. The Secrets page must already be showing.
 # The value is the one field the tests read back: the S3 region for s3-credentials, or the key for api-key. An encryption-key is
 # created with an empty PEM, because the driver types into <input> elements and not into the PEM <textarea>.
@@ -1119,7 +1129,7 @@ assert_value() {
 
 #
 # Prints the path of a file in the app's settings directory, as the app sees it: the directory the scenario's config files are written
-# to on a desktop, and the app's settings directory on a phone. Usage: config_file_path <name>
+# to on a desktop, and the app's settings directory on a mobile. Usage: config_file_path <name>
 #
 config_file_path() {
     case "$PLATFORM" in
@@ -1269,7 +1279,7 @@ seeded_recent_database_names() {
 }
 
 #
-# Opens the page's actions menu, which holds the page's secondary actions on a phone. A desktop page shows those actions directly, so
+# Opens the page's actions menu, which holds the page's secondary actions on a mobile. A desktop page shows those actions directly, so
 # there is no menu to open. Usage: open_page_actions_menu <port>
 #
 open_page_actions_menu() {
@@ -1283,7 +1293,7 @@ open_page_actions_menu() {
 
 #
 # Opens the left sidebar and clicks one of its items, the way a user opens the New database, Open database and Configuration
-# dialogs on every platform. A phone has no menu bar, so the sidebar is the one path that is the same everywhere.
+# dialogs on every platform. A mobile has no menu bar, so the sidebar is the one path that is the same everywhere.
 # Usage: click_sidebar_item <port> <new-database|open-database|configuration>
 #
 click_sidebar_item() {
@@ -1294,7 +1304,7 @@ click_sidebar_item() {
 }
 
 #
-# Clicks one of a database row's actions on the Databases page. A phone folds a row's actions into the row's menu, which is opened
+# Clicks one of a database row's actions on the Databases page. A mobile folds a row's actions into the row's menu, which is opened
 # first, and the open menu holds the one set of action buttons. A desktop shows every row's buttons, so the row is the button's index.
 # Usage: click_database_row_action <port> <row_index> <action_data_id>
 #
@@ -1315,7 +1325,7 @@ click_database_row_action() {
 
 #
 # Imports host files into the open database through the import page, which must be showing. A desktop drops the files on the page's
-# drop zone. A phone has no drop zone and its picker is native, so the files are put into the app's import directory from outside the
+# drop zone. A mobile has no drop zone and its picker is native, so the files are put into the app's import directory from outside the
 # app and the picker is answered with their paths, then the picker button is clicked. The files keep their names.
 # Usage: import_files <port> <host_file>...
 #
@@ -1379,7 +1389,7 @@ config_file_exists() {
 
 #
 # Succeeds when the vault holds a secret of the given name, as the app's own list of secrets has it. A desktop keeps its vault in a
-# file the scenario can read. A phone keeps secrets in the device keychain, which nothing outside the app can read, so the Secrets
+# file the scenario can read. A mobile keeps secrets in the device keychain, which nothing outside the app can read, so the Secrets
 # page, which lists what the vault holds, is read instead. Returns 0 when the vault holds it, 1 when the vault is readable and does not,
 # and 2 when the app could not be asked (so a dead app is never taken for an absent secret). Usage: secret_in_vault <port> <name>
 #
@@ -1405,7 +1415,7 @@ secret_in_vault() {
 
 #
 # Damages the vault the way a truncated write or a damaged disk would, from outside the app, so reading it fails. A desktop app reads
-# its vault file each time, so it is damaged under the running app. A phone app opens its keychain once, when it starts, so the app is
+# its vault file each time, so it is damaged under the running app. A mobile app opens its keychain once, when it starts, so the app is
 # stopped, the keychain damaged and the app started again on the same data, which is a new log. Fails when there is no vault to
 # damage. Usage: damage_vault
 #
@@ -1430,7 +1440,7 @@ damage_vault() {
 
 #
 # Prints an extended regex of the [ERROR] lines an app logs while it runs on a damaged vault, besides the failed reset itself, for
-# check_no_errors. A phone app that was started on a damaged keychain fails to load the secrets its pages show; a desktop app that
+# check_no_errors. A mobile app that was started on a damaged keychain fails to load the secrets its pages show; a desktop app that
 # had its vault damaged while running logs nothing more. Usage: damaged_vault_errors_pattern
 #
 damaged_vault_errors_pattern() {
@@ -1454,7 +1464,7 @@ read_default_database_path() {
 
 #
 # Asserts that the row on the Databases page is the database marked as the default, and that no other row is. The app's recorded
-# default is read on every platform. A desktop's table also shows a badge on the default row, so that is read too; a phone's cards show
+# default is read on every platform. A desktop's table also shows a badge on the default row, so that is read too; a mobile's cards show
 # no badge, so there is nothing more to read there. Usage: expect_default_database <port> <row_index> <row_count> <database_path>
 #
 expect_default_database() {

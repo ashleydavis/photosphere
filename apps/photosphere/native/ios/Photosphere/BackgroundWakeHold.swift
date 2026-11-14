@@ -1,6 +1,6 @@
 //
 // The hold the background work takes while a pass is running, so the app keeps running when it leaves the screen. It is given back
-// between passes: a phone has no use for a process kept running while nothing is being done.
+// between passes: a mobile has no use for a process kept running while nothing is being done.
 //
 // Counted, because the passes of the background loops overlap. Each takes a hold for its own pass and gives it back afterwards, and the
 // system is free to suspend the app when the last hold goes. iOS has no wake lock. What keeps a process running in the background is a

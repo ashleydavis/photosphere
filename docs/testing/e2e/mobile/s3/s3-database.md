@@ -2,15 +2,15 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-Test opening and using a database whose storage is an S3 bucket rather than the phone.
+Test opening and using a database whose storage is an S3 bucket rather than the mobile.
 
 ## Prep
 
-- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
+- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real mobile, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
 - `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
-- S3 is a fresh bucket on a local MinIO server on this machine, set up by `bun run start-minio`: see [MinIO for the manual tests](../../minio.md). The phone must be on the same network as this machine. Run the commands in one terminal, which the later CLI steps use too.
+- S3 is a fresh bucket on a local MinIO server on this machine, set up by `bun run start-minio`: see [MinIO for the manual tests](../../minio.md). The mobile must be on the same network as this machine. Run the commands in one terminal, which the later CLI steps use too.
 - `--add test/test.jpg` creates the database `manual-test` holding one photo. `<bucket>` in the steps below is `photosphere-smoke-test`.
-- `psi dbs send` sends the database entry with the S3 credentials attached, prints a pairing code and waits. On the phone, go to the **Databases** page, choose **Receive database** and enter the code.
+- `psi dbs send` sends the database entry with the S3 credentials attached, prints a pairing code and waits. On the mobile, go to the **Databases** page, choose **Receive database** and enter the code.
 - `test.png` goes into the device photo library, for Test step 2 to import.
 
 ```bash
@@ -28,17 +28,17 @@ psi dbs send --name manual-test --yes
 Expected:
 - The reset prints that it wiped Photosphere's data, or that the app is not installed.
 - The database is created in the bucket and the photo is added.
-- The phone receives `manual-test` with `manual-test-s3`.
+- The mobile receives `manual-test` with `manual-test-s3`.
 
 ## Test
 
 ### 1. Open it
 
-1. Open the S3 database on the phone.
+1. Open the S3 database on the mobile.
 
 Expected:
 - The gallery loads and thumbnails appear.
-- It is usable on a phone connection, not only on fast Wi-Fi: give it a moment rather than expecting it to be instant.
+- It is usable on a mobile connection, not only on fast Wi-Fi: give it a moment rather than expecting it to be instant.
 
 ### 2. Import into it
 
@@ -56,7 +56,7 @@ Expected: The full photo loads from S3. A thumbnail that renders while the full 
 
 ### 4. Lose the network mid-use
 
-1. Put the phone in flight mode.
+1. Put the mobile in flight mode.
 2. Scroll the gallery and open a photo.
 
 Expected:
@@ -88,6 +88,6 @@ bun run stop-minio -- manual-test
 ## Agent notes
 
 - How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Android: the agent does the UI steps with adb. iOS: the human does them, and the agent reads the results from screenshots.
-- The pairing code `psi dbs send` prints is typed on the phone with `input text`.
+- The pairing code `psi dbs send` prints is typed on the mobile with `input text`.
 - Step 6 edits the S3 secret with `input text`.
 - Flight mode is turned on and off from the quick settings panel, opened with a swipe down from the top edge, and tapped like the app.

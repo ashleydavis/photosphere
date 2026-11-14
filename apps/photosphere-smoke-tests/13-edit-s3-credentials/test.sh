@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Edits the region of an s3-credentials secret. On a desktop the vault is seeded with credentials stored as JSON with no label, and
-# the vault is checked to still hold JSON with no label, the new region and the other two fields untouched. On a phone the vault
+# the vault is checked to still hold JSON with no label, the new region and the other two fields untouched. On a mobile the vault
 # cannot be written from the host, so the secret is added through the Add Secret dialog and only the edit is covered.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -32,7 +32,7 @@ wait_for_log "$TMP_DIR" "Secrets page loaded"
 case "$PLATFORM" in
     android|ios)
         add_secret_via_ui "$APP_PORT" "s3-cred" "s3-credentials" "us-east-1" || exit 1
-        # The secret's actions are in its card's menu on a phone.
+        # The secret's actions are in its card's menu on a mobile.
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
         ;;
 esac

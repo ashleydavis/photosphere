@@ -283,7 +283,7 @@ pub const Image = struct {
         // Build the convert command.
         //
         // The XMP block is dropped from the copy. A resize otherwise carries the original's profiles
-        // into it, and a photo from a modern phone brings an XMP block of tens of kilobytes: the
+        // into it, and a photo from a modern mobile brings an XMP block of tens of kilobytes: the
         // forty pixel thumbnail stored inside every asset record was coming out at fifty kilobytes of
         // somebody else's metadata, which the database then wrote into both of its sort index pages
         // and rewrote whole on every commit. The original is stored untouched and keeps everything.

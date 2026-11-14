@@ -535,7 +535,7 @@ create_base_avd() {
 
     # A minimal but complete hardware profile. Anything not named here the emulator defaults for
     # itself; these are the settings the tests actually depend on (a writable data partition big
-    # enough for the fixtures, and a phone-sized screen).
+    # enough for the fixtures, and a mobile-sized screen).
     cat > "$dir/config.ini" <<CONFIG
 AvdId=$name
 avd.ini.displayname=$name
@@ -721,7 +721,7 @@ clone_avd() {
 #
 # Prints "<serial> <avd-name>" for every attached emulator that adb reports as "device", meaning it
 # has finished booting and is usable. This is the only place that asks adb what is attached and what
-# each one is running, so the filters below cannot drift apart. A real phone has no AVD name and
+# each one is running, so the filters below cannot drift apart. A real mobile has no AVD name and
 # prints an empty second field, which matches neither filter.
 #
 # Returns non-zero, naming the emulator, when one does not give its AVD name in time. It would

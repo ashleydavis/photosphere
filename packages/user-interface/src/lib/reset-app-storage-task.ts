@@ -5,7 +5,7 @@ import type { IResetAppStorageOutcome } from "./reset-device";
 //
 // Runs the reset-app-storage task and reports what it removed.
 //
-// The task empties the app's own config and cache directories, and on a phone the app's data
+// The task empties the app's own config and cache directories, and on a mobile the app's data
 // directory too, so this is what takes the databases off a device. It is registered by every platform that
 // runs tasks (desktop, the CLI and the dev server through initTaskHandlers, mobile through
 // mobile-worker-entry), which is why the reset needs no platform-specific code and no new method on

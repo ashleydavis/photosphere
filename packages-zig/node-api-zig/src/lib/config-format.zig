@@ -20,7 +20,7 @@ const config_state = @import("ziggy").config_state;
 // The on-disk contents of config.toml and the conversions between it and the in-memory type.
 //
 // One file holds every setting the app remembers, on every platform: ~/.config/photosphere/config.toml
-// for the CLI and the desktop app, and config.toml at the root of the storage sandbox on a phone. One
+// for the CLI and the desktop app, and config.toml at the root of the storage sandbox on a mobile. One
 // file means one format definition, so a setting means the same thing whichever platform wrote it.
 // The wiki page "Configuration-File" documents the file for users.
 //
@@ -252,7 +252,7 @@ fn yamlToSyncFile(allocator: std.mem.Allocator, section: ?std.json.Value) !ISync
 //
 // A file that is not there arrives here as undefined and comes back as the defaults, which have both
 // automatic import and syncing switched off. That is the whole point of the defaults being what they
-// are: a phone that cannot read its settings must not start pushing over a metered connection.
+// are: a mobile that cannot read its settings must not start pushing over a metered connection.
 //
 // A section that is malformed falls back to that section's own defaults without discarding the
 // sections that did parse, and a key nothing recognises is ignored rather than rejected. One

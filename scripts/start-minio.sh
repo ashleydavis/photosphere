@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts a local MinIO server with a fresh bucket for a manual test, creates the test's database in it and sets the CLI up to use
-# it, at an address a phone on the same network can reach. See start-minio.md.
+# it, at an address a mobile on the same network can reach. See start-minio.md.
 #
 # Usage:
 #   bun run start-minio -- <name> [--from <fixture>] [--add <path>] [--encrypt] [--key <pem file>] [--empty] [--lan-ip <address>]
@@ -15,7 +15,7 @@ usage() {
 }
 
 #
-# Prints this machine's address on the local network, the one a phone on the same Wi-Fi reaches it by.
+# Prints this machine's address on the local network, the one a mobile on the same Wi-Fi reaches it by.
 #
 find_lan_ip() {
     local address=""
@@ -112,7 +112,7 @@ source "$envFile"
 
 # The key the database is encrypted with, which the CLI takes as the name of a secret in its vault. --encrypt generates one named
 # after the entry and attaches it to the entry. --key imports a PEM file the test made itself, which `psi secrets import` names after
-# the file, and leaves it off the entry, because the test puts that key on the phone by hand.
+# the file, and leaves it off the entry, because the test puts that key on the mobile by hand.
 keyArgs=()
 if [ "$encrypt" = "true" ]; then
     keyArgs=(--key "$name-key")
@@ -159,7 +159,7 @@ fi
 
 echo
 echo "S3 database ready: $database"
-echo "  Endpoint for the phone: http://$lanIp:$S3_EMULATOR_PORT  (region us-east-1)"
+echo "  Endpoint for the mobile: http://$lanIp:$S3_EMULATOR_PORT  (region us-east-1)"
 echo "  Access key: $S3_EMULATOR_ACCESS_KEY  Secret key: $S3_EMULATOR_SECRET_KEY"
 echo "  On this machine the CLI knows it as the entry '$name', with the credentials secret '$name-s3'."
 echo "Set up this terminal for the CLI with:"

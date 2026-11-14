@@ -196,7 +196,7 @@ pub fn planAutoImportHandler(
                 .options = .{
                     .object = options,
                 },
-                // Named here rather than in native code, so a phone's row reads the same as a
+                // Named here rather than in native code, so a mobile's row reads the same as a
                 // desktop's. No cancel source: the pass is queued by the native driver under a
                 // source of its own that the WebView never learns, and automatic import is switched
                 // off from Settings.

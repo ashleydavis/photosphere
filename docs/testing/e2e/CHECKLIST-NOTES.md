@@ -10,7 +10,7 @@ Upcoming version: 0.0.9
 
 - Most CLI tests kept their data in the one shared folder `/tmp/psi-test`, so two tests running at once deleted each other's databases. Every CLI test now uses its own folder, `/tmp/psi-cli-<group>-<test>`.
 - `psi add` always reports `Total size: 0 Bytes`, and `psi list` shows `Size: Unknown` for every asset.
-- `psi list` on an S3 database filled by syncing from the Android app shows each phone photo's `Path` as the app's temporary copy, `/data/user/0/au.com.codecapers.photosphere.ziggy/cache/.media-tmp`, rather than where the photo was on the phone.
+- `psi list` on an S3 database filled by syncing from the Android app shows each mobile photo's `Path` as the app's temporary copy, `/data/user/0/au.com.codecapers.photosphere.ziggy/cache/.media-tmp`, rather than where the photo was on the mobile.
 
 ### Import
 
@@ -183,9 +183,9 @@ All desktop results below come from a test-hooks build of the app driven through
 #### auto-import-new-remote
 
 - **revist and confirm** *n* Step 6 fails: the import record doesn't load as new imports are added. The Import page reads the record once, when the database is opened, and never again, so a database opened before automatic import ran shows an empty list however many photos have gone in since.
-- **revist and confirm** *n* Consolidate does not sound safe: it deletes all the local records, which sounds like losing the local database rather than consolidating it. It removes the local originals the remote already holds, then deletes `.db/bson` entirely, then replicates the remote down to replace them. The three are not one transaction, so anything that stops the app in that window leaves a phone with files deleted, no records, and no replacement. On a phone being killed mid-task is ordinary, and this work has no background service keeping it alive.
-- **revist and confirm** *n* Replicate database just times out and produces an error, with fewer than 500 files in the database. The failure is "Operation timed out after 30000ms: () => copyAsset(...)": replicate wraps each asset copy in `retry`, whose per-attempt timeout defaults to thirty seconds, and one asset is an original, a display copy and a thumbnail. The S3 client was already given ten minutes per request for this reason, with a comment saying thirty seconds is far too short on a phone, but the replicate path still caps every copy at thirty.
-- **revist and confirm** *n* A user who already has a remote database should be able to set up a new device by starting from it: the device gets a fresh partial copy of that database and imports into it, rather than building a separate library that then has to be joined to the remote. This is the second device case, and it is the normal one once somebody has more than one phone.
+- **revist and confirm** *n* Consolidate does not sound safe: it deletes all the local records, which sounds like losing the local database rather than consolidating it. It removes the local originals the remote already holds, then deletes `.db/bson` entirely, then replicates the remote down to replace them. The three are not one transaction, so anything that stops the app in that window leaves a mobile with files deleted, no records, and no replacement. On a mobile being killed mid-task is ordinary, and this work has no background service keeping it alive.
+- **revist and confirm** *n* Replicate database just times out and produces an error, with fewer than 500 files in the database. The failure is "Operation timed out after 30000ms: () => copyAsset(...)": replicate wraps each asset copy in `retry`, whose per-attempt timeout defaults to thirty seconds, and one asset is an original, a display copy and a thumbnail. The S3 client was already given ten minutes per request for this reason, with a comment saying thirty seconds is far too short on a mobile, but the replicate path still caps every copy at thirty.
+- **revist and confirm** *n* A user who already has a remote database should be able to set up a new device by starting from it: the device gets a fresh partial copy of that database and imports into it, rather than building a separate library that then has to be joined to the remote. This is the second device case, and it is the normal one once somebody has more than one mobile.
 - **revist and confirm** *n* There should be one step in the UI that either creates the remote database and makes it the origin, or consolidates with a remote database that already exists. Today it takes a replicate and then a separate origin edit, because replication sets the origin on the copy and not on the database being replicated, and nothing says so.
 - **revist and confirm** *n* Browse in the Replicate dialog does not browse. It comes up with an error instead of listing what is in the bucket, so the destination has to be typed by hand, which is how a path ends up wrong.
 - **revist and confirm** *n* Replication needs to be a proper background task on mobile, so it keeps running when the app is not in the foreground. A first replication of a whole library is long, and it is the step that makes the remote copy exist.
@@ -208,12 +208,12 @@ All desktop results below come from a test-hooks build of the app driven through
     - **revist and confirm** *e* Automatic import never says how many photos are left to import. Not knowing how much is still to come is no good, especially on a big library.
     - **revist and confirm** *e* Import the existing library newest first, not oldest first, so users see their recent photos quickly.
     - **revist and confirm** *e* Remove the lone file name shown under the counts on the automatic import card. It has no label and no explanation, and serves no good purpose.
-    - **revist and confirm** *e* Split the Import page in two. One page for importing, where photos and videos are selected and added. A separate Import Log page that just shows what was recently imported. One page doing both jobs does not fit on a phone screen.
+    - **revist and confirm** *e* Split the Import page in two. One page for importing, where photos and videos are selected and added. A separate Import Log page that just shows what was recently imported. One page doing both jobs does not fit on a mobile screen.
     - **revist and confirm** *e* The "My Photos" button in the Open database list is too small. Make it double the size and add padding underneath to separate it from the other buttons.
     - **revist and confirm** *e* The wording "a private photo database is created for you" needs updating. Check what it really does first.
     - **revist and confirm** *e* Better if turning the toggle on prompted to add a folder, after Allow is tapped.
 - Android: step 6 fails. The Import page lists only the 2 photos imported from the existing library (test-1, test-2), both badged Automatic. The photo taken with the camera in step 5 is in the gallery (3 photos) but is not on the Import page, even after leaving the page and coming back. No import was running, so the count shown while one runs was not seen.
-- Android: step 14 passed, but has some issues. `psi verify` passed (12 valid files, 0 invalid), and the originals of all 3 photos exported from the bucket are byte for byte the same as the photos on the phone. The counts do not line up: `psi verify` reports 12 files, `psi summary` reports 10 files and `Files imported: 0` (the phone's own copy reports 3), and the gallery shows 3 photos, so "the number of files matches what the gallery showed" cannot be checked as written. In the bucket the photos are named `35.jpeg`, `36.png` and `37.jpg` with the app's temp folder as their path, not their camera roll names and paths.
+- Android: step 14 passed, but has some issues. `psi verify` passed (12 valid files, 0 invalid), and the originals of all 3 photos exported from the bucket are byte for byte the same as the photos on the mobile. The counts do not line up: `psi verify` reports 12 files, `psi summary` reports 10 files and `Files imported: 0` (the mobile's own copy reports 3), and the gallery shows 3 photos, so "the number of files matches what the gallery showed" cannot be checked as written. In the bucket the photos are named `35.jpeg`, `36.png` and `37.jpg` with the app's temp folder as their path, not their camera roll names and paths.
 - Android: passed, with the problems noted above in steps 6 and 14. Run on Android only.
 
 #### auto-import-existing-remote
@@ -295,7 +295,7 @@ All desktop results below come from a test-hooks build of the app driven through
 #### edit-database-origin
 
 - Android: fails at step 4. A made-up origin is skipped without telling anyone: the log has only an INFO line, "Sync skipped … origin not accessible", and nothing shows on screen. Steps 1 to 3 passed; the origin is set from **Edit**, the details sheet cannot set it. The quick sync after start-up did not run ("Sync debounce triggered" was logged, but nothing was queued until the 5-minute timer).
-- Android rerun: fails at step 4 again. Prep and steps 1 to 3 passed: the origin was picked with **Choose…** in **Edit**, survived a force-stop, and a photo added to the remote with `psi add` reached the phone on the next sync (50 to 51 photos). With the origin set to `s3:no-such-bucket/made-up-origin`, the periodic sync failed and nothing showed on screen. Errors log: `[ERROR] [Worker 2] Sync failed for "…/files/50-assets" Error: Failed to check if file exists: Could not load credentials from any providers`, which does not say the origin does not exist. The start-up sync again did not run; each sync waited for the 5-minute timer.
+- Android rerun: fails at step 4 again. Prep and steps 1 to 3 passed: the origin was picked with **Choose…** in **Edit**, survived a force-stop, and a photo added to the remote with `psi add` reached the mobile on the next sync (50 to 51 photos). With the origin set to `s3:no-such-bucket/made-up-origin`, the periodic sync failed and nothing showed on screen. Errors log: `[ERROR] [Worker 2] Sync failed for "…/files/50-assets" Error: Failed to check if file exists: Could not load credentials from any providers`, which does not say the origin does not exist. The start-up sync again did not run; each sync waited for the 5-minute timer.
 - Android rerun with `bun run android:set-sync-interval -- 10` in Prep (it was a raw `adb` line at the time): syncs ran every 10 seconds. Steps 1 to 3 passed; the photo added to the remote arrived within seconds. Fails at step 4 the same way as the first run: with the origin set to `s3:no-such-bucket/made-up-origin`, every pass logs only `[INFO] Sync skipped … origin not accessible (S3:no-such-bucket/made-up-origin)`, nothing in the errors log and nothing on screen.
 
 ### Sync
@@ -344,15 +344,15 @@ All desktop results below come from a test-hooks build of the app driven through
 
 #### mobile-to-mobile
 
-- Android: fails at step 4. Test fixed first: the sender shows the pairing code and the receiver types it, and Prep now gives each phone something to send (MinIO `mobile-test-m2m`). With a wrong code nothing is transferred, but both phones say only "No sender/receiver found within 60 seconds"; neither says a device is using a different code. Steps 1, 2 and 5 passed. Step 3 (network off) cannot run on a pool emulator.
+- Android: fails at step 4. Test fixed first: the sender shows the pairing code and the receiver types it, and Prep now gives each mobile something to send (MinIO `mobile-test-m2m`). With a wrong code nothing is transferred, but both mobiles say only "No sender/receiver found within 60 seconds"; neither says a device is using a different code. Steps 1, 2 and 5 passed. Step 3 (network off) cannot run on a pool emulator.
 
 #### desktop-to-mobile
 
-- Android: passed. Test fixed first: the sender shows the pairing code, Prep now creates an encrypted database `desktop-share-enc` for the desktop to send, and step 3 attaches the key on the phone through **Configure secrets…**.
+- Android: passed. Test fixed first: the sender shows the pairing code, Prep now creates an encrypted database `desktop-share-enc` for the desktop to send, and step 3 attaches the key on the mobile through **Configure secrets…**.
 
 #### cli-to-mobile
 
-- Android: fails at step 3, which could not be run. Test fixed first: the code is chosen and passed to `psi ... --code`, then typed on the phone. Steps 1, 2, 4 and 5 passed. Step 3 (network off) cannot run on a pool emulator. `psi secrets send` exits 0 after "Pairing code rejected", and a plain secret sent from the CLI shows as "API Key" on the phone.
+- Android: fails at step 3, which could not be run. Test fixed first: the code is chosen and passed to `psi ... --code`, then typed on the mobile. Steps 1, 2, 4 and 5 passed. Step 3 (network off) cannot run on a pool emulator. `psi secrets send` exits 0 after "Pairing code rejected", and a plain secret sent from the CLI shows as "API Key" on the mobile.
 
 ### News
 

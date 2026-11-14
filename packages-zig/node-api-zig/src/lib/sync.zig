@@ -45,7 +45,7 @@ const computeAssetHash = hash.computeAssetHash;
 //
 // How long one step of a sync may take before the pass gives up on it.
 //
-// Generous, because these steps are slow on a phone and there is no harm in a long one finishing. It
+// Generous, because these steps are slow on a mobile and there is no harm in a long one finishing. It
 // exists to put a floor under a step that will never finish at all: a pass that fails is ordinary and
 // the loop runs another, while a pass that hangs stops syncing until the app is restarted.
 //
@@ -405,7 +405,7 @@ fn pushOutgoingFiles(
     // Push files from source to target.
     // Need the write lock in the target database.
     // No deadline on this one, unlike every other step: it is the whole point of a sync, it
-    // copies every file the origin is missing, and on a phone with a real library that is hours
+    // copies every file the origin is missing, and on a mobile with a real library that is hours
     // of work. The copies inside it have their own deadline, one per file, which is where a
     // stuck upload is caught. A deadline here caught nothing but honest progress: thirty minutes
     // in it gave up on a push that was uploading steadily.
@@ -479,7 +479,7 @@ const IFileToConsider = struct {
 // ciphertext one holds is exactly the ciphertext the other would write, so it goes across as it is,
 // with no decryption on the way out and no encryption on the way in.
 //
-// On a phone those two are the whole cost of pushing an original, because AES-256-CBC is slow there.
+// On a mobile those two are the whole cost of pushing an original, because AES-256-CBC is slow there.
 // The bytes themselves, sent as they are stored, go from the file to the socket natively.
 //
 pub const IPushBytes = struct {
@@ -729,7 +729,7 @@ const PushState = struct {
         // The hash goes up with the file. It is already known, because it is what the merkle tree is
         // made of, and handing it over means nothing has to compute it: S3 checks the body against it
         // and refuses a write that does not match, while a store that cannot check it writes the
-        // stream as usual. On a phone that is the difference between a sync and a stalled one, since
+        // stream as usual. On a mobile that is the difference between a sync and a stalled one, since
         // the SDK would otherwise hash every byte itself.
         //
         // What is sent, and what the target is told it is. Through the databases the stream is what
@@ -760,7 +760,7 @@ const PushState = struct {
         //
         // Asking cost two more round trips per file, on top of the write: one to learn the file is
         // there and how long it is, another to read back the hash the server had just verified. On a
-        // phone, where every request is a fresh connection and a response crosses the engine bridge,
+        // mobile, where every request is a fresh connection and a response crosses the engine bridge,
         // those two were a large part of the time a file took. A store that cannot check (a
         // filesystem, or encrypted storage, whose stored bytes are ciphertext and hash to something
         // else) is still asked, and the copy is checked by its length. `psi verify` is the deep

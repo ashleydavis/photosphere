@@ -14,7 +14,7 @@ const errors = @import("utils-zig").errors;
 // documented here rather than for users the way config.toml is.
 //
 // It sits beside config.toml, in ~/.config/photosphere on the CLI and the desktop app and at the root
-// of the storage sandbox on a phone, and PHOTOSPHERE_CONFIG_DIR moves both together.
+// of the storage sandbox on a mobile, and PHOTOSPHERE_CONFIG_DIR moves both together.
 //
 // Nothing here touches the filesystem, which is what lets it be bundled into the mobile worker, and
 // it is the only definition of the file format, so the reader and the writer cannot drift apart.
@@ -85,7 +85,7 @@ pub const INewsState = struct {
 
     //
     // The feed the app last had in hand. The CLI and the desktop app fetch it each time and never
-    // keep it, so this is only ever written on a phone, where there is nothing else to hold it.
+    // keep it, so this is only ever written on a mobile, where there is nothing else to hold it.
     //
     feed: []const INewsFeedItem,
 };

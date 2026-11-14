@@ -9,7 +9,7 @@ Plays the running app through every registered UI story, in light and then dark,
 - `--screenshots <dir>`: where the PNGs go. The default is `stories-screenshots/<platform>`.
 - `--no-screenshots`: play the stories without capturing anything.
 - `--open`: open the generated `index.html` when the run finishes.
-- `--headless`: hide the window. It applies to the Photosphere App on Linux, which then runs on a virtual display. A phone or simulator window is always shown.
+- `--headless`: hide the window. It applies to the Photosphere App on Linux, which then runs on a virtual display. A mobile or simulator window is always shown.
 
 ## What it does
 
@@ -17,4 +17,4 @@ Builds the app in test mode, starts it, navigates it to the stories cycle and wa
 
 The Photosphere App platforms are driven through the app's remote control connection (see "Remote control" in Ziggy's architecture guide, https://github.com/ashleydavis/ziggy/blob/main/docs/development/architecture.md), with the commands `ready`, `navigate`, `screenshot`, `cycle-advance` and `quit`. They use the platform libraries of `apps/photosphere-smoke-tests`, so the app is built and started the way the smoke tests do it. The app on a desktop writes the screenshot itself. On Android and the iOS simulator the screenshot is taken from the host with `adb` or `simctl`, so it is of the whole screen. The Electron and Capacitor platforms are driven over HTTP by their own harnesses.
 
-The app runs with the repository as its working directory, because the stories that show real photos open the relative path `test/dbs/50-assets`. On a phone that fixture is copied into the app's own database folder first as `50-assets`, a simple name the app resolves there, and the app's data is cleared again when the run ends.
+The app runs with the repository as its working directory, because the stories that show real photos open the relative path `test/dbs/50-assets`. On a mobile that fixture is copied into the app's own database folder first as `50-assets`, a simple name the app resolves there, and the app's data is cleared again when the run ends.

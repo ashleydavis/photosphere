@@ -553,7 +553,7 @@ ios_dump_background_diagnostics() {
 }
 
 #
-# Makes the next download end as the user cancelling it. A phone hands a download to the system share sheet, which a test cannot tap,
+# Makes the next download end as the user cancelling it. A mobile hands a download to the system share sheet, which a test cannot tap,
 # so the sheet's outcome is staged as cancelled through the page. Usage: ios_cancel_next_download <port>
 #
 ios_cancel_next_download() {

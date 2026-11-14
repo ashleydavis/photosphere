@@ -5,7 +5,7 @@
 #
 # The restart is the assertion that matters on a desktop. A gallery that loads two assets in the process the import ran in could be
 # reading an in-process cache; a gallery that loads two assets after the app has been stopped and started again can only have got them
-# out of the bucket. A phone does not restart the app: it covers creating, importing and reading back inside one run, which is what
+# out of the bucket. A mobile does not restart the app: it covers creating, importing and reading back inside one run, which is what
 # runs the create, import and load tasks over an s3: path inside the embedded worker.
 #
 # The credentials reach S3 through the vault secret named by the databases entry the dialog writes, so this also covers the vault
@@ -40,7 +40,7 @@ start_s3_emulator "$S3_STATE_DIR"
 S3_DB_PATH="s3:$S3_EMULATOR_BUCKET/lifecycle"
 log_info "Database path: $S3_DB_PATH"
 
-# Creating a database on S3, and importing into it, are given longer than the default on a phone, because every step of either is a
+# Creating a database on S3, and importing into it, are given longer than the default on a mobile, because every step of either is a
 # round trip to the host and on a NAT-only emulator those are slow enough to matter. The work is still going when a short wait gives
 # up, and app.log stops meanwhile because the worker logs elsewhere, so the failure reads as a hang when it is not one.
 S3_STEP_TIMEOUT=300

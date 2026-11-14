@@ -10,7 +10,7 @@ export interface IMobileDialogActionChildSx {
 }
 
 //
-// Styles applied to a sheet's action row on a phone. The actions become a full-width stack at the
+// Styles applied to a sheet's action row on a mobile. The actions become a full-width stack at the
 // bottom of the sheet (the thumb end of the screen) instead of a cramped right-aligned row.
 //
 export interface IMobileDialogActionsSx {
@@ -29,7 +29,7 @@ export interface IMobileDialogActionsSx {
 }
 
 //
-// Styles applied to a sheet's title on a phone. The title stays put while the body scrolls, so it
+// Styles applied to a sheet's title on a mobile. The title stays put while the body scrolls, so it
 // is always clear which sheet is open.
 //
 export interface IMobileDialogTitleSx {
@@ -116,7 +116,7 @@ export interface IMobileSheetContentSx {
 }
 
 //
-// The `sx` values produced for the Joy `Drawer` that presents a dialog as a bottom sheet on a phone.
+// The `sx` values produced for the Joy `Drawer` that presents a dialog as a bottom sheet on a mobile.
 // Kept as a concrete interface (rather than the broad Joy `SxProps` union) so the individual values
 // can be asserted directly in unit tests.
 //
@@ -187,12 +187,12 @@ const SHEET_TRANSITION_FUNCTION = 'cubic-bezier(0.32, 0.72, 0, 1)';
 const SHEET_CORNER_RADIUS = '20px';
 
 //
-// Builds the `sx` for the Joy `Drawer` that presents a dialog as a bottom sheet on a phone.
+// Builds the `sx` for the Joy `Drawer` that presents a dialog as a bottom sheet on a mobile.
 //
 // A centred dialog is a desktop idiom: it wastes the width, strands its actions in the middle of the
 // screen away from the thumb, and squeezes its content between two margins. A sheet anchored to the
 // bottom edge uses the full width, puts the actions where the thumb already rests, and reads as
-// native on a phone.
+// native on a mobile.
 //
 // A `Drawer` is used rather than a `Modal` styled to look like a sheet because Joy's `Drawer` slides
 // its content in and out on its own, and stays mounted for the length of the closing slide. Joy's

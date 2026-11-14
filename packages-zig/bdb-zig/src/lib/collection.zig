@@ -47,7 +47,7 @@ pub const DirtyCallback = struct {
 // A shard holds every record in it, so this is the ceiling on how much of a collection is in memory
 // at once. Eight is enough that the handful of shards a write touches together all stay, and small
 // enough that walking a whole collection does not end up holding it: a sync's record merge visits
-// every differing shard on both sides, and holding them all is what ran a phone out of memory.
+// every differing shard on both sides, and holding them all is what ran a mobile out of memory.
 //
 const MAX_CACHED_SHARDS = 8;
 

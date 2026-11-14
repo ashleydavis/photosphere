@@ -8,7 +8,7 @@ import type { IStory } from "../types";
 
 //
 // Stories for the MobilePageHeader: the header used by the management pages, which folds its
-// secondary actions into an overflow menu on a phone.
+// secondary actions into an overflow menu on a mobile.
 //
 export const stories: IStory[] = [
     {

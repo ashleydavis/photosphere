@@ -212,7 +212,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: 
     if (options.cleanup orelse false) {
         // After the import rather than during it, and as one walk rather than per file. The CLI has
         // no confirmation dialog in front of deleting a file, so unlike mobile it needs no button:
-        // only what triggers this differs between the two, and it differs because only a phone puts
+        // only what triggers this differs between the two, and it differs because only a mobile puts
         // a system prompt in front of it.
         log.info(try pc.dim(allocator, "Looking for source files the database already holds..."));
         _ = try cleanUpImportedSources(allocator, io, log, uuidGenerator, storageDescriptor, try watchSettings(allocator, io, paths), sessionId);

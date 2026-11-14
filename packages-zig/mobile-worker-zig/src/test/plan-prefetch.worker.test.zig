@@ -44,7 +44,7 @@ const BsonDocument = serialization_zig.bson.BsonDocument;
 const at = @import("sandbox.zig").at;
 
 //
-// The database the tests use, which stands in for the replica a phone holds.
+// The database the tests use, which stands in for the replica a mobile holds.
 //
 const DATABASE_PATH = "photosphere-default";
 
@@ -129,7 +129,7 @@ fn writeMerkleTree(sandbox: *Sandbox, log: ILog, isPartial: bool) !void {
 }
 
 //
-// Makes every storage this test opens an encrypted one, the way a phone holding a replica of an
+// Makes every storage this test opens an encrypted one, the way a mobile holding a replica of an
 // encrypted database has it.
 //
 // The key goes in through PSI_ENCRYPTION_KEY as a file path, which resolveStorageCredentials accepts
@@ -174,7 +174,7 @@ fn plan(sandbox: *Sandbox, log: ILog, connectionType: []const u8) !std.json.Valu
     }, sandbox.context(), host.networkStatusHost());
 }
 
-// A phone whose settings cannot be read must not start pulling files over whatever connection it happens to have. Off is the only
+// A mobile whose settings cannot be read must not start pulling files over whatever connection it happens to have. Off is the only
 // safe reading of a file that is not there.
 test "plan-prefetch says not to run when there is no settings file at all" {
     var sandbox: Sandbox = undefined;
@@ -270,7 +270,7 @@ test "plan-prefetch says not to run when the database has no origin to fill in f
 }
 
 // A full database has nothing missing. The prefetch task checks this too and returns, but it would pay for an engine slot and a
-// merkle tree load to find out, every pass, for as long as the phone was switched on.
+// merkle tree load to find out, every pass, for as long as the mobile was switched on.
 test "plan-prefetch says not to run when the database is not a partial replica" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
@@ -289,11 +289,11 @@ test "plan-prefetch says not to run when the database is not a partial replica" 
     try expectEmptyArray(result, "steps");
 }
 
-// The database on a real phone is encrypted, and the merkle tree this reads to find out whether the replica is partial is one of
+// The database on a real mobile is encrypted, and the merkle tree this reads to find out whether the replica is partial is one of
 // the encrypted files. Asked for it without the credentials, the tree loader read .db/files.dat as the raw ciphertext it is on
 // disk and threw on the serialized checksum, so every pass of the background loop failed and the prefetch never ran at all.
 // Measured on a Pixel 6 against an encrypted S3 origin: "Checksum mismatch: expected <the file's last 32 bytes> got <a hash of
-// the rest of it>", once a pass, for as long as the phone was left running.
+// the rest of it>", once a pass, for as long as the mobile was left running.
 test "plan-prefetch runs against an encrypted replica, whose merkle tree has to be decrypted to be read" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();

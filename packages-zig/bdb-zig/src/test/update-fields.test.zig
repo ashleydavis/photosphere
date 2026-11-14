@@ -142,7 +142,7 @@ test "should handle deeply nested objects" {
                 property("age", numberValue(30)),
                 property("contact", try objectValue(allocator, &.{
                     property("email", stringValue("john@example.com")),
-                    property("phone", stringValue("555-1234")),
+                    property("mobile", stringValue("555-1234")),
                 })),
             })),
         })),
@@ -164,7 +164,7 @@ test "should handle deeply nested objects" {
                 property("age", numberValue(30)),
                 property("contact", try objectValue(allocator, &.{
                     property("email", stringValue("john.new@example.com")),
-                    property("phone", stringValue("555-1234")),
+                    property("mobile", stringValue("555-1234")),
                 })),
             })),
         })),

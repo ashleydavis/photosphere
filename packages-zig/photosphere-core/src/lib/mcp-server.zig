@@ -8,7 +8,7 @@
 // for the page to reply with the `mcp-tool-response` message, which the main thread passes to the connection thread that holds the call.
 //
 // The server runs for the life of the app, started when the main window is created and stopped when the app stops (see
-// MainState.mainWindowCreated and MainState.stop). A phone has no MCP server.
+// MainState.mainWindowCreated and MainState.stop). A mobile has no MCP server.
 //
 
 const std = @import("std");

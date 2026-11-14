@@ -3,7 +3,7 @@
 # Cancelling a secret receive, then receiving again. The secret counterpart of 30.
 #
 # The receiver is the app under test on every platform. The sender of the second receive is a second copy of the app on a desktop. A
-# phone cannot run two copies of the app, so there the sender is the psi CLI on the host, reaching the device over the LAN bridge.
+# mobile cannot run two copies of the app, so there the sender is the psi CLI on the host, reaching the device over the LAN bridge.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -31,7 +31,7 @@ wait_for_log "$TMP_DIR" "Secrets page loaded"
 #
 open_receive_dialog_and_start() {
     local code="$1"
-    # The receive action is in the page's actions menu on a phone. A desktop has no such menu and the click finds nothing.
+    # The receive action is in the page's actions menu on a mobile. A desktop has no such menu and the click finds nothing.
     send_command "$RECEIVER_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
     send_command "$RECEIVER_PORT" click '{"dataId":"receive-secret-button"}' || exit 1
     wait_for_log "$TMP_DIR" "Receive secret dialog opened"

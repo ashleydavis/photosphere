@@ -46,7 +46,7 @@ dependencies {
     // Ziggy's Android native app, at the version tag every other place that takes Ziggy names (see settings.gradle).
     implementation 'dev.ziggy:ziggy-native-android:v0.0.23'
 
-    // Jetpack Security: EncryptedSharedPreferences backed by the Android Keystore, which holds the phone's secrets encrypted at rest.
+    // Jetpack Security: EncryptedSharedPreferences backed by the Android Keystore, which holds the mobile's secrets encrypted at rest.
     implementation "androidx.security:security-crypto:$androidxSecurityCryptoVersion"
 
     // Plain-JVM unit tests of the Java that does not need the platform.

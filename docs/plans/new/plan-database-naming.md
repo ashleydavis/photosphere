@@ -2,7 +2,7 @@
 
 ## Overview
 
-A database is identified three ways at once and they disagree: the uuid in its merkle tree is its real identity, its credentials and encryption key are found by exact path match against `databases.toml`, and its entry in that file is keyed by name, unique per device and chosen independently on each. That last one is the odd one out, and it breaks the ordinary case: two copies of one database, a local one and the remote it syncs with, cannot both be called what the database is called, because the list refuses the second. Setting up an Android phone against an existing bucket database ran straight into it, and the way out was to rename one copy so the other could have the name. **The decision is made: the path is the identifier and the name is a description.** Names need not be unique, so a local database and its remote can share one. `psi` takes either a path or a name, and where a name matches more than one entry, `--type=fs` or `--type=s3` says which is meant. The interface shows a badge on every database saying what kind of storage it lives in, so two entries with one name are told apart on sight rather than by opening each.
+A database is identified three ways at once and they disagree: the uuid in its merkle tree is its real identity, its credentials and encryption key are found by exact path match against `databases.toml`, and its entry in that file is keyed by name, unique per device and chosen independently on each. That last one is the odd one out, and it breaks the ordinary case: two copies of one database, a local one and the remote it syncs with, cannot both be called what the database is called, because the list refuses the second. Setting up an Android mobile against an existing bucket database ran straight into it, and the way out was to rename one copy so the other could have the name. **The decision is made: the path is the identifier and the name is a description.** Names need not be unique, so a local database and its remote can share one. `psi` takes either a path or a name, and where a name matches more than one entry, `--type=fs` or `--type=s3` says which is meant. The interface shows a badge on every database saying what kind of storage it lives in, so two entries with one name are told apart on sight rather than by opening each.
 
 ## Issues
 
@@ -58,7 +58,7 @@ A database is identified three ways at once and they disagree: the uuid in its m
 - `bun run test:and` passes.
 - `bun run test:electron` passes.
 - `bun run tev` passes, in one run, as the final check.
-- On a phone, a local replica and the remote it syncs with both carry the database's name, are told apart by their badges, and both open.
+- On a mobile, a local replica and the remote it syncs with both carry the database's name, are told apart by their badges, and both open.
 
 ## Notes
 

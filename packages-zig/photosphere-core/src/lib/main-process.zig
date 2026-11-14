@@ -293,7 +293,7 @@ fn enqueueEvictOriginals(state: *MainState, services: HandlerServices, io: std.I
 }
 
 //
-// Creates the default private database and records it. The same create-default-database task a phone's background import runs: it
+// Creates the default private database and records it. The same create-default-database task a mobile's background import runs: it
 // makes the database, lists it, and remembers it as the default. The main process queues it rather than writing the config and the
 // database list itself, so the default database comes to exist one way rather than one way per platform.
 //
@@ -307,7 +307,7 @@ fn createDefaultDatabase(services: TaskServices, timers: Timers, io: std.Io, are
         .configPath = config_path,
 
         // The user switched automatic import on and photos are about to start arriving in this database, so it is requested on screen
-        // as well as on disk. The same thing a phone's pass requests, put the same way: in the request that makes the database.
+        // as well as on disk. The same thing a mobile's pass requests, put the same way: in the request that makes the database.
         .open = true,
     }, null);
     const completion = try services.awaitTask(io, arena, timers, task_id);
@@ -321,7 +321,7 @@ fn createDefaultDatabase(services: TaskServices, timers: Timers, io: std.Io, are
 // What the `ensure-auto-import` task found automatic import should do, which the main thread does when the task ends.
 //
 pub const IEnsureAutoImportResult = struct {
-    // "none" when automatic import is already doing what the config says (or this is a phone), "stop" when it should not run, and
+    // "none" when automatic import is already doing what the config says (or this is a mobile), "stop" when it should not run, and
     // "start" when it should be started into the database, with the settings, given here.
     action: []const u8,
     // The database to import into, for "start".
@@ -343,7 +343,7 @@ pub const IEnsureAutoImportResult = struct {
 //
 pub fn ensureAutoImport(services: TaskServices, timers: Timers, io: std.Io, arena: std.mem.Allocator, context: TaskContext, given: main_state.IEnsureAutoImportData) !IEnsureAutoImportResult {
     const log = services.log;
-    // A phone does not watch folders. Its automatic import is the background work the page starts and stops (startBackgroundImport and
+    // A mobile does not watch folders. Its automatic import is the background work the page starts and stops (startBackgroundImport and
     // stopBackgroundImport), which reads the device photo library.
     if (builtin.os.tag == .ios or builtin.abi.isAndroid()) {
         return .{

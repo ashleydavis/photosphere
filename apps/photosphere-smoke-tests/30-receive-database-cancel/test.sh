@@ -5,10 +5,10 @@
 #
 # Every LAN-share task runs under one fixed source tag (LAN_SHARE_SOURCE), and cancelling calls cancelTasks on it. A backend that keeps a
 # cancelled source discards the restarted receive silently, leaving the dialog waiting for a sender that has already connected. On a
-# phone the engine pool once did exactly that: the second receive was dropped before it ran, with no error and no log line, while the
+# mobile the engine pool once did exactly that: the second receive was dropped before it ran, with no error and no log line, while the
 # host CLI sent to nobody.
 #
-# On a desktop the second receive is paired with a second copy of the app as the sender. A phone cannot run two copies of the app, so
+# On a desktop the second receive is paired with a second copy of the app as the sender. A mobile cannot run two copies of the app, so
 # there the sender is the psi CLI on the host, reaching the device over the LAN bridge.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -60,7 +60,7 @@ send_command "$RECEIVER_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$RECEIVER_DIR" "Databases page loaded"
 
 #
-# Opens the Receive Database dialog (from the page-actions menu on a phone, where it is a secondary action), waits for its code step to
+# Opens the Receive Database dialog (from the page-actions menu on a mobile, where it is a secondary action), waits for its code step to
 # have rendered, types the code and presses Start.
 # Usage: open_receive_dialog_and_start <code>
 #

@@ -10,7 +10,7 @@ print_test_header 61 "desktop-menu"
 
 case "$PLATFORM" in
     android|ios)
-        log_info "SKIP: a phone has no desktop menu. Skipping."
+        log_info "SKIP: a mobile has no desktop menu. Skipping."
         exit 77
         ;;
 esac

@@ -42,7 +42,7 @@ export function SecretsPage() {
     const platform = usePlatform();
     const { secrets, dbs, refresh, addSecret, updateSecret, deleteSecret } = useApp();
 
-    // On a phone the secrets are shown as cards rather than as a table.
+    // On a mobile the secrets are shown as cards rather than as a table.
     const isMobile = useIsMobile();
 
     // Whether the add/edit dialog is open.
@@ -355,7 +355,7 @@ export function SecretsPage() {
                 </Box>
             }
 
-            {/* Cards on a phone (name across the full width, actions in the ⋮ menu), the table on a
+            {/* Cards on a mobile (name across the full width, actions in the ⋮ menu), the table on a
                 wide screen where the columns are worth having. */}
             {secrets.length > 0 && isMobile
                 && <Box>

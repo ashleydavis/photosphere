@@ -581,7 +581,7 @@ export function MockProviders({
 // first covers `bun run dev` and `bun run dev:web` (the server runs from
 // apps/<app>), the second covers app processes launched from the repo root.
 // The third is a simple name, which the app resolves into its own database
-// folder, where the story player seeds the fixture on a phone.
+// folder, where the story player seeds the fixture on a mobile.
 //
 const testDatabaseCandidates = [
     "../../test/dbs/50-assets",

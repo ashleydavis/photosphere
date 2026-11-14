@@ -57,7 +57,7 @@ photosphere_platform_start() {
         return 1
     fi
     local pid pgid
-    # The S3 variables a scenario exports for the CLI are removed: a phone never sees its host's environment, so the app has to find
+    # The S3 variables a scenario exports for the CLI are removed: a mobile never sees its host's environment, so the app has to find
     # credentials the way it does there, from the vault.
     read -r pid pgid < <(launch_in_process_group "$test_dir/app.log" env \
         -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_ENDPOINT_URL -u AWS_REGION -u AWS_SESSION_TOKEN \
@@ -327,7 +327,7 @@ linux_library_remove() {
 
 #
 # Writes the automatic import settings into the auto_import section of the app's config.toml, keeping every other section the file
-# already has, so the import watches the library and nothing else. The last argument names a photo the library holds on a phone, where
+# already has, so the import watches the library and nothing else. The last argument names a photo the library holds on a mobile, where
 # the device must know an album before it can be watched, and is not needed here.
 # Usage: linux_seed_library_auto_import_config <enabled true|false> <default_database_path or ""> <pause_ms> <library> <photo_name_in_it>
 #
@@ -386,7 +386,7 @@ linux_asset_count() {
 }
 
 #
-# Copies the database in the directory of the given name onto the given host directory, the way a phone's is copied off the device.
+# Copies the database in the directory of the given name onto the given host directory, the way a mobile's is copied off the device.
 # Usage: linux_pull_database <dir_name> <local_dir>
 #
 linux_pull_database() {
@@ -422,7 +422,7 @@ linux_claim_device() {
 }
 
 #
-# A desktop is never a real phone. Usage: linux_is_real_device
+# A desktop is never a real mobile. Usage: linux_is_real_device
 #
 linux_is_real_device() {
     return 1
@@ -499,7 +499,7 @@ linux_sync_stopped_log() {
 
 #
 # A desktop is always started on a directory of its own that nothing else uses, so its data is wiped by being new and the settings of a
-# real phone are never borrowed. A scenario that reached these on a desktop would be about to damage something, so they refuse.
+# real mobile are never borrowed. A scenario that reached these on a desktop would be about to damage something, so they refuse.
 # Usage: linux_borrow_app_settings, linux_return_app_settings
 #
 linux_borrow_app_settings() {

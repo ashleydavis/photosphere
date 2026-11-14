@@ -2,12 +2,12 @@ import { DEFAULT_SYNC_PAUSE_MS, DEFAULT_SYNC_SETTINGS, INITIAL_SYNC_SETTINGS } f
 import { planSyncSeed, planSyncDatabase, type IMobileSyncSettings } from "../lib/background-work";
 
 //
-// Tests for the two decisions the phone makes about the syncing section of config.toml that no other
+// Tests for the two decisions the mobile makes about the syncing section of config.toml that no other
 // platform makes: what to write into a fresh installation, and what to write when a database is
 // opened.
 //
 // Reading and writing the file itself goes through the core's config tasks and is covered by the Android
-// suite. What is here is the deciding, because getting it wrong is a phone that quietly stops pushing
+// suite. What is here is the deciding, because getting it wrong is a mobile that quietly stops pushing
 // photos, one that pushes them over cellular after being told not to, or one that has a user's choice
 // overwritten every time the app starts.
 //

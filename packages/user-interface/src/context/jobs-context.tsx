@@ -82,7 +82,7 @@ export function JobsContextProvider({ children }: IJobsContextProviderProps) {
     const loggedJobNames = useRef<Map<string, string>>(new Map());
 
     //
-    // Record what started and what finished in the app log. On a phone there is no console to watch
+    // Record what started and what finished in the app log. On a mobile there is no console to watch
     // and the work carries on with the screen off, so the log is the only account of what ran.
     //
     useEffect(() => {

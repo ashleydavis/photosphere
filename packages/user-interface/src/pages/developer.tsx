@@ -38,7 +38,7 @@ export function DeveloperPage(): JSX.Element {
     }
 
     //
-    // Height of each row. Every row is a full-width tap target on a phone, comfortably above the
+    // Height of each row. Every row is a full-width tap target on a mobile, comfortably above the
     // 48px minimum, because these rows carry switches that are easy to miss with a thumb.
     //
     const rowSx = { minHeight: isMobile ? 56 : 44, borderRadius: 'md' };

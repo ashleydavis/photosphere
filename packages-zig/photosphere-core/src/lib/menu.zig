@@ -1,6 +1,6 @@
 //
 // Photosphere's desktop menu: the menu bar, written once. Ziggy's native apps draw it natively on every desktop platform and never
-// on a phone.
+// on a mobile.
 //
 // Each item says what it runs. A `.standard` item is an action the native app does itself: quit, close-window, reload, toggle-devtools,
 // toggle-fullscreen, zoom-in, zoom-out, zoom-reset, undo, redo, cut, copy, paste and select-all. Every other item is Photosphere's and

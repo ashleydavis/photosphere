@@ -20,7 +20,7 @@ Ziggy is the only platform Photosphere runs on, so the injected platform abstrac
     - `bun run compile` and `bun run test` pass.
 
 4. **Add the Ziggy context.** Create `packages/user-interface/src/context/ziggy-context.tsx`, with no logic in it:
-    - `IErudaState` (moved from the provider: `initialised`, `visible`) and `IExportTestState` (`staged: ExportTestOutcome | undefined`, the outcome a test staged for the next phone export).
+    - `IErudaState` (moved from the provider: `initialised`, `visible`) and `IExportTestState` (`staged: ExportTestOutcome | undefined`, the outcome a test staged for the next mobile export).
     - `IZiggyContext`: `ziggy: IZiggyBridge`, `platform: IPlatformInfo`, `messages: AppMessages`, `erudaState: IErudaState`, `exportTestState: IExportTestState`.
     - `ZiggyContextProvider({ value, children })` and `useZiggy(): IZiggyContext`, which throws `ZiggyContext is not set! Add ZiggyContextProvider to the component tree.` when none is mounted.
     - Export from `index.tsx`. `bun run compile` passes.
@@ -75,7 +75,7 @@ All in `packages/user-interface/src/test/lib/ziggy/`, with `FakeZiggy`:
 ## Smoke Tests
 
 - `bun run test:ziggy`: the Photosphere App smoke tests on the host cover opening a database, the menu, toasts, import, sync, export and test mode through `App` and the changed callers.
-- `bun run test:ziggy:and`: the same on the Android emulator pool, covering the phone branches (background import, Eruda, share-sheet export). Part of `bun run tev`.
+- `bun run test:ziggy:and`: the same on the Android emulator pool, covering the mobile branches (background import, Eruda, share-sheet export). Part of `bun run tev`.
 - `bun run stories:ziggy`: renders every story through the new mocks and fails on any story that crashes.
 
 ## Verify
@@ -90,7 +90,7 @@ All in `packages/user-interface/src/test/lib/ziggy/`, with `FakeZiggy`:
 ## Notes
 
 - The human chose, while this plan was written: delete `IPlatformContext`, `PlatformContextProvider`, `usePlatform` and `mockPlatform` entirely; the code goes down into the callers and into the component that hosted the provider (`App`); no documentation review stop.
-- This puts Ziggy bridge calls and the desktop/phone branches in `packages/user-interface`, which the `CLAUDE.md` rule against platform-specific code there was written to prevent while there were several platforms. The human directed this change with Ziggy as the only platform. The plan does not edit `CLAUDE.md`.
+- This puts Ziggy bridge calls and the desktop/mobile branches in `packages/user-interface`, which the `CLAUDE.md` rule against platform-specific code there was written to prevent while there were several platforms. The human directed this change with Ziggy as the only platform. The plan does not edit `CLAUDE.md`.
 - `ZiggyContext` holds the real bridge and two small pieces of state two callers share (`erudaState` for `toggleDevTools`, called from `developer-context.tsx` and `stories-page.tsx`; `exportTestState`, set by `App` and read by `saveDownloadedFiles`). It is needed so stories can swap in a `FakeZiggy`; reading `window.ziggy` directly would leave stories no way to fake the core.
 - Page-only events (`database-chosen`, `background-work-settings-changed`, `database-content-changed`, and `database-opened`/`database-closed`/`platform-event`/`show-notification` when the page starts them) go through `AppMessages.emit`, replacing the provider's callback sets and `autoImportChangedRef`. `database-chosen` is separate from `database-opened` because the provider recorded the sync database only for `notifyDatabaseOpened`, not for the core's own `database-opened` event.
 - The provider was mounted once per route, so leaving `/stories` remounted it and resent `page-loaded`. With the work in `App` it runs once per page load.

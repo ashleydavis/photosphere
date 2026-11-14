@@ -119,7 +119,7 @@ fn plan(sandbox: *Sandbox, log: ILog, connectionType: []const u8, dataJson: []co
     return planSyncHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(dataJson), sandbox.context(), host.networkStatusHost());
 }
 
-// A phone whose settings cannot be read must not start pushing photos over whatever connection it happens to have. Off is the only
+// A mobile whose settings cannot be read must not start pushing photos over whatever connection it happens to have. Off is the only
 // safe reading of a file that is not there.
 test "plan-sync says not to sync when there is no settings file at all" {
     var sandbox: Sandbox = undefined;
@@ -250,7 +250,7 @@ test "plan-sync says not to sync when no default database has been created yet" 
 }
 
 // The sync task itself would skip it, having paid for an engine slot and a database open to find that out, and it would do so every
-// pass for as long as the phone was switched on.
+// pass for as long as the mobile was switched on.
 test "plan-sync says not to sync when the database has no origin to sync to" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
@@ -286,7 +286,7 @@ test "plan-sync hands back a sync-database step for the default database when a 
     try std.testing.expectEqual(@as(usize, 2), stepData.object.count());
     try expectString(DATABASE_PATH, stepData, "databasePath");
 
-    // Named here rather than in native code, so a phone's job row reads the same as a desktop's. No cancel source: the pass is
+    // Named here rather than in native code, so a mobile's job row reads the same as a desktop's. No cancel source: the pass is
     // queued by the native driver under a source the WebView never learns, so the row must not offer a Cancel button it cannot
     // honour.
     try std.testing.expectEqual(@as(usize, 2), at(stepData, "job").?.object.count());
@@ -322,7 +322,7 @@ test "plan-sync's refusal still carries the pause, so the loop does not spin ask
 }
 
 // A sync that overlaps a working prefetch does the same work slowly and gets in its own way: measured on a Pixel 6, reaching the
-// origin's merkle tree took 81.5 seconds during such a pass against 97 milliseconds when the phone was idle, and the record merge
+// origin's merkle tree took 81.5 seconds during such a pass against 97 milliseconds when the mobile was idle, and the record merge
 // took 15 minutes pulling down the same metadata shards the prefetch was fetching.
 test "plan-sync says not to sync while a prefetch is still filling the database in" {
     var sandbox: Sandbox = undefined;
@@ -340,8 +340,8 @@ test "plan-sync says not to sync while a prefetch is still filling the database 
 }
 
 // The hazard this whole ordering could create, and the reason the wait is bounded by progress rather than by completion. A
-// prefetch failed and was never retried on the measured phone; a sync that waited on that would have waited for the life of the
-// app, which is a phone that has silently stopped backing up.
+// prefetch failed and was never retried on the measured mobile; a sync that waited on that would have waited for the life of the
+// app, which is a mobile that has silently stopped backing up.
 test "plan-sync syncs when the prefetch is stalled, so a prefetch that cannot finish cannot stop syncing" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
@@ -368,7 +368,7 @@ test "plan-sync syncs when the prefetch has finished filling the database in" {
     try expectBool(true, result, "shouldRun");
 }
 
-// Nothing has reported a pass, which is every phone at launch. Refusing on no evidence is how a loop gets stuck.
+// Nothing has reported a pass, which is every mobile at launch. Refusing on no evidence is how a loop gets stuck.
 test "plan-sync syncs when nothing is known about the prefetch yet" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
@@ -382,7 +382,7 @@ test "plan-sync syncs when nothing is known about the prefetch yet" {
     try expectBool(true, result, "shouldRun");
 }
 
-// An older native build, or any caller that sends no input data. A missing value must not be able to stop a phone syncing.
+// An older native build, or any caller that sends no input data. A missing value must not be able to stop a mobile syncing.
 test "plan-sync syncs when the native side said nothing about the prefetch at all" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
@@ -410,7 +410,7 @@ test "plan-sync syncs when the prefetch state is a value nobody recognises or th
     try expectBool(true, try plan(&sandbox, log, "wifi", "null"), "shouldRun");
 }
 
-// The reason a user is most likely to care about is the one the log should carry: a phone with syncing switched off is not syncing
+// The reason a user is most likely to care about is the one the log should carry: a mobile with syncing switched off is not syncing
 // because it was switched off, whatever the prefetch is doing.
 test "plan-sync: the master switch wins over a working prefetch" {
     var sandbox: Sandbox = undefined;
@@ -440,7 +440,7 @@ test "plan-sync: the connection check wins over a working prefetch" {
     try expectContains("cellular", result, "reason");
 }
 
-test "plan-sync's refusal says why, so a phone that is not syncing can be accounted for" {
+test "plan-sync's refusal says why, so a mobile that is not syncing can be accounted for" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     const log = MuteLog.init();

@@ -12,7 +12,7 @@ The caches a task builds (vaults, the hash cache, the S3 client, the last error)
 
 Photosphere starts threads of its own for its two HTTP servers on loopback. Both use `node-utils-zig`'s `http_server` (`packages-zig/node-utils-zig/src/lib/http-server.zig`): an accepting thread posts each connection to a server thread, which hands it to a connection thread from a pool. The threads talk by Ziggy's `MessageQueue`. Each makes its own allocator and Io.
 
-- **The asset server** serves images, video and asset writes to the page. The main thread opens its socket when the page asks for its query, so the page gets the port at once. It is not a task. Each connection thread keeps its own core and its own cache of database storages. A connection thread that needs the phone's keychain asks the main thread for it by message.
+- **The asset server** serves images, video and asset writes to the page. The main thread opens its socket when the page asks for its query, so the page gets the port at once. It is not a task. Each connection thread keeps its own core and its own cache of database storages. A connection thread that needs the mobile's keychain asks the main thread for it by message.
 - **The MCP server** (`mcp-server.zig`, desktop only) passes each tool call to the page as an `mcp-tool-request` event. The main thread passes the page's `mcp-tool-response` back to the connection thread that holds the call.
 - **Writes to a database** from different threads (a task and an asset server connection) are kept apart by the database's `.db/write.lock` file, not by a lock in memory.
 

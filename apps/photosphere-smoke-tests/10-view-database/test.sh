@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Adds a database entry with a geocoding secret, then views the database and reveals the secret. On a desktop the database and the
-# api-key secret are made with the CLI, the secret in the vault the app uses. On a phone the vault cannot be written from the host, so
+# api-key secret are made with the CLI, the secret in the vault the app uses. On a mobile the vault cannot be written from the host, so
 # the secret is added through the Add Secret dialog and the database is copied into the sandbox.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,7 +14,7 @@ trap 'cleanup_apps "$TMP_DIR"' EXIT
 case "$PLATFORM" in
     android|ios)
         "${PLATFORM}_reset_app_state" || exit 1
-        # A user on a phone types the short name, which the app resolves into its own storage, where the database is seeded.
+        # A user on a mobile types the short name, which the app resolves into its own storage, where the database is seeded.
         DATABASE_PATH="test-db"
         ;;
     *)
@@ -57,7 +57,7 @@ wait_for_log "$TMP_DIR" "Databases page loaded"
 
 case "$PLATFORM" in
     android|ios)
-        # The Add button is in the page's actions menu on a phone.
+        # The Add button is in the page's actions menu on a mobile.
         send_command "$APP_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
         ;;
 esac

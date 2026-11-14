@@ -68,7 +68,7 @@ pub const IReplicationResult = struct {
     //
     // Names of files the source's merkle tree describes but the source does not hold.
     //
-    // Only ever non-empty for a partial replica, which is exactly what a phone holds: its tree is the
+    // Only ever non-empty for a partial replica, which is exactly what a mobile holds: its tree is the
     // whole origin's, and the files it has are a subset. Reported rather than silently dropped, so a
     // replication that copied less than the tree describes says how much less.
     //
@@ -214,7 +214,7 @@ const ReplicateFilesState = struct {
         var srcInfoOperation: retry_operations.InfoOperation("() => assetStorage.info(fileName)") = .{ .allocator = allocator, .storage = assetStorage, .fileName = fileName };
         const srcFileInfo = try retry(io, log, &srcInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
             // A partial replica's merkle tree is the whole origin's, so it describes files the
-            // replica does not hold: that is what makes it partial, and it is what every phone has.
+            // replica does not hold: that is what makes it partial, and it is what every mobile has.
             // Treating the first of those as fatal made a partial replica impossible to replicate or
             // consolidate from at all, which is the one copy of a database that exists when the
             // origin has been lost.
@@ -393,7 +393,7 @@ fn replicateFiles(
     // By name, and not by the merkle diff, for the reason given at compareTrees: the diff matches
     // by hash, so of two files with the same content under different names it copied whichever it
     // visited second and pruned whichever it visited second, which is the wrong one half the time.
-    // The sync's push had the same fault, measured at 243 files left behind on a phone.
+    // The sync's push had the same fault, measured at 243 files left behind on a mobile.
     //
     const comparison = try compareTrees(allocator, log, merkleTree, destMerkleTree, null);
     const namesToCopy = try std.mem.concat(allocator, []const u8, &.{ comparison.onlyInA, comparison.modified });
@@ -1120,10 +1120,10 @@ pub fn replicate(
         //
         // Without the partial flag, whatever the source's says. A full replica is full by
         // definition: it holds everything its source could give it, and full is what was asked for
-        // by name. Carrying the flag over from a partial source made a full copy of a phone's
+        // by name. Carrying the flag over from a partial source made a full copy of a mobile's
         // replica, taken to rebuild a lost origin, come out marked partial, and every sync then
         // refused the originals and display versions pushed at it, for ever: measured on a Pixel 6,
-        // the phone imported and pushed 1,937 photos and the origin ended up holding the 250
+        // the mobile imported and pushed 1,937 photos and the origin ended up holding the 250
         // originals it started with, while its thumbnails went from 8,481 to 10,199.
         //
         if (merkleTree.databaseMetadata) |sourceMetadata| {

@@ -14,7 +14,7 @@ import {
 //
 // It lives in this package rather than in the mobile frontend because the native background import
 // asks for the same plan, through a worker task, and the worker cannot reach the frontend's React
-// code. One planner answers both, so a phone driving the import from its own service and a phone
+// code. One planner answers both, so a mobile driving the import from its own service and a mobile
 // driving it from the WebView cannot decide different things.
 //
 
@@ -43,7 +43,7 @@ export interface IAutoImportFile {
 // How long the background import waits between passes when the settings file does not say.
 //
 // A pass reads its sources to the end and stops, so this is the gap before the next one starts. Long
-// enough that a phone is not scanning its library continuously, short enough that a photo taken now
+// enough that a mobile is not scanning its library continuously, short enough that a photo taken now
 // is backed up in the next minute or so.
 //
 export const DEFAULT_AUTO_IMPORT_PAUSE_MS = 30000;
@@ -53,7 +53,7 @@ export const DEFAULT_AUTO_IMPORT_PAUSE_MS = 30000;
 //
 // Zero, a negative number, and anything that is not a finite number all fall back to the default.
 // The value is read from a file the user may edit, and a gap of zero is a loop that starts a fresh
-// pass the instant the last one ends, which on a phone is a flat battery rather than a fast backup.
+// pass the instant the last one ends, which on a mobile is a flat battery rather than a fast backup.
 //
 export function resolveAutoImportPauseMs(pauseMs: number | undefined): number {
     if (typeof pauseMs !== "number" || !Number.isFinite(pauseMs) || pauseMs <= 0) {

@@ -52,7 +52,7 @@ wait_for_log "$TMP_DIR" "Database summary loaded:"
 wait_for_value "$APP_PORT" database-mode "full"
 
 # The same summary is a tap away from the navbar's photo count, which is the number it summarises.
-# On a phone the dialog is a drawer sliding up from the bottom edge rather than a centred modal.
+# On a mobile the dialog is a drawer sliding up from the bottom edge rather than a centred modal.
 # Back to the gallery first, because the count only renders there.
 send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
 wait_for_value "$APP_PORT" database-photo-count "photos"

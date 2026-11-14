@@ -34,7 +34,7 @@ describe('resolveDroppedFilePath', () => {
         expect(path).toBeUndefined();
     });
 
-    test('a phone never asks the bridge', () => {
+    test('a mobile never asks the bridge', () => {
         let asked = false;
         const path = resolveDroppedFilePath(fileWith(undefined), false, mobile, () => {
             asked = true;

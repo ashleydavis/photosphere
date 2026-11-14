@@ -4,10 +4,10 @@ import android.content.Context;
 import android.os.PowerManager;
 
 // The wake lock the background work holds while a pass is running, so the CPU keeps working with the screen off. It is released
-// between passes: held for the life of the service it would flatten a phone overnight.
+// between passes: held for the life of the service it would flatten a mobile overnight.
 //
 // Reference counted, because the passes of the background loops overlap. Each takes a hold for its own pass and gives it back
-// afterwards, and the phone is free to sleep when the last hold goes. Held with no timeout, because a first backup of a phone's whole
+// afterwards, and the mobile is free to sleep when the last hold goes. Held with no timeout, because a first backup of a mobile's whole
 // photo library is over an hour of hashing and a timed lock would expire in the middle of it. A wake lock belongs to the process, so a
 // process killed mid pass has its lock released by the platform.
 public final class BackgroundWakeLock {
@@ -28,7 +28,7 @@ public final class BackgroundWakeLock {
             if (wakeLock == null) {
                 PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
                 if (powerManager == null) {
-                    throw new IllegalStateException("This phone has no power manager to hold the CPU awake with.");
+                    throw new IllegalStateException("This mobile has no power manager to hold the CPU awake with.");
                 }
                 wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG);
                 wakeLock.setReferenceCounted(true);

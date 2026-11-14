@@ -444,7 +444,7 @@ test "an item already in the database is never opened and never pushed" {
     try context.init();
     defer context.deinit();
     const allocator = context.arena.allocator();
-    // The whole point of asking before opening: on a phone, opening an item copies the entire
+    // The whole point of asking before opening: on a mobile, opening an item copies the entire
     // photo out of the library, and hashing it reads that copy back.
     var source = context.sourceWithPages(&.{.{
         .cursor = "",

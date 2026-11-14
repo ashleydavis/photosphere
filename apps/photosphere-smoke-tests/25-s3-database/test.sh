@@ -10,7 +10,7 @@
 #   2. A bad credential surfaces an error in the browser rather than an empty list. An empty list is the failure this test exists to
 #      catch: it looks exactly like an empty bucket.
 #
-# On a desktop the dialog is New Database, reached from the left sidebar. On a phone it is Add Database, reached from the databases page's
+# On a desktop the dialog is New Database, reached from the left sidebar. On a mobile it is Add Database, reached from the databases page's
 # actions menu, and each listing runs as a background task on the embedded worker, so the second browse also covers the worker pool
 # reviving a task source the first browser closed and cancelled.
 #
@@ -143,7 +143,7 @@ close_s3_browser
 
 # Break the stored credentials through the app's own Edit Secret dialog. On a desktop no navigation is needed: the dialog that adds a
 # database is a modal over whatever page is showing, so cancelling it leaves the secrets page on screen, and navigating to the page it
-# is already on logs nothing, so a wait for "Secrets page loaded" would time out. A phone is on the databases page, and the secret's
+# is already on logs nothing, so a wait for "Secrets page loaded" would time out. A mobile is on the databases page, and the secret's
 # actions are in its card's menu.
 case "$PLATFORM" in
     android|ios)
@@ -173,7 +173,7 @@ log_success "Bad credentials surfaced an error rather than an empty list"
 close_s3_browser
 
 # The failed listing above is provoked on purpose and is logged by the list-s3-dirs task, which runs the same way on a desktop and a
-# phone, so it is the one error allowed through. Anything else in app.log still fails the test.
+# mobile, so it is the one error allowed through. Anything else in app.log still fails the test.
 check_no_errors "$TMP_DIR" 'Error listing S3 directories'
 
 stop_app "$APP_PORT" "$TMP_DIR"

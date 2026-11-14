@@ -4,19 +4,19 @@
 #
 # This is the other half of what the background-import scenario proves. A photo taken while the app is backgrounded reaches the
 # device's own database there, and this scenario is about what happens next: it has to reach the remote copy as well, without anybody
-# opening the app. For a photo backup app that is the half that matters, because the photo is on the phone either way.
+# opening the app. For a photo backup app that is the half that matters, because the photo is on the mobile either way.
 #
 # Everything is measured by reading the S3 origin from the host, never by anything the app says. Log lines reach app.log from the web
 # view, and a backgrounded web view may be suspended, which is exactly the moment this scenario cares about. The origin is outside the
-# phone altogether, so it keeps answering.
+# mobile altogether, so it keeps answering.
 #
 # The negative case matters as much as the positive one: with `Enable syncing` switched off, the photo still has to reach the local
 # database and nothing at all may reach the origin, with the app and its service still running throughout. A scenario that only checked
 # the positive case would pass on an app that ignored the setting, and would pass on an app that had crashed.
 #
-# It runs against a real phone as well as an emulator, and on a phone it never wipes anything. An emulator gets `pm clear` like every
-# other mobile scenario; a phone gets its settings files and its keychain saved and handed back at the end, and the database this
-# scenario syncs is named for it rather than being the phone's own default. That matters because a phone this runs on may hold a real
+# It runs against a real mobile as well as an emulator, and on a mobile it never wipes anything. An emulator gets `pm clear` like every
+# other mobile scenario; a mobile gets its settings files and its keychain saved and handed back at the end, and the database this
+# scenario syncs is named for it rather than being the mobile's own default. That matters because a mobile this runs on may hold a real
 # imported photo library, and `pm clear` would destroy it.
 #
 # The `Only sync over Wi-Fi` restriction is NOT covered here. Driving it needs the device's connection type changed to cellular, and
@@ -42,13 +42,13 @@ SECRET_NAME="background-sync-smoke-test-s3"
 
 # The database this scenario seeds and syncs.
 #
-# Named for the scenario rather than "photosphere-default", so a run against a real phone never touches the database that phone actually
+# Named for the scenario rather than "photosphere-default", so a run against a real mobile never touches the database that mobile actually
 # backs up to. Which database the background sync pushes is whatever config.toml names, and this scenario names this one for as long as
 # it runs. The path is the absolute one in the app's files directory, for what the test does from outside the app.
 DB_NAME="background-sync-test-db"
 DB_PATH="$("${PLATFORM}_app_path" "$DB_NAME")"
 
-# True when this run is against a real phone rather than an emulator. Two things depend on it: the app's data is never wiped on a phone,
+# True when this run is against a real mobile rather than an emulator. Two things depend on it: the app's data is never wiped on a mobile,
 # and the last photo is a small one, for the reason below.
 IS_REAL_DEVICE=0
 if "${PLATFORM}_is_real_device"; then
@@ -60,14 +60,14 @@ fi
 ANCHOR_PHOTO_NAME="psphere-background-sync-anchor-$$.jpeg"
 BACKGROUNDED_PHOTO_NAME="psphere-background-sync-backgrounded-$$.png"
 
-# The last photo is two megabytes on an emulator and a small one on a phone, and the difference is the route to this host rather than
+# The last photo is two megabytes on an emulator and a small one on a mobile, and the difference is the route to this host rather than
 # anything about syncing.
 #
-# An emulator is on the LAN bridge and reaches the S3 server over a real network. A phone reaches it through the port reverses adb sets
+# An emulator is on the LAN bridge and reaches the S3 server over a real network. A mobile reaches it through the port reverses adb sets
 # up over USB, because the app permits cleartext to localhost only, and a two megabyte upload through that tunnel times out every time:
 # measured with the screen on and with it off, and with the same photo in the backgrounded step, so it is the upload and not the state
-# of the phone. Small photos go through it without trouble. The large upload is worth keeping where it can run, so the emulator keeps it
-# and the phone proves the same loop with a photo its route can carry.
+# of the mobile. Small photos go through it without trouble. The large upload is worth keeping where it can run, so the emulator keeps it
+# and the mobile proves the same loop with a photo its route can carry.
 if [ "$IS_REAL_DEVICE" -eq 1 ]; then
     SCREEN_OFF_PHOTO_NAME="psphere-background-sync-screen-off-$$.png"
     SCREEN_OFF_PHOTO_SOURCE="$REPO_DIR/test/test.png"
@@ -76,15 +76,15 @@ else
     SCREEN_OFF_PHOTO_SOURCE="$REPO_DIR/test/test.jpg"
 fi
 
-# The library this run's photos go into, which is a folder of its own and, on a phone, an album of its own.
+# The library this run's photos go into, which is a folder of its own and, on a mobile, an album of its own.
 #
 # Its own, because automatic import is pointed at that library and nothing else. Watching the whole library is right on an emulator
-# with nothing on it; on a phone it would import somebody's entire photo collection into this scenario's database, and every import
+# with nothing on it; on a mobile it would import somebody's entire photo collection into this scenario's database, and every import
 # pass would take long enough that the sync loop never got a turn.
 LIBRARY_PREFIX="psphere-background-sync"
 LIBRARY="$("${PLATFORM}_library_dir" "$LIBRARY_PREFIX")"
 
-# Where the saved settings of a real phone are kept while this scenario has its own in place. Not used on an emulator or a desktop,
+# Where the saved settings of a real mobile are kept while this scenario has its own in place. Not used on an emulator or a desktop,
 # where the app's data is wiped instead and there is nothing to keep.
 SAVED_SETTINGS_DIR="$TMP_DIR/device-settings"
 
@@ -99,7 +99,7 @@ NO_SYNC_WINDOW_SECONDS=60
 #
 # How many originals the app's database holds right now, or 0 when there is no database yet.
 #
-# Read from outside the app, which is the only way to see its storage on a phone.
+# Read from outside the app, which is the only way to see its storage on a mobile.
 #
 asset_count() {
     "${PLATFORM}_asset_count" "$DB_NAME"
@@ -108,7 +108,7 @@ asset_count() {
 #
 # How many files the origin database in the bucket holds.
 #
-# Read with the CLI from the host, which is the whole point: the phone is off screen and may be telling nobody anything. One photo is
+# Read with the CLI from the host, which is the whole point: the mobile is off screen and may be telling nobody anything. One photo is
 # several files (the original, the display copy and two thumbnails), so this is a number to compare against itself rather than a count
 # of photos.
 #
@@ -128,7 +128,7 @@ wait_for_origin_growth() {
     local what="$2"
     local elapsed=0
 
-    # A phone's background loop pushes what it imported by itself. A desktop syncs after an edit and on a timer of several minutes, and
+    # A mobile's background loop pushes what it imported by itself. A desktop syncs after an edit and on a timer of several minutes, and
     # an automatic import is neither, so it is told the database was edited, as it is when the user changes something.
     "${PLATFORM}_request_sync" "$APP_PORT" || return 1
     while [ "$elapsed" -lt "$SYNC_TIMEOUT_SECONDS" ]; do
@@ -180,24 +180,24 @@ restart_app() {
     wait_for_ready "$APP_PORT"
 }
 
-# True when this target's app data may be wiped, which is every emulator and desktop and no phone.
+# True when this target's app data may be wiped, which is every emulator and desktop and no mobile.
 CAN_WIPE_APP_DATA=0
 if "${PLATFORM}_may_wipe_app_data"; then
     CAN_WIPE_APP_DATA=1
 fi
 
-# Removes the photos from the library, puts the screen back on, hands the phone its own settings back, and stops both the app and the S3
+# Removes the photos from the library, puts the screen back on, hands the mobile its own settings back, and stops both the app and the S3
 # emulator, however the scenario ends. A screen left off poisons every scenario after it on that emulator, and a MinIO server left
 # running holds a port.
 on_exit() {
     local exit_code=$?
     "${PLATFORM}_screen_on" >/dev/null 2>&1 || true
-    # The photos are named with the library: without it the file is left on disk while the phone's record of it goes, and the next
+    # The photos are named with the library: without it the file is left on disk while the mobile's record of it goes, and the next
     # volume scan puts the record back. Photos left that way are photos the next scenario imports and counts.
     "${PLATFORM}_library_remove" "$LIBRARY" "$ANCHOR_PHOTO_NAME" "$BACKGROUNDED_PHOTO_NAME" "$SCREEN_OFF_PHOTO_NAME" 2>/dev/null || true
     cleanup_apps "$TMP_DIR"
 
-    # The phone gets its settings back before anything else, and whether the scenario passed or not: they say which database its
+    # The mobile gets its settings back before anything else, and whether the scenario passed or not: they say which database its
     # photos are backed up to, and leaving this scenario's in place would have it backing up into a test database.
     if [ "$CAN_WIPE_APP_DATA" -ne 1 ]; then
         "${PLATFORM}_return_app_settings" "$SAVED_SETTINGS_DIR"
@@ -212,7 +212,7 @@ trap on_exit EXIT
 
 mkdir -p "$TMP_DIR"
 
-# A locked phone cannot run this scenario, and it is worth saying so here rather than letting it fail four minutes later on an empty
+# A locked mobile cannot run this scenario, and it is worth saying so here rather than letting it fail four minutes later on an empty
 # database.
 #
 # From Android 12 an app that is not in the foreground may not start a foreground service, and an app launched behind a lock screen is
@@ -239,10 +239,10 @@ run_zig_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
 # does not take it in again, which is correct and is what the counts below would then wait on forever.
 run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/duplicate-images/a.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
 
-# --- 2. The phone's database, which is a partial replica of that origin. ---
+# --- 2. The mobile's database, which is a partial replica of that origin. ---
 
 # A replica rather than a fresh database, because sync moves content between two databases that are copies of each other. This is what
-# `psi consolidate` does for a user on the desktop, and what the app has no way to do on a phone yet, so the scenario does it from the
+# `psi consolidate` does for a user on the desktop, and what the app has no way to do on a mobile yet, so the scenario does it from the
 # host.
 LOCAL_REPLICA="$TMP_DIR/$DB_NAME"
 run_zig_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
@@ -252,13 +252,13 @@ run_zig_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" 
 printf '{"origin":"%s"}\n' "$S3_ORIGIN_PATH" > "$LOCAL_REPLICA/.db/config.json"
 
 ORIGIN_FILES_AT_START="$(origin_file_count)"
-log_info "The origin holds $ORIGIN_FILES_AT_START file(s) before the phone touches it"
+log_info "The origin holds $ORIGIN_FILES_AT_START file(s) before the mobile touches it"
 
-# --- 3. Put it all on the phone, with syncing switched OFF to start with. ---
+# --- 3. Put it all on the mobile, with syncing switched OFF to start with. ---
 
-# An emulator gets the clean start every other mobile scenario gets. A real phone does not: `pm clear` would destroy the photo library
+# An emulator gets the clean start every other mobile scenario gets. A real mobile does not: `pm clear` would destroy the photo library
 # it has imported, which is hours of somebody's work, and this scenario does not need it. What it needs is for its own settings to be in
-# place while it runs and the phone's own to be back afterwards, so on a phone they are saved and put back by the exit trap.
+# place while it runs and the mobile's own to be back afterwards, so on a mobile they are saved and put back by the exit trap.
 if [ "$CAN_WIPE_APP_DATA" -eq 1 ]; then
     "${PLATFORM}_reset_app_state" || exit 1
 else
@@ -278,7 +278,7 @@ fi
 # with no credentials at all and every read of it fails with "Region is missing".
 "${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DB_PATH\"},{\"name\":\"$DB_NAME-origin\",\"path\":\"$S3_ORIGIN_PATH\",\"s3Key\":\"$SECRET_NAME\"}]" || exit 1
 
-# A desktop syncs the database that is open, so the replica is the one the app opens when it starts. A phone's background loops work on
+# A desktop syncs the database that is open, so the replica is the one the app opens when it starts. A mobile's background loops work on
 # the database the settings name and need nothing open.
 "${PLATFORM}_open_database_on_launch" "$DB_PATH" || exit 1
 
@@ -295,8 +295,8 @@ fi
 
 # The app starts with both loops off, and is given its credentials before either of them runs.
 #
-# The other way round does not work on a phone. Automatic import walks the whole photo library's listing on every pass even when it
-# imports nothing from it, which on a phone holding a real collection takes several seconds of a pass every few seconds, and the app
+# The other way round does not work on a mobile. Automatic import walks the whole photo library's listing on every pass even when it
+# imports nothing from it, which on a mobile holding a real collection takes several seconds of a pass every few seconds, and the app
 # was busy enough that the first tap of the settings card never got an answer. It is also the wrong order on its own terms: a sync pass
 # that runs before the credentials exist fails, and a scenario should not need failures it does not care about to get to the ones it
 # does.
@@ -312,7 +312,7 @@ add_s3_secret_via_ui "$APP_PORT" "$SECRET_NAME" "$S3_ENDPOINT" "us-east-1" "$S3_
 # Automatic import on, writing into the replica, watching this scenario's album and nothing else. Switching the toggle on through the
 # settings card would make the app create a database of its own, which would have no origin to sync to, so this scenario seeds the
 # setting instead; the auto-import and background-import scenarios are the ones that go through the card. Every one of the three
-# watches an album of its own, because watching the whole library means importing somebody's photo collection on a real phone. The gap
+# watches an album of its own, because watching the whole library means importing somebody's photo collection on a real mobile. The gap
 # between passes is seeded short so the scenario is not waiting out the thirty second default several times over.
 "${PLATFORM}_seed_library_auto_import_config" "true" "$DB_PATH" "5000" "$LIBRARY" "$ANCHOR_PHOTO_NAME" || exit 1
 
@@ -388,7 +388,7 @@ log_success "The app and its service are still running with syncing switched off
 # re-reads the file every pass, so nothing has to be restarted.
 "${PLATFORM}_seed_sync_config" "true" "false" "1000" "$DB_PATH" || exit 1
 
-# A desktop reads its settings when it starts, so it is started again on the same data. A phone's loop has already seen the change.
+# A desktop reads its settings when it starts, so it is started again on the same data. A mobile's loop has already seen the change.
 "${PLATFORM}_apply_settings_change" || exit 1
 
 wait_for_origin_growth "$ORIGIN_FILES_AT_START" "The photo imported while the app was backgrounded reached the origin" || exit 1
@@ -400,7 +400,7 @@ ORIGIN_FILES_AFTER_FIRST="$(origin_file_count)"
 # and syncs gets no background syncing at all. Automatic import goes off here and the sync loop has to keep running: the service stays
 # up, and it goes on asking whether a sync should run.
 #
-# Before the screen goes off, deliberately. A phone with a secure lock screen locks itself when the screen goes off, and an app
+# Before the screen goes off, deliberately. A mobile with a secure lock screen locks itself when the screen goes off, and an app
 # relaunched behind a lock screen is refused its foreground service by the platform, so everything after that point is untestable
 # there. Nothing about this case needs the screen off.
 "${PLATFORM}_seed_library_auto_import_config" "false" "$DB_PATH" "5000" "$LIBRARY" "$ANCHOR_PHOTO_NAME" || exit 1
@@ -458,11 +458,11 @@ wait_for_log "$TMP_DIR" "$("${PLATFORM}_auto_import_started_log")" 120 || exit 1
 
 # Emulators only, and not because the case is uninteresting: it is the one the wake lock exists for.
 #
-# Turning the screen off on a phone with a secure lock screen locks it, and nothing a script may do can unlock it again: no scenario
-# should know somebody's PIN. The phone is then left locked for whoever picks it up next, and every later run of this scenario refuses
+# Turning the screen off on a mobile with a secure lock screen locks it, and nothing a script may do can unlock it again: no scenario
+# should know somebody's PIN. The mobile is then left locked for whoever picks it up next, and every later run of this scenario refuses
 # to start on it. An emulator has no lock screen, so it runs there every time, including in the release workflow.
 if [ "$IS_REAL_DEVICE" -eq 1 ]; then
-    log_info "SKIP (the screen-off case): turning the screen off would leave this phone locked, and a script cannot unlock it. It runs on every emulator."
+    log_info "SKIP (the screen-off case): turning the screen off would leave this mobile locked, and a script cannot unlock it. It runs on every emulator."
 else
     # A foreground service keeps the process alive but does not by itself keep the CPU awake; the wake lock the service takes for the
     # length of a pass is what makes this work.

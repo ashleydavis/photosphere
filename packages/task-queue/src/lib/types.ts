@@ -43,7 +43,7 @@ export interface ITaskContext {
     // How many child tasks this task may have running at once.
     //
     // Supplied by the platform that built this context, because only it knows: a desktop has cores
-    // and a fast disk to spare, while every engine an import fills on a phone is one a tap has to
+    // and a fast disk to spare, while every engine an import fills on a mobile is one a tap has to
     // wait for. It is not the size of the worker pool, it is how much of that pool one task may take,
     // so a second import, a sync, or anything the user does still gets a worker.
     //
@@ -253,7 +253,7 @@ export interface IJobTag {
 //
 // Sent whenever its progress moves, and carrying the whole job every time, so an interface that was
 // not listening when the job started still learns all of it from the next one. That happens on a
-// phone, where the system suspends the WebView while the work carries on in the native engine.
+// mobile, where the system suspends the WebView while the work carries on in the native engine.
 //
 export interface IJobProgressMessage {
     //

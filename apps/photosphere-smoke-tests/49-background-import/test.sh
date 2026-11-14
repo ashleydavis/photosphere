@@ -29,11 +29,11 @@ FIRST_PHOTO_NAME="psphere-background-import-first-$$.jpeg"
 BACKGROUNDED_PHOTO_NAME="psphere-background-import-backgrounded-$$.png"
 SCREEN_OFF_PHOTO_NAME="psphere-background-import-screen-off-$$.jpg"
 
-# The library this scenario's photos go in, which is a folder of its own. On a phone that is an album of its own, because the device
+# The library this scenario's photos go in, which is a folder of its own. On a mobile that is an album of its own, because the device
 # files an item under the directory it sits in.
 #
-# That is what makes this scenario run on a real phone as well as an emulator. Switching automatic import on watches the whole photo
-# library, and a phone's library is somebody's photo collection. The counts below are of what the app's database holds, so every one of
+# That is what makes this scenario run on a real mobile as well as an emulator. Switching automatic import on watches the whole photo
+# library, and a mobile's library is somebody's photo collection. The counts below are of what the app's database holds, so every one of
 # those would be counted, and the scenario would be waiting for three originals while thousands arrived. Pointing automatic import at
 # this library alone means the only photos it can take in are the ones this scenario put there, on any device.
 LIBRARY_PREFIX="psphere-background-import"
@@ -54,7 +54,7 @@ IMPORT_TIMEOUT_SECONDS=240
 #
 # How many originals the app's database holds right now, or 0 when there is no database yet.
 #
-# Read from outside the app, which is the only way to see its storage on a phone.
+# Read from outside the app, which is the only way to see its storage on a mobile.
 #
 asset_count() {
     "${PLATFORM}_asset_count" "$DEFAULT_DATABASE_DIR_NAME"
@@ -91,7 +91,7 @@ on_exit() {
     local exit_code=$?
     "${PLATFORM}_screen_on" >/dev/null 2>&1 || true
 
-    # The library goes too, so a phone is left as it was found.
+    # The library goes too, so a mobile is left as it was found.
     "${PLATFORM}_library_remove" "$LIBRARY" "$FIRST_PHOTO_NAME" "$BACKGROUNDED_PHOTO_NAME" "$SCREEN_OFF_PHOTO_NAME" 2>/dev/null || true
 
     cleanup_apps "$TMP_DIR"
@@ -254,7 +254,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 if [ "$STOPPED" -ne 1 ]; then
-    log_error "The foreground service is still running with both automatic import and syncing switched off. Its notification stays up and the phone keeps working for nothing."
+    log_error "The foreground service is still running with both automatic import and syncing switched off. Its notification stays up and the mobile keeps working for nothing."
     "${PLATFORM}_dump_background_diagnostics"
     exit 1
 fi

@@ -33,9 +33,9 @@ const IS3CredentialsValue = struct {
 // The bound on finding out whether a database is reachable.
 //
 // What this protects is a user waiting on an answer. Nothing else bounds the read: the S3 client's own
-// request ceiling is ten minutes, set for a phone pushing a large video through the engine bridge, and
+// request ceiling is ten minutes, set for a mobile pushing a large video through the engine bridge, and
 // falling through to it leaves someone opening a database on a screen that never resolves. The server here
-// accepts the connection and then answers nothing, which is what a phone reaching a stopped server through
+// accepts the connection and then answers nothing, which is what a mobile reaching a stopped server through
 // an `adb reverse` forward gets (the real S3 client talks to it over HTTP, as it does to MinIO).
 //
 // The server runs on a thread of its own, which makes its own Io and allocator, and shares nothing with the test: it is given what

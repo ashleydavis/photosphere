@@ -7,7 +7,7 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.os.Build;
 
-// Reports what kind of connection this phone currently has, for the background sync.
+// Reports what kind of connection this mobile currently has, for the background sync.
 //
 // The "Only sync over Wi-Fi" setting refuses a sync on a cellular connection, and the loop that decides that runs while the app is off
 // screen, so it asks the platform here. The names returned are the four the sync decision understands. What to do about each of them is
@@ -32,7 +32,7 @@ public final class NetworkHost {
         this.context = context;
     }
 
-    // Returns the current connection type as one of the four names above. A phone with no connectivity service at all reports "none"
+    // Returns the current connection type as one of the four names above. A mobile with no connectivity service at all reports "none"
     // rather than "unknown", because the one thing that is certain then is that nothing can be pushed anywhere.
     public String connectionType() {
         ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -53,7 +53,7 @@ public final class NetworkHost {
         return legacyConnectionType(connectivityManager);
     }
 
-    // Names the transport a set of capabilities describes. Cellular is checked first: a phone sharing its mobile connection over a VPN
+    // Names the transport a set of capabilities describes. Cellular is checked first: a mobile sharing its mobile connection over a VPN
     // can report more than one transport, and the setting exists to keep a backup off the carrier's network, so answering "wifi" for a
     // connection that is also cellular is the one mistake here that costs the user money. Ethernet counts as Wi-Fi, because the only
     // question asked is whether the connection is the carrier's.

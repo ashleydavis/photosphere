@@ -185,7 +185,7 @@ pub fn planPrefetchHandler(
 
     // And a full database has nothing missing. The prefetch task itself checks this and returns, but
     // it would pay for an engine slot and a merkle tree load to find out, every pass, for as long as
-    // the phone was switched on.
+    // the mobile was switched on.
     //
     // The credentials openStorage already resolved go with the question, because reading the merkle
     // tree needs them: without them an encrypted database's .db/files.dat is read as the raw
@@ -210,7 +210,7 @@ pub fn planPrefetchHandler(
                 .@"type" = "prefetch-database",
                 .data = try toJsonValue(allocator, IPrefetchDatabaseData{
                     .databasePath = databasePath.?,
-                    // Named here rather than natively, so a phone's job row reads the same whatever
+                    // Named here rather than natively, so a mobile's job row reads the same whatever
                     // queued it. No cancel source: the pass is queued by the native driver under a
                     // source the WebView never learns, and it is switched off from Settings rather
                     // than stopped from the job list.

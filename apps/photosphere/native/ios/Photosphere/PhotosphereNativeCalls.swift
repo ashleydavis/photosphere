@@ -15,7 +15,7 @@ final class PhotosphereNativeCalls: ZiggyNativeCallHandler {
     // The keychain the app's secrets are in.
     private let secureStore = SecureStore(service: "au.com.codecapers.photosphere.securestore")
 
-    // Reports the kind of connection the phone has.
+    // Reports the kind of connection the mobile has.
     private let network = NetworkHost()
 
     // Keeps the app running while a background pass is.

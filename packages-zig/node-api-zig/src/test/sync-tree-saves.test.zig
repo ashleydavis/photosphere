@@ -171,7 +171,7 @@ fn savedFilesImported(allocator: std.mem.Allocator, io: std.Io, log: ILog, store
 // records, and the push that picks up afterwards ends with every original counted once.
 //
 // Method: the target refuses the second tree write, so the push saves once at its hundredth file
-// and then fails at its final save, as a phone losing its connection does. The saved tree and its
+// and then fails at its final save, as a mobile losing its connection does. The saved tree and its
 // count are read back, then a second push runs with nothing refused.
 //
 test "a push cut off part way through keeps its imported count in step with the files it saved" {

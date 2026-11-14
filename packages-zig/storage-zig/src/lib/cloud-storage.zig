@@ -38,7 +38,7 @@ const WRITE_LOCK_TIMEOUT_MS = 10000;
 // still allows a 2GB file, which is 400 parts against the 10,000 S3 permits.
 //
 // The smallest is what is wanted here, because a part is held in memory before it is sent and is one
-// request against the server's own object lock. A phone pushes about seven megabytes a minute, so
+// request against the server's own object lock. A mobile pushes about seven megabytes a minute, so
 // eight megabyte parts took over a minute each and MinIO refused the one after with "A timeout
 // occurred while trying to lock a resource, please reduce your request rate", over and over on the
 // same video.
@@ -215,7 +215,7 @@ pub const CloudStorage = struct {
     // where it sends UNSIGNED-PAYLOAD instead, and does not over plain HTTP, which is what an S3
     // server on a local network is reached over.
     //
-    // On a phone that hash is the single most expensive thing a sync does. It runs in the embedded
+    // On a mobile that hash is the single most expensive thing a sync does. It runs in the embedded
     // engine's pure JavaScript SHA-256 at well under a megabyte a second: measured on a Pixel 6, a
     // 100MB video held one upload for over twenty minutes at full CPU without a byte reaching the
     // server. Nothing is given up by not signing the body, because every file this writes carries a
@@ -533,7 +533,7 @@ pub const CloudStorage = struct {
         if (fitsInOnePart) {
             // One request, with the stream handed to the SDK as it is.
             //
-            // The multipart uploader would read the stream into a buffer first, and on a phone that
+            // The multipart uploader would read the stream into a buffer first, and on a mobile that
             // is the expensive half of the work: the mobile shims recognise a file-backed stream
             // piped into a request and have the file sent from disk to the socket natively, which
             // only happens if the stream reaches the request unread.

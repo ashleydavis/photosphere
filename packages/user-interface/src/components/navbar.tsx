@@ -60,12 +60,12 @@ export function Navbar({
     const { openSearch, setOpenSearch, searchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
 
     //
-    // Drives the phone layout of the bar: icon-only controls, sized and spaced for a thumb.
+    // Drives the mobile layout of the bar: icon-only controls, sized and spaced for a thumb.
     //
     const isMobile = useIsMobile();
 
     //
-    // Sizing shared by every control in the bar. On a phone each one is a 44px square, which is the
+    // Sizing shared by every control in the bar. On a mobile each one is a 44px square, which is the
     // smallest comfortable touch target; on desktop the buttons keep their natural size and their
     // labels, so the bar is unchanged there.
     //
@@ -150,7 +150,7 @@ export function Navbar({
             }}
         >
             <div className="flex flex-col">
-                {/* The bar's controls are 44px targets with real gaps between them on a phone. The
+                {/* The bar's controls are 44px targets with real gaps between them on a mobile. The
                     old bar packed four ~32px icons together with a 4px gap and pushed the right-hand
                     buttons against the screen edge, which is fine with a mouse and awful with a
                     thumb. Labels still appear from the `sm` breakpoint up. */}

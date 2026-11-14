@@ -36,6 +36,7 @@ This is crass platform app. Developed on Linux, but delivered and tested on Wind
   - Do not write a bug down instead of dealing with it. Do not start a registry, a known-issues list, a section in a doc, or a TODO comment naming a test that sometimes fails. A record of a bug is a bug nobody is fixing, and it reads as permission to leave the next one too.
   - No bug here is unfixable, so "I could not fix it" is not an outcome. The only failures outside your reach are the ones outside the machine: a network that dropped, a disk that filled or failed, a remote service that was down. Those you cannot fix, and the code should expect them and fail loudly and clearly when they happen, which is a thing you can fix. Everything else is yours: keep going until you have the cause, and if you cannot find it yet, say what you have ruled out and what you will look at next, in the message you are writing.
 - NEVER USE EM DASHES.
+- "phone" is banned. Say "mobile".
 - Never use memory.
 - All Claude configuration goes in this repository only, not in the home directory.
 - Slash commands go in `.claude/commands/`, as a markdown file per command, grouped in a subdirectory where there is more than one of a kind: `.claude/commands/ux/review/create.md` is `/ux:review:create`. A request for a "skill" means one of these. Do not create a `.claude/skills/` directory or a `SKILL.md`, and do not put a command in the home directory, whatever the word used to ask for it. Read the existing commands before adding one and follow what they do: frontmatter carrying `description` and nothing else, then the prompt as ordinary markdown with a heading and steps. The `description` is what the human sees in the command list, so it says what the command does, not when to trigger it.
@@ -123,7 +124,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `what-changed baseline capture` - Record the current tree as the baseline without running anything (an assertion, not a check)
 - `bun run find-flakey-tests` - Loop `test:everything --force` until a target number of consecutive green runs is reached (default 100), stopping at the first failure with a diagnosis report. Prints when the current run and the whole streak should finish, estimated from the most recent runs. `-- --target N` sets the streak, `-- --resume N` carries on from a previous session that banked N green runs, `-- --ladder` climbs the suites one at a time instead, cheapest first, every suite the pre-commit hook runs, requiring the full streak of each before starting the next. See [Testing](docs/testing/README.md)
 - `bun run stories:ziggy` - Cycle the Photosphere App on the host operating system through every UI story, capturing screenshots (long-running, excluded from `test:everything`)
-- `bun run stories:ziggy:and` - Same stories cycle for the Photosphere App on the Android emulator/device. Renders every page at phone resolution, so this is how to check pages fit on mobile
+- `bun run stories:ziggy:and` - Same stories cycle for the Photosphere App on the Android emulator/device. Renders every page at mobile resolution, so this is how to check pages fit on mobile
 - `bun run stories:ziggy:ios` - Same stories cycle for the Photosphere App on the iOS simulator
 - Story player options (pass after `--`): `--duration <ms>`, `--screenshots <dir>`, `--no-screenshots`, `--open`, `--headless`. `scripts/story-player.md` lists them. Screenshots go to `stories-screenshots/<platform>/` with an `index.html` pairing light and dark. See `packages/user-interface/src/stories/README.md`
 - `bun run perf` - Run performance benchmarks for all packages
@@ -137,7 +138,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 ## Guides
 
 - [Development](docs/development.md) - The day-to-day dev loop and an index of the other guides
-- [UI stories](packages/user-interface/src/stories/README.md) - The stories browser (every page/modal/dialog/component in isolation) and the cross-platform story player. Run the stories on Android/iOS to check pages fit on a phone screen
+- [UI stories](packages/user-interface/src/stories/README.md) - The stories browser (every page/modal/dialog/component in isolation) and the cross-platform story player. Run the stories on Android/iOS to check pages fit on a mobile screen
 - [Testing](docs/testing/README.md) - How to run the automated tests, the manual e2e scripts, and the UI stories
 - "The testing manual" is the manual e2e testing checklist, `docs/testing/e2e/CHECKLIST.md`. Read `docs/testing/e2e/README.md` only when more detail is needed.
 - [Tasks](docs/tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)

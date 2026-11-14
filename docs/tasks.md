@@ -1,6 +1,6 @@
 # Tasks
 
-A background task is work that runs on a worker thread in the Zig backend, away from the thread that handles the page's messages. Anything slow (reading a database, hashing files, syncing, importing, waiting on a dialog or the phone's keychain) is a task, so the interface never waits on it.
+A background task is work that runs on a worker thread in the Zig backend, away from the thread that handles the page's messages. Anything slow (reading a database, hashing files, syncing, importing, waiting on a dialog or the mobile's keychain) is a task, so the interface never waits on it.
 
 The backend is Zig. In the Photosphere App the tasks run on the worker pool of [Ziggy](https://github.com/ashleydavis/ziggy)'s core, on every platform. In the Zig CLI they run on the CLI's own worker pool, built from Ziggy's workers. The frontend is TypeScript: it queues tasks and hears how they end, but runs none of them. See [Threads](threads.md) for the threads themselves.
 
@@ -72,7 +72,7 @@ pub fn myTaskHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, t
 
 - The allocator is the task's own, an arena freed when the task ends. The Io and timers are the worker's. None of them are stored: each function that uses one is given it.
 - An error the handler returns fails the task. Return a sentence the user can act on (`utils.errors.throwError`), never a bare error name, because `describe_error` passes that sentence to the page.
-- `openStorage` opens a database's storage with its S3 credentials and encryption keys. `context.nativeCaller` lets it reach the phone's keychain. It is null on a desktop and in the CLI.
+- `openStorage` opens a database's storage with its S3 credentials and encryption keys. `context.nativeCaller` lets it reach the mobile's keychain. It is null on a desktop and in the CLI.
 - A handler that runs ImageMagick or FFmpeg takes one more argument: the runner of the tools built into the program. It is listed in `tool_handlers` rather than `handlers`.
 
 `task-handlers.zig` lists every one of these handlers by task type. `taskEntries` turns the list into Ziggy task types. The app adds them to the ones it declares (`apps/photosphere/core/src/app.zig`). The CLI's pool runs the same list.
@@ -81,11 +81,11 @@ pub fn myTaskHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, t
 
 A few tasks belong to the Photosphere App alone, such as the pickers, the vault and the keychain, the update and news checks and the mobile background passes. They are declared in `.tasks` of `apps/photosphere/core/src/app.zig` and written against Ziggy's task services rather than the task queue. Their handlers are in `packages-zig/photosphere-core/src/lib`. See [Tasks](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md) in Ziggy's guide for that form.
 
-The background auto import, sync and prefetch passes are [keep-alive tasks](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md#keep-alive-tasks), so a phone keeps running them while the app is in the background.
+The background auto import, sync and prefetch passes are [keep-alive tasks](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md#keep-alive-tasks), so a mobile keeps running them while the app is in the background.
 
 ### Messages answered by a task
 
-A message whose response waits on something slow (a picker, the vault, the phone's keychain) has its handler return `.task`, so a task gives the response. See [A message whose response is a task's result](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md#a-message-whose-response-is-a-tasks-result) in Ziggy's guide. `pickers.zig` holds Photosphere's pickers.
+A message whose response waits on something slow (a picker, the vault, the mobile's keychain) has its handler return `.task`, so a task gives the response. See [A message whose response is a task's result](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md#a-message-whose-response-is-a-tasks-result) in Ziggy's guide. `pickers.zig` holds Photosphere's pickers.
 
 ### Tasks the main thread queues
 
@@ -243,7 +243,7 @@ try sendJobProgress(allocator, io, context, data.job, runStartedAt, try std.fmt.
 ```
 
 - `sendJobProgress` (`ziggy.task_queue.job_progress`) sends no event when the tag is null, so a task queued without one never appears. Leave the tag off only for work no user would want to watch or stop, such as the hash and upload children an import queues for itself.
-- `startedAt` is stamped by the handler and resent every time, so a job already running when a phone comes back to the foreground shows its real age rather than restarting from zero.
+- `startedAt` is stamped by the handler and resent every time, so a job already running when a mobile comes back to the foreground shows its real age rather than restarting from zero.
 - There is no completion fraction to report. The interface shows a spinner rather than a bar. Most jobs here scan or stream and cannot know one. A job made of several tasks has no single answer. Say what the job is doing in the message instead.
 - Report often enough that the row does not look stuck and no more often than the work moves.
 

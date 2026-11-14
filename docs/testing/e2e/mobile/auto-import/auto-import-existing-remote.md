@@ -2,19 +2,19 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-The other way round from [the new remote test](auto-import-new-remote.md). There the phone's database comes first and an empty remote is created to match it. Here the remote already exists, with a library in it, and the phone joins it by taking a copy: the credentials go to the phone, the app replicates the remote down as a partial replica, and automatic import and background syncing then run against that copy. This is what somebody with a Photosphere database already in a bucket does when they install the app on a phone.
+The other way round from [the new remote test](auto-import-new-remote.md). There the mobile's database comes first and an empty remote is created to match it. Here the remote already exists, with a library in it, and the mobile joins it by taking a copy: the credentials go to the mobile, the app replicates the remote down as a partial replica, and automatic import and background syncing then run against that copy. This is what somebody with a Photosphere database already in a bucket does when they install the app on a mobile.
 
-The end state is the same as the other test's: one database in two places, the bucket recorded as the phone's origin, photos taken on the phone reaching the bucket on their own. What differs is the direction of the first move. Nothing is uploaded to join the two; the phone downloads a copy of what is already there.
+The end state is the same as the other test's: one database in two places, the bucket recorded as the mobile's origin, photos taken on the mobile reaching the bucket on their own. What differs is the direction of the first move. Nothing is uploaded to join the two; the mobile downloads a copy of what is already there.
 
 ## Prep
 
-- Run from the repo root, in one terminal, which the later CLI steps use too. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
+- Run from the repo root, in one terminal, which the later CLI steps use too. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real mobile, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
 - `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
-- **A Photosphere database that already exists in an S3 bucket, with photos in it.** It is a fresh bucket on a local MinIO server on this machine, set up by `bun run start-minio`: see [MinIO for the manual tests](../../minio.md). `--from 50-assets` fills it with a copy of the `50-assets` test database (50 photos) and registers it on this machine as the entry `existing-remote-test`, with the credentials `existing-remote-test-s3`. The phone must be on the same network as this machine.
+- **A Photosphere database that already exists in an S3 bucket, with photos in it.** It is a fresh bucket on a local MinIO server on this machine, set up by `bun run start-minio`: see [MinIO for the manual tests](../../minio.md). `--from 50-assets` fills it with a copy of the `50-assets` test database (50 photos) and registers it on this machine as the entry `existing-remote-test`, with the credentials `existing-remote-test-s3`. The mobile must be on the same network as this machine.
 - `$S3_DB` in the steps is the database's path, `s3:photosphere-smoke-test/existing-remote-test`.
 - `psi summary` checks the database reads, which also proves those are the right secrets.
 - The device needs at least two photos in its photo library before you start, for step 8 to import, and you need to be able to take one more with the camera partway through. On an emulator or simulator the Prep commands put two in.
-- The phone must be on Wi-Fi. Syncing refuses a cellular connection by default, and a phone on mobile data will sit there doing nothing with no error.
+- The mobile must be on Wi-Fi. Syncing refuses a cellular connection by default, and a mobile on mobile data will sit there doing nothing with no error.
 
 ```bash
 bun run android:reset   # Android
@@ -34,18 +34,18 @@ Expected:
 
 ## Test
 
-### 1. Check where the phone is starting from
+### 1. Check where the mobile is starting from
 
 1. Open the app.
 2. Open the menu and go to the gallery.
 
 Expected: no database is open, and there is nothing in the gallery.
 
-### 2. Send the database to the phone
+### 2. Send the database to the mobile
 
-Each side waits sixty seconds for the other, which is not enough time to start the send and then walk to the phone, so the phone waits first and the pairing code is chosen in advance rather than generated.
+Each side waits sixty seconds for the other, which is not enough time to start the send and then walk to the mobile, so the mobile waits first and the pairing code is chosen in advance rather than generated.
 
-Pick any four digits. On the phone:
+Pick any four digits. On the mobile:
 
 1. Open the menu and choose **Manage Databases**.
 2. Press the **⋮** at the top of the page and choose **Receive database**.
@@ -57,23 +57,23 @@ Then, on the development machine, inside that minute, from the repo root, with t
 psi dbs send --name existing-remote-test --code <the four digits> --yes
 ```
 
-Back on the phone:
+Back on the mobile:
 
-4. On the review screen leave **Name** and **Path** exactly as they arrive. The path is how the phone finds the keys for the bucket and has to match character for character.
+4. On the review screen leave **Name** and **Path** exactly as they arrive. The path is how the mobile finds the keys for the bucket and has to match character for character.
 5. Tick **Import S3 credentials**, and **Import encryption key** if it is offered.
 6. Press **Save**.
 
 Expected:
-- The phone says "Database imported successfully!" and the database appears on the Manage Databases page.
+- The mobile says "Database imported successfully!" and the database appears on the Manage Databases page.
 - The development machine says it sent the database.
 
-"No device found within 60 seconds" means the window was missed or the two are not on the same network. Run the send again with the phone waiting.
+"No device found within 60 seconds" means the window was missed or the two are not on the same network. Run the send again with the mobile waiting.
 
-### 3. Replicate it down onto the phone
+### 3. Replicate it down onto the mobile
 
 1. On **Manage Databases**, press the **⋮** on the database that just arrived and choose **Replicate**.
 2. **Destination type**: `File system`.
-3. **Destination path**: type a short name, for example `my-photos`. It is created inside the app's own private storage; there is nothing on the phone's filesystem to browse to, and **Browse** on Android is a text prompt rather than a folder chooser.
+3. **Destination path**: type a short name, for example `my-photos`. It is created inside the app's own private storage; there is nothing on the mobile's filesystem to browse to, and **Browse** on Android is a text prompt rather than a folder chooser.
 4. **Mode**: **Partial**.
 5. Press **Start replication**.
 
@@ -90,7 +90,7 @@ Expected:
 - **Set as default** is what makes automatic import write into this database. Without it, switching automatic import on in step 6 makes a database of its own called **My Photos** and imports into that instead, because automatic import reads the default recorded in `config.toml` and opening a database does not set it.
 - **⋮** then **View details** on it shows **Origin** set to the remote's path, `s3:photosphere-smoke-test/existing-remote-test`. The replication sets it when it registers the replica. Origin is what background syncing looks for, and a database without it imports happily and never syncs.
 
-### 5. The library appears on the phone
+### 5. The library appears on the mobile
 
 1. Go to the gallery.
 2. Wait.
@@ -100,7 +100,7 @@ Expected:
 - **This takes a while, and the app looks empty while it happens.** The replication copied the trees and not the contents: opening a partial replica queues a prefetch that pulls the records and the thumbnails down from the bucket a few files at a time, and on a library of a few thousand photos that is minutes rather than seconds. An empty gallery a minute in is the prefetch still running, not a failure.
 - The photos are browsable once they appear. The originals are still only in the bucket and are fetched when a photo is opened.
 
-### 6. Set the phone importing into it
+### 6. Set the mobile importing into it
 
 1. Open the menu and choose **Configuration**.
 2. Find the **Automatic import** card and turn the toggle on.
@@ -117,9 +117,9 @@ Expected:
 
 Expected:
 - **Enable syncing** is on.
-- **Only sync over Wi-Fi** is on, and the phone is on Wi-Fi.
+- **Only sync over Wi-Fi** is on, and the mobile is on Wi-Fi.
 
-### 8. The phone's own photos are imported
+### 8. The mobile's own photos are imported
 
 1. Go to the gallery.
 2. Wait.
@@ -143,14 +143,14 @@ psi summary --db "$S3_DB"
 Expected:
 - The photo appears in the gallery within about half a minute, without you importing it.
 - After a sync pass it is in the bucket.
-- The photo count is higher than the number written down in Prep, by what the phone has imported.
+- The photo count is higher than the number written down in Prep, by what the mobile has imported.
 
 ### 10. What was imported is recorded
 
 1. Go to the **Import** page.
 
 Expected:
-- The photos the phone imported are listed, newest first.
+- The photos the mobile imported are listed, newest first.
 - The photos that came down from the bucket are **not** listed. They were not imported on this device; they arrived by replication, and the import record is this device's record of what it took in.
 
 ### 11. The record survives a restart
@@ -190,7 +190,7 @@ Expected: it reports that MinIO stopped.
 ## Agent notes
 
 - How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Android: the agent does the UI steps with adb. iOS: the human does them, and the agent reads the results from screenshots.
-- Step 2: start receiving on the phone first, type the four digits with `input text`, then run `psi dbs send` within the minute.
+- Step 2: start receiving on the mobile first, type the four digits with `input text`, then run `psi dbs send` within the minute.
 - Step 6 brings up the system photos and videos permission: allow access to all photos, not a selection. If a notifications permission follows, allow it. The **Backing up your photos** notification is checked by pulling down the notification shade with a swipe from the top edge.
 - Step 9 needs a photo taken with the camera, which the human does.
 - Step 11: close the app completely from the system's recent apps screen, or with `adb -s <serial> shell am force-stop au.com.codecapers.photosphere.ziggy`, then open it again from the launcher.

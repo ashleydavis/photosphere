@@ -80,7 +80,7 @@ export function ResetDeviceDialog({ open, onClose }: IResetDeviceDialogProps) {
             handleClose();
         }
         catch (error) {
-            // Loud, and stays on screen: a user handing a phone on has to know the reset did not
+            // Loud, and stays on screen: a user handing a mobile on has to know the reset did not
             // finish and their credentials may still be on it.
             log.exception('Device reset failed:', error as Error);
             addToast({

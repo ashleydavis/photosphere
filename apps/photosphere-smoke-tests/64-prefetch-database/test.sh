@@ -43,7 +43,7 @@ send_command "$APP_PORT" click '{"dataId":"add-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Add database dialog opened"
 
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"Source DB"}' || exit 1
-# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+# A user on a mobile types the short name, which the app resolves into its own storage. A desktop user types the full path.
 case "$PLATFORM" in
     android|ios)
         send_command "$APP_PORT" type '{"dataId":"database-path-input","text":"source-db"}' || exit 1

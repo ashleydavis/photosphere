@@ -76,7 +76,7 @@ export function AboutPage() {
                 </Typography>
 
                 {/* The version doubles as the hidden developer-mode gesture (four rapid taps), so it
-                    is a chip: a real target on a phone rather than a line of grey text. */}
+                    is a chip: a real target on a mobile rather than a line of grey text. */}
                 {/* The version doubles as the hidden developer-mode gesture (four rapid taps), so it
                     is a real button: one element that both carries the text and takes the tap. (A
                     Joy Chip splits those across two elements, which breaks the smoke test that reads
@@ -118,7 +118,7 @@ export function AboutPage() {
                         your library while it is open. Add this URL to your MCP client configuration as
                         an HTTP server:
                     </Typography>
-                    {/* The copy button sits under the field on a phone, where an end decorator would
+                    {/* The copy button sits under the field on a mobile, where an end decorator would
                         squeeze the URL into a few characters. */}
                     <Input
                         value={MCP_URL}

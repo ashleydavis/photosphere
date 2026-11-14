@@ -46,7 +46,7 @@ photosphere_platform_start() {
     # on one never draws: the gallery's width comes through an animation frame, so it stays at none and no thumb is ever rendered. The
     # Linux library gets the same from its virtual display, which never sleeps. caffeinate is in the app's process group, so it ends
     # with it.
-    # The S3 variables a scenario exports for the CLI are removed: a phone never sees its host's environment, so the app has to find
+    # The S3 variables a scenario exports for the CLI are removed: a mobile never sees its host's environment, so the app has to find
     # credentials the way it does there, from the vault.
     read -r pid pgid < <(launch_in_process_group "$log" caffeinate -d -u env \
         -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_ENDPOINT_URL -u AWS_REGION -u AWS_SESSION_TOKEN \
@@ -209,7 +209,7 @@ macos_claim_device() {
 }
 
 #
-# A desktop is never a real phone. Usage: macos_is_real_device
+# A desktop is never a real mobile. Usage: macos_is_real_device
 #
 macos_is_real_device() {
     return 1
@@ -439,7 +439,7 @@ macos_library_remove() {
 
 #
 # Writes the automatic import settings into the auto_import section of the app's config.toml, keeping every other section the file
-# already has, so the import watches the library and nothing else. The last argument names a photo the library holds on a phone, where
+# already has, so the import watches the library and nothing else. The last argument names a photo the library holds on a mobile, where
 # the device must know an album before it can be watched, and is not needed here.
 # Usage: macos_seed_library_auto_import_config <enabled true|false> <default_database_path or ""> <pause_ms> <library> <photo_name_in_it>
 #
@@ -497,7 +497,7 @@ macos_app_database_dir() {
 }
 
 #
-# Copies the database in the directory of the given name onto the given host directory, the way a phone's is copied off the device.
+# Copies the database in the directory of the given name onto the given host directory, the way a mobile's is copied off the device.
 # Usage: macos_pull_database <dir_name> <local_dir>
 #
 macos_pull_database() {

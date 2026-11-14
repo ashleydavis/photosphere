@@ -1,5 +1,5 @@
 //
-// The planning tasks the phone's background loop asks of the core: plan-auto-import, plan-sync and plan-prefetch. They work out, from the settings on disk, whether the loop should
+// The planning tasks the mobile's background loop asks of the core: plan-auto-import, plan-sync and plan-prefetch. They work out, from the settings on disk, whether the loop should
 // run, with what, and how long to pause.
 //
 // plan-sync and plan-prefetch ask the platform for the connection type. The native app is asked through the core's host request
@@ -64,10 +64,10 @@ const network_status_vtable: INetworkStatusHost.VTable = .{
 fn networkConnectionTypeOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) anyerror![]const u8 {
     const result = try background_work.callNativeApp(servicesOf(ptr), io, allocator, null, "networkConnectionType", "null");
     const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, result, .{}) catch {
-        return utils.errors.throwError("The phone's answer to networkConnectionType could not be read.", .{});
+        return utils.errors.throwError("The mobile's answer to networkConnectionType could not be read.", .{});
     };
     if (parsed != .string) {
-        return utils.errors.throwError("The phone's answer to networkConnectionType was not text.", .{});
+        return utils.errors.throwError("The mobile's answer to networkConnectionType was not text.", .{});
     }
     return parsed.string;
 }
@@ -105,7 +105,7 @@ fn bridgedContext(services: *const TaskServices, context: TaskContext, native_ca
 //
 pub fn planAutoImportTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    // The phone's working directory is not the app's data directory, so the default database is given a place in the dbs directory
+    // The mobile's working directory is not the app's data directory, so the default database is given a place in the dbs directory
     // of it, where short names resolve.
     var request: std.json.ObjectMap = .empty;
     try request.put(allocator, "appDataPath", .{

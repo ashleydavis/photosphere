@@ -44,7 +44,7 @@ const readNetworkConnectionType = network_status.readNetworkConnectionType;
 // The native side reports the fact and this task decides what it means, which is the same division as
 // the connection type: the platform says "wifi" or "cellular" and computeSyncAllowed decides. Only
 // "working" holds a sync back, because the question is whether the prefetch is making progress rather
-// than whether it has finished: a sync that waited for a prefetch that cannot finish would be a phone
+// than whether it has finished: a sync that waited for a prefetch that cannot finish would be a mobile
 // that has silently stopped backing up, which is worse than the contention it was avoiding.
 // (Zig: an enum, whose tag names are the strings.)
 //
@@ -70,7 +70,7 @@ pub const PrefetchState = enum {
 pub const IPlanSyncData = struct {
     // What the prefetch loop's last pass said about the replica. Absent, or a value this build does
     // not recognise, is read as "unknown" and allows syncing: nothing about a value nobody understood
-    // should be able to stop a phone syncing.
+    // should be able to stop a mobile syncing.
     prefetchState: ?PrefetchState = null,
 };
 
@@ -230,14 +230,14 @@ pub fn planSyncHandler(
     }
 
     // After the master switch and the connection, and before the database is resolved, because the
-    // reason a user is most likely to care about should win: a phone on cellular is refused for being
+    // reason a user is most likely to care about should win: a mobile on cellular is refused for being
     // on cellular rather than for waiting on a prefetch.
     //
     // Only "working" waits. A prefetch that is stuck, one that has finished, and a state nobody has
     // reported yet all let the sync run, because the alternative is a sync that never happens again:
     // measured on a Pixel 6, a prefetch failed and was never retried, and a sync that had waited for
     // it would have waited for the life of the app. Reaching the origin's merkle tree during a pass
-    // that overlapped a working prefetch took 81.5 seconds against 97 milliseconds when the phone was
+    // that overlapped a working prefetch took 81.5 seconds against 97 milliseconds when the mobile was
     // idle, and the record merge in that pass took 15 minutes pulling down the same metadata shards
     // the prefetch was fetching, which is what waiting one gap avoids.
     if (readPrefetchState(data) == .working) {
@@ -248,7 +248,7 @@ pub fn planSyncHandler(
     //
     // The opened one comes first because it is what the user is using, and because syncing
     // must not need automatic import switched on to have anything to push: the two are switched on
-    // separately. The import's database is the fallback for a phone that has imported in the
+    // separately. The import's database is the fallback for a mobile that has imported in the
     // background without anybody opening it.
     const autoImportConfig = config.autoImport;
     const recordedPath = syncConfig.databasePath;
@@ -262,7 +262,7 @@ pub fn planSyncHandler(
 
     // A database with no origin has nowhere to sync to. The sync task itself would skip it, having
     // paid for an engine slot and a database open to find that out, and it would say so every pass
-    // for as long as the phone was switched on.
+    // for as long as the mobile was switched on.
     const opened = try openStorage(allocator, io, log, try node_api.database_base_dir.taskDatabaseBaseDir(allocator, data), databasePath.?, null, null, context.nativeCaller);
     const databaseConfig = try loadDatabaseConfig(allocator, io, log, opened.rawStorage);
     if (configOrigin(databaseConfig) == null) {
@@ -283,7 +283,7 @@ pub fn planSyncHandler(
                 .@"type" = "sync-database",
                 .data = try toJsonValue(allocator, ISyncStepData{
                     .databasePath = databasePath.?,
-                    // Named here rather than natively, so a phone's sync row reads the same as a
+                    // Named here rather than natively, so a mobile's sync row reads the same as a
                     // desktop's. No cancel source: the pass is queued by the native driver under a
                     // source of its own that the WebView never learns, and syncing is switched off
                     // from Settings rather than stopped from the job list.

@@ -446,7 +446,7 @@ test "a write of one section leaves the others alone: keeps settings the task kn
 //
 // The two used to be files of their own, so "the file is there" answered "have these settings been chosen?". With one file it
 // does not: automatic import writing its own section brings the file into being, and a fresh install would then be told its
-// syncing settings had already been decided. The interface skips its seeding step on that answer, so the phone would sit with
+// syncing settings had already been decided. The interface skips its seeding step on that answer, so the mobile would sit with
 // syncing switched off while both toggles said it was on.
 test "whether a feature's settings have been written: writing only the automatic import settings does not claim the syncing settings were chosen" {
     var sandbox: Sandbox = undefined;
@@ -507,7 +507,7 @@ test "whether a feature's settings have been written: both are claimed once both
 }
 
 // Asserted on the file itself, because anything else that opens it (a smoke test seeding settings from outside the app, a
-// person looking at what their phone is doing) reads these names rather than the camelCase ones used in memory.
+// person looking at what their mobile is doing) reads these names rather than the camelCase ones used in memory.
 test "the file on disk is YAML with snake_case keys nested by feature" {
     var sandbox: Sandbox = undefined;
     const log = utils.mute_log.MuteLog.init();
@@ -532,7 +532,7 @@ test "the file on disk is YAML with snake_case keys nested by feature" {
     try expectInteger(300000, document, "sync.pause_between_runs_ms");
 }
 
-// A gap of zero is a loop that starts a fresh pass the instant the last one ended, which on a phone is a flat battery rather
+// A gap of zero is a loop that starts a fresh pass the instant the last one ended, which on a mobile is a flat battery rather
 // than a fast backup. The value can only get here by hand, so it is corrected on the way in and on the way out.
 test "values a hand-edited file may hold: a gap of zero or less falls back to the default rather than spinning" {
     var sandbox: Sandbox = undefined;
@@ -705,7 +705,7 @@ test "bad input to the handlers: a config path that is not a string fails with a
     ), sandbox.taskContext.context.taskContext()));
 }
 
-// The settings the interface names, which is how a phone reads and writes what the desktop app and the CLI keep in this same
+// The settings the interface names, which is how a mobile reads and writes what the desktop app and the CLI keep in this same
 // file. Each one goes to the section the format puts it in. A key this file does not hold is not this handler's business: the
 // routing sends it to state.json instead.
 test "the settings the interface names: a setting the format declares is written into its own section and read back by name" {
@@ -772,7 +772,7 @@ test "the settings the interface names: writing a setting leaves a feature's set
 }
 
 // A fresh install seeds syncing on, and only skips that when the file says syncing has been chosen already. An empty sync
-// section left behind by an unrelated write would say exactly that, and the phone would sit with syncing off and its toggles
+// section left behind by an unrelated write would say exactly that, and the mobile would sit with syncing off and its toggles
 // saying on.
 test "the settings the interface names: writing a setting does not make it look as though syncing had been decided" {
     var sandbox: Sandbox = undefined;

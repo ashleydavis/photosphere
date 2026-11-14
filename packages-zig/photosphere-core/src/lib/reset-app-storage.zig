@@ -1,5 +1,5 @@
 //
-// The reset-app-storage task: no payload. Empties the app's config and cache directories and, on a phone, the app's data directory,
+// The reset-app-storage task: no payload. Empties the app's config and cache directories and, on a mobile, the app's data directory,
 // which is where every database the app made sits. The reply is what was removed (node-api's IResetAppStorageResult).
 //
 

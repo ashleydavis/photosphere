@@ -4,11 +4,11 @@
 
 Test freeing up space: once a photo is confirmed in the database, the copy in the device photo library can be deleted from the **Free up space on this device** part of the **Automatic import** card.
 
-This test destroys photos on the device, on purpose. Run it on a test device or with photos you are willing to lose, and never on a phone holding anything you care about.
+This test destroys photos on the device, on purpose. Run it on a test device or with photos you are willing to lose, and never on a mobile holding anything you care about.
 
 ## Prep
 
-- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
+- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real mobile, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
 - `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
 - After the app starts, get automatic import working: open the menu, choose **Configuration**, turn the **Automatic import** toggle on and allow the photo permission. Wait until the photos already in the library have appeared in the gallery and no more arrive.
 - The two throwaway photos are put in the device library during Test steps 2 and 3.

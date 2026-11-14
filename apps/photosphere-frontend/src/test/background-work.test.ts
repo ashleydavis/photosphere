@@ -29,7 +29,7 @@ describe("planning the background work", () => {
     });
 
     test("both off is the only thing that stops it", () => {
-        // The ongoing notification goes with it, so a phone that has opted into neither must not be
+        // The ongoing notification goes with it, so a mobile that has opted into neither must not be
         // left carrying one.
         const decision = planBackgroundWork({ autoImportEnabled: false, syncEnabled: false, hasDatabaseToSync: true });
 
@@ -51,7 +51,7 @@ describe("planning the background work", () => {
     });
 
     test("syncing with nothing to sync runs nothing", () => {
-        // A phone that has never opened a database has nothing to push, and syncing defaults to on,
+        // A mobile that has never opened a database has nothing to push, and syncing defaults to on,
         // so this is every fresh install. Starting a service for it would put an ongoing
         // notification on the screen to do nothing at all.
         const decision = planBackgroundWork({ autoImportEnabled: false, syncEnabled: true, hasDatabaseToSync: false });

@@ -37,7 +37,7 @@ export interface IDeviceAlbumAutoImportSource {
 //
 // The album identifier that means the whole photo library rather than one album in it.
 //
-// A device source has to name something, and "everything on this phone" is the default a user gets
+// A device source has to name something, and "everything on this mobile" is the default a user gets
 // before they pick albums. Spelling it as a reserved id keeps the settings uniform: there is one
 // kind of device source, not a source and a separate "watch everything" flag.
 //

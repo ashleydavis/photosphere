@@ -3,7 +3,7 @@
 // framework (node_utils.http_server). It is a server of Photosphere's own, not a task. The main thread opens its socket, so it knows
 // the port at once, starts it, and stops it with a message when the app stops. Each connection thread is given its own copy of the
 // session id and keeps a core of its own (asset-server-core.zig), with its own cache of database storages, so the threads share
-// nothing. A connection thread that needs the phone's keychain asks the main thread for it by message.
+// nothing. A connection thread that needs the mobile's keychain asks the main thread for it by message.
 //
 
 const std = @import("std");
@@ -44,7 +44,7 @@ pub const IAssetServerOptions = struct {
     // Write-lock owner for write/apply operations (see acquireWriteLock).
     sessionId: []const u8,
     // The native app's callbacks, through which a connection thread reads a database's credentials from the native app's keychain (a
-    // phone's) itself when the native app has a host request callback, or null for none.
+    // mobile's) itself when the native app has a host request callback, or null for none.
     nativeCallbacks: ?ziggy.core.NativeCallbacks,
 };
 

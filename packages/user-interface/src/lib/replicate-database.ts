@@ -29,7 +29,7 @@ export interface IReplicationResult {
     //
     // Names of files the source's merkle tree describes but the source does not hold.
     //
-    // Only ever non-empty for a partial replica, which is exactly what a phone holds: its tree is the
+    // Only ever non-empty for a partial replica, which is exactly what a mobile holds: its tree is the
     // whole origin's, and the files it has are a subset. Reported rather than silently dropped, so a
     // replication that copied less than the tree describes says how much less.
     //

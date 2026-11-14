@@ -59,7 +59,7 @@ describe("retry", () => {
     // Only the last attempt's error used to be reported, and at verbose level nothing else was said
     // at all. A failure that takes three attempts and a minute and a half then looks like a single
     // event with a single cause, which is how an upload whose first attempt failed one way and whose
-    // retries failed another went undiagnosed on a phone.
+    // retries failed another went undiagnosed on a mobile.
     //
     test("each attempt that will be tried again says what went wrong", async () => {
         const operation = jest.fn()

@@ -83,7 +83,7 @@ export interface IPlatformProviderZiggyProps {
 }
 
 //
-// Whether the in-page Eruda console has been started and whether it is showing. A phone has no inspector the page can
+// Whether the in-page Eruda console has been started and whether it is showing. A mobile has no inspector the page can
 // reach, so the page brings its own.
 //
 interface IErudaState {
@@ -95,9 +95,9 @@ interface IErudaState {
 }
 
 //
-// Platform context provider for the app running on Ziggy, on a desktop or a phone. Everything the core owns (databases,
+// Platform context provider for the app running on Ziggy, on a desktop or a mobile. Everything the core owns (databases,
 // the vault, recents, config and state, tasks, sharing, news and update marks) is reached the same way on both. What differs
-// on a phone is decided by the platform kind the core reported.
+// on a mobile is decided by the platform kind the core reported.
 //
 export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformProviderZiggyProps) {
     // What the automatic import card says about importing while the app is not on screen. A desktop imports while it is open, iOS
@@ -107,13 +107,13 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         backgroundImportDescription = "Runs whenever Photosphere is open, importing new photos as they appear.";
     }
     else if (platform.os === "ios") {
-        backgroundImportDescription = "When the app is not open, iOS decides when to catch up, usually while the phone is charging.";
+        backgroundImportDescription = "When the app is not open, iOS decides when to catch up, usually while the mobile is charging.";
     }
     else {
         backgroundImportDescription = "Keeps importing when the app is closed and the screen is off, showing a notification while it does.";
     }
 
-    // In test mode, the outcome a test staged for the next phone export in place of the native app's share or save sheet. Read
+    // In test mode, the outcome a test staged for the next mobile export in place of the native app's share or save sheet. Read
     // and cleared by the export it applies to, so each staged outcome serves exactly one export.
     const stagedExportOutcomeRef = useRef<ExportTestOutcome | undefined>(undefined);
 
@@ -164,7 +164,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     // Writes the syncing settings a fresh installation starts from, if nobody has written them yet. The background sync loop reads
     // config.toml, and a section it cannot read means syncing off, which is the safe answer for a loop that would otherwise push photos
-    // over a metered connection on a guess. That leaves a new phone with the two toggles showing syncing on and a file saying nothing,
+    // over a metered connection on a guess. That leaves a new mobile with the two toggles showing syncing on and a file saying nothing,
     // so the app writes what the toggles say the first time it runs. A section that is already there is left alone.
     useEffect(() => {
         seedSyncSettings()
@@ -289,7 +289,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [platform.platformKind, ziggy]);
 
     // What automatic import is doing is only visible through the progress it streams back. Logged rather than only shown on
-    // screen, because an import doing nothing and one quietly failing look the same in the interface. On every platform: a phone
+    // screen, because an import doing nothing and one quietly failing look the same in the interface. On every platform: a mobile
     // streams it from the background work, and a desktop from the import task its core runs.
     useEffect(() => {
         // The progress line last written to the log, so the same one is not written again.
@@ -545,7 +545,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     const openDatabase = useCallback(async (): Promise<void> => {
         if (platform.platformKind !== "desktop") {
-            // No-op: no database picker on a phone yet.
+            // No-op: no database picker on a mobile yet.
             return;
         }
         await ziggy.invoke('open-database', null);
@@ -664,7 +664,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     const openFolder = useCallback(async (folderPath: string): Promise<void> => {
         if (platform.platformKind !== "desktop") {
-            // No-op: a phone has no file manager to show a folder in.
+            // No-op: a mobile has no file manager to show a folder in.
             return;
         }
         await ziggy.invoke('open-path', folderPath);
@@ -732,7 +732,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [ziggy]);
 
     // Both platforms show the native app's folder dialog. On Android the dialog answers with a content:// tree address, where
-    // the phone's earlier "Browse" prompt asked for a name and answered with a path inside the app's private storage.
+    // the mobile's earlier "Browse" prompt asked for a name and answered with a path inside the app's private storage.
     const pickFolder = useCallback(async (options?: IPickFolderOptions): Promise<string | undefined> => {
         const picked = await ziggy.invoke<string | null>('pick-folder', toJsonValue(options ?? null));
         return picked ?? undefined;
@@ -768,7 +768,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             return await ziggy.invoke<ISaveDownloadResult>('save-assets', { items: toJsonValue(items), databasePath });
         }
 
-        // A phone cannot write to a place the user chooses, so the files are written into the app's private storage and the
+        // A mobile cannot write to a place the user chooses, so the files are written into the app's private storage and the
         // native app's share sheet hands them out.
         const testOutcome = stagedExportOutcomeRef.current;
         stagedExportOutcomeRef.current = undefined;
@@ -830,7 +830,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     const copyToClipboard = useCallback(async (blob: Blob, _contentType: string): Promise<void> => {
         if (platform.platformKind !== "desktop") {
-            // No-op: native clipboard image support is not wired up on a phone.
+            // No-op: native clipboard image support is not wired up on a mobile.
             return;
         }
         const pngBlob = await convertToPng(blob);
@@ -839,7 +839,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     //
     // Toggles the developer tools. A desktop asks the native app to, through the generic main-command channel, so no
-    // developer-tools-specific channel is needed. A phone shows or hides the in-page Eruda console, the only inspector
+    // developer-tools-specific channel is needed. A mobile shows or hides the in-page Eruda console, the only inspector
     // reachable from inside its web view.
     //
     const toggleDevTools = useCallback((): void => {

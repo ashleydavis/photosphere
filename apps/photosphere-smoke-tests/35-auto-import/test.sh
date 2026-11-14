@@ -8,13 +8,13 @@
 # be driven from here. Everything above the picker is the real code path: the setting, the main process reacting to it, the task, and
 # the import.
 #
-# On a phone, a photo is put into the device photo library from outside the app (pushed to DCIM and scanned into MediaStore), the photo
+# On a mobile, a photo is put into the device photo library from outside the app (pushed to DCIM and scanned into MediaStore), the photo
 # permission is granted from outside the app, and then automatic import is switched on through the settings card. Nothing else is
-# touched: the app has to create its own default database, notice the photo, and import it. The part that is different on a phone is
+# touched: the app has to create its own default database, notice the photo, and import it. The part that is different on a mobile is
 # that the loop runs natively (a foreground service on Android) rather than as one long-running task, because the task slots are few
 # and the asset server holds one for the life of the app: an orchestrator task in a second slot leaves nothing for the tasks the import
 # it queues needs in turn, and the import waits for a slot that can never come free. That failure looks exactly like success from
-# outside (the setting is on, the task is running), which is why the phone branch waits for the photo to land in the gallery rather
+# outside (the setting is on, the task is running), which is why the mobile branch waits for the photo to land in the gallery rather
 # than for the task to start. What happens once the app is off screen is the background-import scenario's.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,12 +22,12 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 35 "auto-import"
 
-# Android only on a phone, for now. Putting a photo into the simulator's library is straightforward (`simctl addmedia`), but there is no
+# Android only on a mobile, for now. Putting a photo into the simulator's library is straightforward (`simctl addmedia`), but there is no
 # supported way to take one out again, and a scenario that leaves a photo behind poisons every run after it, including other suites
 # sharing the simulator. Skipping is said out loud rather than passing quietly, because a test that reports success without running is
 # worse than one that is missing.
 if [ "$PLATFORM" = "ios" ]; then
-    log_info "SKIP: automatic import on a phone is covered on Android only. The iOS simulator has no supported way to remove a seeded photo, so this scenario would leave one behind for every run after it."
+    log_info "SKIP: automatic import on a mobile is covered on Android only. The iOS simulator has no supported way to remove a seeded photo, so this scenario would leave one behind for every run after it."
     exit "$TEST_SKIPPED_EXIT_CODE"
 fi
 
@@ -41,8 +41,8 @@ case "$PLATFORM" in
         # The album this scenario's photos go in, which is a directory of its own: MediaStore files an item under the directory it sits
         # in, so a directory of our own is an album of our own.
         #
-        # That is what makes this scenario run on a real phone as well as an emulator. Switching automatic import on watches the whole
-        # photo library, and a phone's library is somebody's photo collection. The scenario would then wait for "Import: 1 imported"
+        # That is what makes this scenario run on a real mobile as well as an emulator. Switching automatic import on watches the whole
+        # photo library, and a mobile's library is somebody's photo collection. The scenario would then wait for "Import: 1 imported"
         # while the app took in thousands, and never see it. Pointing automatic import at this album alone means the only photos it can
         # take in are the ones this scenario put there, on any device.
         TEST_ALBUM_DIR="/sdcard/DCIM/psphere-auto-import-$$"
@@ -85,7 +85,7 @@ case "$PLATFORM" in
             android_remove_media "$PHOTO_NAME" "$TEST_ALBUM_DIR" 2>/dev/null || true
             android_remove_media "$SECOND_PHOTO_NAME" "$TEST_ALBUM_DIR" 2>/dev/null || true
 
-            # The album directory goes too, so a phone is left as it was found. The files go first and the directory second, because
+            # The album directory goes too, so a mobile is left as it was found. The files go first and the directory second, because
             # rmdir refuses a directory with anything in it. This is a plain file delete and an empty-directory removal, never a
             # recursive one.
             photosphere_adb shell "rm -f $TEST_ALBUM_DIR/*" >/dev/null 2>&1 || true
@@ -376,7 +376,7 @@ TOMLEOF
 
         # --- 4. The cleanup button deletes the source files the database already holds. ---
 
-        # This used to be a toggle, with automatic import deleting each file as it confirmed it. On a phone every deletion raises a
+        # This used to be a toggle, with automatic import deleting each file as it confirmed it. On a mobile every deletion raises a
         # system confirmation, so that asked the user once per handful of photos. It is a button now: it counts what could go, and
         # deletes it when pressed a second time.
 

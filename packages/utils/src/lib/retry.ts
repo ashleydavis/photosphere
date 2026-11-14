@@ -19,7 +19,7 @@ export async function retryOnce<ReturnT>(operation: () => Promise<ReturnT>, time
     //
     // A timeout is raised by a timer rather than by the work, so the error it throws carries the
     // timer's stack and says nothing about what was being waited for. "Operation timed out after
-    // 30000ms" was the whole of what a failing background sync reported on a phone, pass after pass,
+    // 30000ms" was the whole of what a failing background sync reported on a mobile, pass after pass,
     // and there are dozens of retries it could have come from. A stack does not help either: the
     // callers are async, and the embedded engine shows only the two synchronous frames inside this
     // file. The operation's own text does, because these are all one-line arrow functions naming the
@@ -55,7 +55,7 @@ export async function retry<ReturnT>(operation: () => Promise<ReturnT>, maxAttem
             if (maxAttempts >= 1) {
                 // What went wrong on an attempt that is about to be tried again, said once, in one
                 // line. It used to be verbose-only, and the last attempt's error was the only one
-                // anyone ever saw: on a phone that made a failure that takes three attempts and a
+                // anyone ever saw: on a mobile that made a failure that takes three attempts and a
                 // minute and a half look like a single event with a single cause, and hid that the
                 // first attempt failed differently from the ones that followed it.
                 log.warn(`${errorContext ?? "An operation failed"}. Retrying after: ${error?.message ?? String(error)}`);

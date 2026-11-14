@@ -343,7 +343,7 @@ pub const IStorage = struct {
     // whose body does not match it, which is a stronger guarantee than checking afterwards), and one
     // that cannot ignores it and writes the stream as usual.
     //
-    // It exists because computing the hash is the expensive part of an upload, most of all on a phone,
+    // It exists because computing the hash is the expensive part of an upload, most of all on a mobile,
     // and the sync already knows every file's hash, because it is what the merkle tree is made of.
     //
     // Returns true when the store checked the bytes against the hash as it wrote them, so the caller
@@ -367,7 +367,7 @@ pub const IStorage = struct {
     // copy against what was sent costs one small request instead of the whole file again. A store
     // with no such answer says so, and the caller reads the file back and hashes it as before.
     //
-    // On a phone that difference matters: the sync's verification read-back downloads every file a
+    // On a mobile that difference matters: the sync's verification read-back downloads every file a
     // second time and hashes it.
     //
     pub fn storedHash(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]const u8 {

@@ -8,24 +8,24 @@
 | --- | --- |
 | Method settled | Yes, described below |
 | Measuring harness built | Yes, `apps/smoke-tests/tests/manual/90-perf-import/` |
-| Before figures taken | Yes, on an emulator. **Not on the phone** |
+| Before figures taken | Yes, on an emulator. **Not on the mobile** |
 | Native hashing implemented | Yes, Android and iOS |
-| After figures taken | Yes, on an emulator. **Not on the phone** |
-| Decision | **Short of the bar on every measurement taken. The phone run settles it and is still owed.** |
+| After figures taken | Yes, on an emulator. **Not on the mobile** |
+| Decision | **Short of the bar on every measurement taken. The mobile run settles it and is still owed.** |
 
 **Two headline findings, both of which contradict what the earlier scan measurement led people here to expect.**
 
 **Hashing is 24.7% of a full import, not the 99.1% it is of a bare scan.** A scan lists, exports and hashes; a full import also decodes each photo, builds a thumbnail and a display version, and writes to the database. That is three quarters of the work and no amount of faster hashing touches it.
 
-**Native hashing made hashing 11.6x faster and the import 1.24x faster.** Both numbers are real and neither is marginal. The bar agreed in advance was several times faster on a phone. See "The decision".
+**Native hashing made hashing 11.6x faster and the import 1.24x faster.** Both numbers are real and neither is marginal. The bar agreed in advance was several times faster on a mobile. See "The decision".
 
 ## The question this answers
 
-Automatic import on a phone hashes every photo with a pure-JS SHA-256 running inside the embedded JS engine. A native hash is available on both platforms and is far faster in isolation. The question is not whether native SHA-256 is faster than JS SHA-256, which is not in doubt, but **whether routing the import's hashing through it makes automatic import on a real phone substantially faster end to end**.
+Automatic import on a mobile hashes every photo with a pure-JS SHA-256 running inside the embedded JS engine. A native hash is available on both platforms and is far faster in isolation. The question is not whether native SHA-256 is faster than JS SHA-256, which is not in doubt, but **whether routing the import's hashing through it makes automatic import on a real mobile substantially faster end to end**.
 
 That distinction is the whole point of measuring. Hashing is 99.1% of a bare scan of the photo library, but a full import also generates a thumbnail and a display version for every photo and writes to the database, and none of that has ever been measured. If hashing turns out to be a small part of a full import, this change will collapse the hashing time to nothing and barely move the number a user waits on.
 
-**The change is kept only if the full import gets substantially faster on the phone, and reverted if it does not.**
+**The change is kept only if the full import gets substantially faster on the mobile, and reverted if it does not.**
 
 ## What is measured
 
@@ -35,14 +35,14 @@ A **full automatic import**, end to end: listing the device photo library, expor
 
 Two passes, both before and after:
 
-- **Hash computed (cold).** The hash cache is deleted first, so every photo is exported out of the library and hashed. This is the pass the change is aimed at, and it is what a first backup of a phone does.
-- **Hash cached (warm).** Run straight after the cold pass, over the items the cold pass reached. The cache answers, so nothing is exported and nothing is hashed. This is what a phone does on every run after the first. It is measured because a change that speeds up the cold pass while slowing the warm one down has not helped.
+- **Hash computed (cold).** The hash cache is deleted first, so every photo is exported out of the library and hashed. This is the pass the change is aimed at, and it is what a first backup of a mobile does.
+- **Hash cached (warm).** Run straight after the cold pass, over the items the cold pass reached. The cache answers, so nothing is exported and nothing is hashed. This is what a mobile does on every run after the first. It is measured because a change that speeds up the cold pass while slowing the warm one down has not helped.
 
 ## Why the measurement is time-boxed rather than run over the whole library
 
-A cold pass over the phone's whole library cannot be run twice in a working session, and would have to be run four times here (cold and warm, before and after).
+A cold pass over the mobile's whole library cannot be run twice in a working session, and would have to be run four times here (cold and warm, before and after).
 
-From the earlier scan measurement in `mobile-auto-import-scan.md`: a cold **scan** of the library, which is listing, exporting and hashing and nothing else, extrapolates to about an hour. The same document records an end-to-end import observed at about 1.5 photos a minute, which over a library that size is around a day. That observation was taken while the phone was out of swap and is not a figure to rely on, but it is the right order of magnitude for the point being made here: a full cold import of the whole library is not a measurement that can be repeated four times.
+From the earlier scan measurement in `mobile-auto-import-scan.md`: a cold **scan** of the library, which is listing, exporting and hashing and nothing else, extrapolates to about an hour. The same document records an end-to-end import observed at about 1.5 photos a minute, which over a library that size is around a day. That observation was taken while the mobile was out of swap and is not a figure to rely on, but it is the right order of magnitude for the point being made here: a full cold import of the whole library is not a measurement that can be repeated four times.
 
 So each pass is **time-boxed to a fixed wall clock**, and what is compared is the rate and the split between the stages rather than a total for the whole library. The warm pass then covers exactly the items the cold pass reached. This is the same method the earlier scan measurement used, for the same reason, and it is what makes the before and after comparable: both are run for the same length of time on the same device against the same library.
 
@@ -50,9 +50,9 @@ The time box is chosen when the harness is built and is recorded here with the f
 
 ## The device and the library
 
-The decision figure has to come from a real phone. The earlier scan measured an emulator at about 1.5x the phone's hashing rate, and a phone is what the product runs on.
+The decision figure has to come from a real mobile. The earlier scan measured an emulator at about 1.5x the mobile's hashing rate, and a mobile is what the product runs on.
 
-**The figures below are from an emulator, because the Pixel 6 was not attached when they were taken.** They are recorded as what they are. The split between hashing and everything else is the part that generalises, and it is that split, not the absolute rate, that the finding below rests on. The phone run is still owed.
+**The figures below are from an emulator, because the Pixel 6 was not attached when they were taken.** They are recorded as what they are. The split between hashing and everything else is the part that generalises, and it is that split, not the absolute rate, that the finding below rests on. The mobile run is still owed.
 
 | | |
 | --- | --- |
@@ -78,11 +78,11 @@ PHOTOSPHERE_ANDROID_DEVICES="<serial>" \
 bun run test:and -- 90-perf-import
 ```
 
-Two things to know before pointing it at a real phone.
+Two things to know before pointing it at a real mobile.
 
-The run does not need the screen kept on. Automatic import is driven by `AutoImportService`, an Android foreground service, so it keeps working while the phone is idle and off screen. (`docs/performance/mobile-auto-import-scan.md` says the opposite under "What this measurement found". That was true of the scan harness it describes and is no longer true of automatic import.)
+The run does not need the screen kept on. Automatic import is driven by `AutoImportService`, an Android foreground service, so it keeps working while the mobile is idle and off screen. (`docs/performance/mobile-auto-import-scan.md` says the opposite under "What this measurement found". That was true of the scan harness it describes and is no longer true of automatic import.)
 
-Sideloading onto a phone needs **Developer options → Verify apps over USB** turned off (`adb shell settings put global verifier_verify_adb_installs 0`). Without it Play Protect sends each install of an unrecognised package off for verification and either refuses it (`INSTALL_FAILED_VERIFICATION_FAILURE`) or waits for someone to tap "Install anyway" on the phone, which makes an unattended run impossible.
+Sideloading onto a mobile needs **Developer options → Verify apps over USB** turned off (`adb shell settings put global verifier_verify_adb_installs 0`). Without it Play Protect sends each install of an unrecognised package off for verification and either refuses it (`INSTALL_FAILED_VERIFICATION_FAILURE`) or waits for someone to tap "Install anyway" on the mobile, which makes an unattended run impossible.
 
 The smoke test runner clears the app's data when the run ends, which removes the app's own databases and settings and nothing outside the app. The device's photo library is never written to.
 
@@ -124,7 +124,7 @@ Warm, immediately after, over the same photos:
 
 **The warm pass hashes nothing, so this change cannot help it at all.** 24.2 seconds of wall clock for 24 photos recognised without being opened, with no hashing and no child tasks. Whatever that time is, it is not hashing, and a faster hash leaves it exactly where it is.
 
-**The hashing rate here is 1.68 MB/s, close to the 1.13 MB/s the earlier scan measured on an emulator** and about twice the phone's 0.75. That much is consistent, and it is the reason the phone run is still owed: the phone hashes at less than half this rate, so hashing will be a larger share of a full import there than the 24.7% measured here. How much larger is exactly what has not been established, and it is the number the decision turns on.
+**The hashing rate here is 1.68 MB/s, close to the 1.13 MB/s the earlier scan measured on an emulator** and about twice the mobile's 0.75. That much is consistent, and it is the reason the mobile run is still owed: the mobile hashes at less than half this rate, so hashing will be a larger share of a full import there than the 24.7% measured here. How much larger is exactly what has not been established, and it is the number the decision turns on.
 
 ## After: automatic import with native hashing
 
@@ -177,17 +177,17 @@ Warm pass, where nothing is hashed:
 
 **On the evidence available, this change does not clear the bar that was set for it, and the bar was set before the numbers were known.**
 
-The rule agreed in advance was that the cold full import must be **at least several times faster on the phone**, and that hashing on its own getting hundreds of times faster would not save the change. Hashing got 11.6x faster. The import got 1.24x faster. That is a real improvement and it is not several times.
+The rule agreed in advance was that the cold full import must be **at least several times faster on the mobile**, and that hashing on its own getting hundreds of times faster would not save the change. Hashing got 11.6x faster. The import got 1.24x faster. That is a real improvement and it is not several times.
 
-**The measurement is not yet the one the rule names.** These figures are from an emulator, because the Pixel 6 was not attached. The phone hashes at 0.75 MB/s against this emulator's 1.68, so hashing is a larger share of a full import there and the change is worth more on a phone than these figures show. How much more has not been measured and this document will not guess at it: the arithmetic that could be done here is exactly the kind of reasoning that produced the "45x" expectation the before run disproved.
+**The measurement is not yet the one the rule names.** These figures are from an emulator, because the Pixel 6 was not attached. The mobile hashes at 0.75 MB/s against this emulator's 1.68, so hashing is a larger share of a full import there and the change is worth more on a mobile than these figures show. How much more has not been measured and this document will not guess at it: the arithmetic that could be done here is exactly the kind of reasoning that produced the "45x" expectation the before run disproved.
 
 What can be said without guessing:
 
 - The part of the import that is not hashing is unaffected by this change, on any device.
 - On this emulator that part is about 85 of 113 seconds of child task work.
-- For the cold import to get several times faster, hashing would have to be most of it. On the phone it is a larger share than 24.7%, and whether it is large enough is the open question.
+- For the cold import to get several times faster, hashing would have to be most of it. On the mobile it is a larger share than 24.7%, and whether it is large enough is the open question.
 
-**So the phone run is what settles it, and it is the one thing this work has not been able to do.** The harness is in the tree and takes one command. Until it has been run, the honest position is that the change is measured, understood, and short of the bar on every measurement taken.
+**So the mobile run is what settles it, and it is the one thing this work has not been able to do.** The harness is in the tree and takes one command. Until it has been run, the honest position is that the change is measured, understood, and short of the bar on every measurement taken.
 
 ## Cost of keeping it, if it is kept
 
@@ -199,6 +199,6 @@ Worth weighing against the 1.24x, because it is not nothing and it is not much:
 
 ## The decision
 
-Not yet reached. The test it has to pass is set out in the plan and repeated here so this document stands on its own: the cold full import must be **at least several times faster on the phone**, and the warm pass must not be slower. Hashing on its own getting hundreds of times faster is not the test and does not save the change.
+Not yet reached. The test it has to pass is set out in the plan and repeated here so this document stands on its own: the cold full import must be **at least several times faster on the mobile**, and the warm pass must not be slower. Hashing on its own getting hundreds of times faster is not the test and does not save the change.
 
 Whichever way it goes, the figures stay in this document. A change that did not help is worth as much to the next person as one that did, provided the numbers are here to stop it being tried again on the same reasoning.

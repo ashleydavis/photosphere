@@ -188,10 +188,10 @@ wait_for_log "$TMP_DIR" "Replicate database dialog opened"
 
 # replicate() writes origin = the source path into the destination's .db/config.json, so the replica
 # points back at the S3 path with no extra step, and the sync handler resolves that origin's
-# credentials from the received shared-db entry, which names the same path. Partial is what a phone
+# credentials from the received shared-db entry, which names the same path. Partial is what a mobile
 # really holds, and it is the target of the push either way: the partial filter in syncDatabases
 # applies to the target of a copy, and the target here is the origin.
-# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+# A user on a mobile types the short name, which the app resolves into its own storage. A desktop user types the full path.
 case "$PLATFORM" in
     android|ios)
         send_command "$APP_PORT" type "$(jq -cn --arg text "$REPLICA_NAME" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1

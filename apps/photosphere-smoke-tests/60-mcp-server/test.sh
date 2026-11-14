@@ -12,7 +12,7 @@ print_test_header 60 "mcp-server"
 
 case "$PLATFORM" in
     android|ios)
-        log_info "SKIP: a phone has no MCP server. Skipping."
+        log_info "SKIP: a mobile has no MCP server. Skipping."
         exit 77
         ;;
 esac

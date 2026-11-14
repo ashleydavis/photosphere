@@ -1,10 +1,10 @@
 //
 // The background processing tasks that let the automatic import, the sync and the prefetch of a partial replica catch up while the app
-// is not on screen. iOS decides when a processing task runs, usually while the phone is charging and idle, and may not run one for a
+// is not on screen. iOS decides when a processing task runs, usually while the mobile is charging and idle, and may not run one for a
 // long time: that is the platform, not a setting.
 //
-// Each of the three has a task of its own, because they are separately useful: a phone with nothing new to import may still have edits
-// to push, and a phone with no origin has photos to import and nothing to sync. The identifiers must match the entries in Info.plist's
+// Each of the three has a task of its own, because they are separately useful: a mobile with nothing new to import may still have edits
+// to push, and a mobile with no origin has photos to import and nothing to sync. The identifiers must match the entries in Info.plist's
 // BGTaskSchedulerPermittedIdentifiers: the system refuses to register a handler for an identifier the app has not declared, and refuses
 // at launch, so a mismatch crashes the app rather than quietly doing nothing.
 //
@@ -87,7 +87,7 @@ final class BackgroundPasses {
     }
 
     // Registers the handlers. The system accepts them only before the app finishes launching, whether or not automatic import is
-    // switched on: registration is not scheduling. Nothing is scheduled here, so a phone that never switches automatic import on never
+    // switched on: registration is not scheduling. Nothing is scheduled here, so a mobile that never switches automatic import on never
     // asks the system for anything.
     func register() {
         for pass in passes {

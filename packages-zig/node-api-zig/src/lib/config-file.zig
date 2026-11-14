@@ -20,7 +20,7 @@ pub const ISettingTarget = struct {
 // Reading and writing config.toml where there is a filesystem: the CLI and the desktop app.
 //
 // The mobile apps read and write the same document through worker tasks instead (config.worker.zig),
-// because a phone's WebView has no filesystem of its own. Both go through config-format.zig, so the
+// because a mobile's WebView has no filesystem of its own. Both go through config-format.zig, so the
 // file means the same thing whichever wrote it. The wiki page "Configuration-File" documents it for
 // users.
 //

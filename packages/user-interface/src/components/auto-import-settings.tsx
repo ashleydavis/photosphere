@@ -31,7 +31,7 @@ const CLEANUP_TASK_SOURCE = "source-cleanup";
 //
 // The card also carries the button that deletes photos this device holds that the database already
 // has. That used to be a setting, switched on and off, with automatic import doing the deleting as
-// it went: on a phone every deletion raises a system confirmation, so the user was asked once per
+// it went: on a mobile every deletion raises a system confirmation, so the user was asked once per
 // handful of photos. A button asks once, when they choose.
 //
 export function AutoImportSettings() {
