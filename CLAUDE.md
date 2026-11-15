@@ -45,6 +45,8 @@ This is crass platform app. Developed on Linux, but delivered and tested on Wind
 - Never stash code unless asked.
 - Never use `cd` to permanently change directories within the repo. Use it on case-by-case and temporary basis as part of a command to run the command from a particular directory. Use of `cd` by itself will leave you in the wrong directory meaning other commands won't work.
 - A Ziggy release is NEVER needed to build, test or commit a change that spans Photosphere and Ziggy. Build and test Photosphere against the local Ziggy checkout (the sibling `../ziggy`, or a Ziggy worktree), for example `zig build --fork=<path to that Ziggy>`. Never report a Photosphere change as blocked on a Ziggy release.
+- HIGH PRIORITY: NEVER CHANGE CI WORKFLOWS (`.github/`) TO SUPPORT A LOCAL ZIGGY. Switching this project to a local Ziggy checkout for testing is temporary, so the workflows always keep taking Ziggy from its release tag.
+- HIGH PRIORITY: Never update the documentation to describe a temporary switch to a local Ziggy. The docs always describe taking Ziggy from its release tag.
 - Never invoke shell scripts directly (e.g. `./apps/cli-zig/smoke-tests-zig.sh`). Use the `bun run` equivalent from `package.json` (e.g. `bun run test:cli:zig`, `bun run test:ziggy`).
 - When running smoke tests, do not manually `rm -rf` the test's `tmp/` directory — the runner already cleans it before each test.
 - HIGH PRIORITY: `rm -r` is banned, in every form and every flag combination that includes it (`-r`, `-R`, `--recursive`, `-rf`, `-fr`), unless the human asks for that exact deletion in the message you are acting on. This covers commands you run yourself, commands you ask the human to run, and any `rm -r` you write into a script, a test, a runner or a hook, where it will run later without anyone watching. A recursive delete takes everything under a path, and the path is often built from a variable: when that variable is empty, wrong, or points somewhere shared, what goes is not what you meant to go, and there is nothing to undo it with. This has already cost this repository real work. Removing a single file by name is not covered by this and is fine.
@@ -92,6 +94,8 @@ This is crass platform app. Developed on Linux, but delivered and tested on Wind
 ## Project Overview
 
 Photosphere is a self-hosted, cross-platform photo and video management application built as a monorepo using Bun workspaces. It includes desktop and mobile apps (the Photosphere App on Ziggy) and a CLI.
+
+"Psi" means Photosphere, this project. `psi` is the Photosphere CLI tool.
 
 ## Commands
 

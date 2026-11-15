@@ -29,8 +29,6 @@ const tools = @import("tools-zig");
 const background_work = @import("background-work.zig");
 const mcp_server = @import("mcp-server.zig");
 const single_instance = @import("single-instance.zig");
-const windows_native_calls = @import("windows-native-calls.zig");
-const macos_native_calls = @import("macos-native-calls.zig");
 
 const HandlerServices = ziggy.core.HandlerServices;
 const Timers = ziggy.timers.Timers;
@@ -170,11 +168,6 @@ pub const MainState = struct {
     background_pass_targets: [background_work.PASS_COUNT]PassTimer,
     // Makes the ids of the tasks the main process queues.
     uuid_generator: utils.random_uuid_generator.RandomUuidGenerator,
-    // What makes the background work's native calls on Windows, whose native app has no native call callback (see
-    // windows-native-calls.zig).
-    windows_native_calls: windows_native_calls.WindowsNativeCalls,
-    // What makes the background work's native calls on MacOS, whose bridge has no native call callback (see macos-native-calls.zig).
-    macos_native_calls: macos_native_calls.MacosNativeCalls,
     // Set once the app is stopping, so that nothing the stopping tasks do restarts anything.
     stopping: bool,
     // The environment read from the process, which this thread reads, or null when the thread already had one. Owned.
@@ -233,8 +226,6 @@ pub const MainState = struct {
             .prefetch_replica_state = .unknown,
             .background_pass_targets = undefined,
             .uuid_generator = .{},
-            .windows_native_calls = windows_native_calls.WindowsNativeCalls.init(),
-            .macos_native_calls = macos_native_calls.MacosNativeCalls.init(),
             .stopping = false,
         };
         inline for (std.meta.fields(background_work.Pass)) |field| {
@@ -246,8 +237,6 @@ pub const MainState = struct {
         // Undoes what the state now owns, in the order destroy uses, when applying the single instance rule fails. The rule can fail after
         // taking the lock (logging that it was acquired), so the lock is released too.
         errdefer {
-            state.windows_native_calls.deinit();
-            state.macos_native_calls.deinit();
             if (state.single_instance) |*instance| {
                 instance.release(io);
             }
@@ -439,8 +428,6 @@ pub const MainState = struct {
             server.stop(io, allocator);
             self.asset_server = null;
         }
-        self.windows_native_calls.deinit();
-        self.macos_native_calls.deinit();
         if (self.single_instance) |*instance| {
             instance.release(io);
         }
@@ -633,23 +620,6 @@ pub const MainState = struct {
         defer arena_state.deinit();
         log.event(try std.fmt.allocPrint(arena_state.allocator(), "Second-instance signal received by pid={d}", .{storage.storage.processId()}));
         services.menuAction(io, arena_state.allocator(), "focus-window");
-    }
-
-    //
-    // Takes one hold on the computer staying awake for a background pass, or lets one go, from the JSON text of a holdAwake request a
-    // pass task sent as an event (see background_work.callOnDesktop). The hold belongs to the main thread, which keeps it across
-    // passes. Windows and MacOS only: no other platform's tasks send the event.
-    //
-    pub fn holdAwake(self: *MainState, arena: std.mem.Allocator, request_json: []const u8) !void {
-        if (builtin.os.tag == .windows) {
-            _ = try self.windows_native_calls.call(arena, "holdAwake", request_json);
-            return;
-        }
-        if (builtin.os.tag == .macos) {
-            _ = try self.macos_native_calls.call(arena, "holdAwake", request_json);
-            return;
-        }
-        return utils.errors.throwError("The computer is held awake on Windows and MacOS only, and this is {s}.", .{@tagName(builtin.os.tag)});
     }
 
     //

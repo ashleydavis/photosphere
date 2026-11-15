@@ -627,7 +627,14 @@ fn runStepOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, time
     return readPrefetchStepCounts(outputs);
 }
 
+//
+// Holds a mobile awake for a pass, so background work keeps running with the app in the background and the screen off. A desktop is
+// never held awake: it suspends when its user's settings say so.
+//
 fn holdAwakeOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, awake: bool) anyerror!void {
+    if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
+        return;
+    }
     _ = try callNativeApp(servicesOf(ptr), io, allocator, timers, "holdAwake", try json.stringify(allocator, .{
         .awake = awake,
     }));
@@ -664,19 +671,13 @@ fn sendBackgroundLog(services: TaskServices, io: std.Io, allocator: std.mem.Allo
 }
 
 //
-// The type of the task event a task sends for the main thread to hold the computer awake, or let it go, on Windows and MacOS, where the
-// hold belongs to the main thread (see callOnDesktop). Its data is the JSON text of the holdAwake request.
-//
-pub const HOLD_AWAKE_EVENT_TYPE = "hold-awake";
-
-//
 // Calls the native app to do what the method names, and returns its result, which is JSON text, allocated with the allocator. A
 // platform without the callback and a native app that cannot do it are each an error with a sentence the user can act on.
 //
 pub fn callNativeApp(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: ?Timers, method: []const u8, request_json: []const u8) ![]const u8 {
     const reply = services.nativeCall(io, allocator, timers, method, request_json) catch |err| {
         if (err == error.NativeCallMissing) {
-            return try callOnDesktop(services, io, allocator, method, request_json);
+            return try callOnDesktop(allocator, method, request_json);
         }
         return err;
     };
@@ -688,33 +689,17 @@ pub fn callNativeApp(services: TaskServices, io: std.Io, allocator: std.mem.Allo
 
 //
 // Makes a native call when the native app has no native call callback. Ziggy's Windows native app and MacOS bridge have none, so on
-// Windows and MacOS the task makes the calls a desktop can do itself (windows-native-calls.zig, macos-native-calls.zig): the constant
-// results here, on the task's thread, and holdAwake on the main thread, which keeps the hold, through a task event of
-// HOLD_AWAKE_EVENT_TYPE. Anywhere else, and for a call only a mobile can make, it is an error that names the method.
+// Windows and MacOS the task makes the calls a desktop can do itself (windows-native-calls.zig, macos-native-calls.zig), on the task's
+// thread. Anywhere else, and for a call only a mobile can make, it is an error that names the method.
 //
-pub fn callOnDesktop(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) ![]const u8 {
-    if (builtin.os.tag == .windows or builtin.os.tag == .macos) {
-        if (std.mem.eql(u8, method, "holdAwake")) {
-            try services.sendEvent(io, allocator, .{
-                .type = HOLD_AWAKE_EVENT_TYPE,
-                .request = json.Raw{
-                    .text = request_json,
-                },
-            });
-            return "null";
-        }
-    }
+pub fn callOnDesktop(allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) ![]const u8 {
     if (builtin.os.tag == .windows) {
-        var native_calls = windows_native_calls.WindowsNativeCalls.init();
-        defer native_calls.deinit();
-        if (try native_calls.call(allocator, method, request_json)) |result| {
+        if (try windows_native_calls.call(allocator, method, request_json)) |result| {
             return result;
         }
     }
     if (builtin.os.tag == .macos) {
-        var native_calls = macos_native_calls.MacosNativeCalls.init();
-        defer native_calls.deinit();
-        if (try native_calls.call(allocator, method, request_json)) |result| {
+        if (try macos_native_calls.call(allocator, method, request_json)) |result| {
             return result;
         }
     }

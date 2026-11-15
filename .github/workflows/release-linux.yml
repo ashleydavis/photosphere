@@ -39,12 +39,14 @@ on:
           - new-patch
         default: none
 
+# The Linux jobs run on ubuntu-24.04, a fixed image, not ubuntu-latest: ubuntu-latest moved to ubuntu-26.04, which changed CI under
+# unchanged code (on it, every start of a Ziggy Linux app waited 25 seconds for the desktop portal).
 jobs:
   # Resolves the release tag once, before anything is built, because it can create and push a tag. Its outputs, the tag and
   # whether this run is a release, are read by app-build, cli-build, package and create-release, so the two builds run side by side.
   prepare-tag:
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     outputs:
@@ -56,13 +58,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Resolve release tag
         id: resolve
         run: |
@@ -105,18 +100,11 @@ jobs:
   # restores them from those artifacts with the third-party-libraries action.
   build-aws-sdk:
     timeout-minutes: 40
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Build the AWS SDK for C
         uses: ./.github/actions/build-aws-sdk
         with:
@@ -124,18 +112,11 @@ jobs:
 
   build-zlib-ng:
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Build zlib-ng
         uses: ./.github/actions/build-zlib-ng
         with:
@@ -143,18 +124,11 @@ jobs:
 
   build-imagemagick:
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Build ImageMagick
         uses: ./.github/actions/build-imagemagick
         with:
@@ -162,18 +136,11 @@ jobs:
 
   build-ffmpeg:
     timeout-minutes: 40
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Build FFmpeg
         uses: ./.github/actions/build-ffmpeg
         with:
@@ -186,20 +153,13 @@ jobs:
   app-build:
     timeout-minutes: 120
     needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -315,18 +275,11 @@ jobs:
     # by both.
     timeout-minutes: 60
     needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
         with:
@@ -432,17 +385,10 @@ jobs:
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
     needs: [cli-build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -541,18 +487,11 @@ jobs:
     # The CLI that makes the scenarios' fixtures is the one cli-build built.
     timeout-minutes: 75
     needs: [app-build, cli-build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -653,18 +592,11 @@ jobs:
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
   typescript-compile:
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -694,18 +626,11 @@ jobs:
   # The TypeScript unit tests.
   typescript-unit-tests:
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -734,18 +659,11 @@ jobs:
   zig-unit-tests:
     timeout-minutes: 50
     needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, cli-build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -834,18 +752,11 @@ jobs:
   package:
     timeout-minutes: 120
     needs: [prepare-tag, app-build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -925,7 +836,7 @@ jobs:
   create-release:
     timeout-minutes: 20
     needs: [prepare-tag, app-build, cli-build, cli-smoke-tests, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -934,13 +845,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Ziggy, beside Photosphere, which the build and the frontend package take by path.
-      - name: Check out Ziggy
-        uses: actions/checkout@v4
-        with:
-          repository: ashleydavis/ziggy
-          ref: main
-          path: ../ziggy
       - name: Restore the Photosphere App package
         uses: actions/cache/restore@v4
         with:

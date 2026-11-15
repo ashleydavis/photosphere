@@ -4,15 +4,15 @@ The Photosphere App is built on [Ziggy](https://github.com/ashleydavis/ziggy), t
 
 ## Taking Ziggy
 
-Ziggy is not part of this repository. Photosphere takes most of it from a version tag of [Ziggy's repository](https://github.com/ashleydavis/ziggy), and the Zig package and the frontend package from a checkout beside it:
+Ziggy is not part of this repository. Photosphere takes every part of it from a version tag of [Ziggy's repository](https://github.com/ashleydavis/ziggy):
 
-- The Zig package: the `ziggy` dependency in `build.zig.zon`, which is `.path = "../ziggy"` for this work. It gives the module `ziggy`, which holds Ziggy's core and its task queue (`@import("ziggy").task_queue`), and the build functions `build.zig` uses to build the app's core and its Linux and Windows native apps.
-- The frontend package: `ziggy` in `apps/photosphere-frontend/package.json`, which is `file:../../../ziggy/packages/ziggy/frontend` for this work.
-- The remote control server: `ziggy-remote-control-server` in the root `package.json`, which is `file:../ziggy/tools/remote-control-server` for this work. The smoke tests run it.
-- The Android native app: the dependency `dev.ziggy:ziggy-native-android` in `apps/photosphere/native/android/app/build.gradle`. The `includeBuild` block in `apps/photosphere/native/android/settings.gradle` has Gradle build the native app from the Ziggy checkout beside this repository.
-- The Apple native apps: the Ziggy checkout beside this repository, referenced by the Xcode projects under `apps/photosphere/native/ios` and `apps/photosphere/native/macos`, with the products `ZiggyNativeIOS` and `ZiggyNativeMacOS`.
+- The Zig package: the `ziggy` dependency in `build.zig.zon`, by the URL of the tag and its hash. It gives the module `ziggy`, which holds Ziggy's core and its task queue (`@import("ziggy").task_queue`), and the build functions `build.zig` uses to build the app's core and its Linux and Windows native apps.
+- The frontend package: `ziggy` in `apps/photosphere-frontend/package.json`, by the git URL of the tag.
+- The remote control server: `ziggy-remote-control-server` in the root `package.json`, by the git URL of the tag. The smoke tests run it.
+- The Android native app: the dependency `dev.ziggy:ziggy-native-android` in `apps/photosphere/native/android/app/build.gradle`, which names the tag. The `sourceControl` block in `apps/photosphere/native/android/settings.gradle` has Gradle check Ziggy's repository out at that tag and build the native app from it.
+- The Apple native apps: the Swift package `https://github.com/ashleydavis/ziggy` at the exact version of the tag, in the Xcode projects under `apps/photosphere/native/ios` and `apps/photosphere/native/macos`, with the products `ZiggyNativeIOS` and `ZiggyNativeMacOS`.
 
-Every part takes the sibling checkout until the next Ziggy release moves every part back to one tag. To move to a newer Ziggy, change every part to that release's tag, run `zig fetch --save=ziggy <url>` for the hash in `build.zig.zon` and `bun install` to update `bun.lock`, and run the whole test set.
+Every one of these names the same tag. To move to a newer Ziggy, change the tag in each of them, run `zig fetch --save=ziggy <url>` for the hash in `build.zig.zon` and `bun install` to update `bun.lock`, and run the whole test set.
 
 ## Icons and splash screens
 

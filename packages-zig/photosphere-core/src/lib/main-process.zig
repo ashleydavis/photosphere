@@ -623,8 +623,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
 
 //
 // Told when any task sends an event, on the main thread. Sends the page the events a task sends it (events.APP_EVENT_TYPE), queues the
-// save-asset task a save-asset-request task requests, holds the computer awake or lets it go for a background pass on Windows and
-// MacOS, and tells the page when a sync starts and when it completes. The page is told of every task event by the core.
+// save-asset task a save-asset-request task requests, and tells the page when a sync starts and when it completes. The page is told of every task event by the core.
 //
 pub fn onTaskEvent(services: HandlerServices, _: Timers, io: std.Io, allocator: std.mem.Allocator, sent: ziggy.types.TaskSentEvent) void {
     const log = services.log;
@@ -655,12 +654,6 @@ fn handleTaskEvent(services: HandlerServices, io: std.Io, arena: std.mem.Allocat
         const state = main_state.current();
         const task_id = try state.uuid_generator.uuidGenerator().generate(arena, io);
         try services.addTask(io, arena, task_id, "save-asset", database_path, try json.stringify(arena, save_data), .background);
-    }
-    else if (std.mem.eql(u8, event_type, background_work.HOLD_AWAKE_EVENT_TYPE)) {
-        const request = event.object.get("request") orelse {
-            return utils.errors.throwError("A request to hold the computer awake has no request.", .{});
-        };
-        try main_state.current().holdAwake(arena, try json.stringify(arena, request));
     }
     else if (std.mem.eql(u8, event_type, "sync-started")) {
         log.event("Sync started");

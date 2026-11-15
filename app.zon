@@ -5,7 +5,7 @@
     .title = "Photosphere",
     .version = "dev",
     .splash = .{
-        .background = "#FFFFFF",
+        .background = "#140A24",
         .portrait = "apps/photosphere/icons/splash-portrait.png",
         .landscape = "apps/photosphere/icons/splash-landscape.png",
     },

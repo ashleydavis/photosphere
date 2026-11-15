@@ -41,7 +41,6 @@
 		B2000000000000000000000D /* PhotosphereNativeCalls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosphereNativeCalls.swift; sourceTree = "<group>"; };
 		B2000000000000000000000E /* BackgroundPasses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPasses.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A20000000000000000000006 /* ios */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ios; path = "../../../../../../../../ziggy/.claude/worktrees/splash-screens/packages/ziggy/native/ios"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,7 +60,6 @@
 			children = (
 				A40000000000000000000002 /* Photosphere */,
 				A40000000000000000000003 /* Resources */,
-				A20000000000000000000006 /* ios */,
 				A40000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -144,6 +142,9 @@
 				en,
 			);
 			mainGroup = A40000000000000000000001;
+			packageReferences = (
+				AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */,
+			);
 			productRefGroup = A40000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -306,9 +307,21 @@
 /* End XCConfigurationList section */
 
 
+/* Begin XCRemoteSwiftPackageReference section */
+		AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ashleydavis/ziggy";
+			requirement = {
+				kind = exactVersion;
+				version = 0.0.24;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		A60000000000000000000001 /* ZiggyNativeIOS */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */;
 			productName = ZiggyNativeIOS;
 		};
 /* End XCSwiftPackageProductDependency section */

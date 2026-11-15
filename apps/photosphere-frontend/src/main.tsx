@@ -23,7 +23,7 @@ if (!window.ziggy) {
 // out with the same curve.
 //
 const splash = installSplashScreen(document, {
-    background: "#FFFFFF",
+    background: "#140A24",
     minimumDisplayMilliseconds: 2000,
     fadeDurationMilliseconds: 500,
 });

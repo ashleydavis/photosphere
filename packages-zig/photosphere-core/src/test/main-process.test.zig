@@ -516,29 +516,6 @@ test "a sync task's started and completed messages are passed to the page as eve
     try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "sync-started"));
 }
 
-test "a background pass's hold-awake event reaches the main thread's hold on the computer staying awake, and one without its request is an error" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try sendTaskEvent(&app, .{
-        .task_id = "pass-1",
-        .task_type = "background-pass",
-        .source = "background",
-        .event_json = "{\"type\":\"hold-awake\",\"request\":{\"awake\":true}}",
-    });
-    // Windows and MacOS take the hold; this test runs on Linux, where the main state refuses it, which shows the request reached it.
-    if (@import("builtin").os.tag == .linux) {
-        try std.testing.expect(std.mem.indexOf(u8, try app.consoleErr(), "The computer is held awake on Windows and MacOS only, and this is linux.") != null);
-    }
-    try sendTaskEvent(&app, .{
-        .task_id = "pass-1",
-        .task_type = "background-pass",
-        .source = "background",
-        .event_json = "{\"type\":\"hold-awake\"}",
-    });
-    try std.testing.expect(std.mem.indexOf(u8, try app.consoleErr(), "A request to hold the computer awake has no request.") != null);
-}
-
 test "the periodic sync queues a sync for the open database when syncing is allowed" {
     var app: TestApp = undefined;
     try app.start();
