@@ -327,6 +327,27 @@ photosphere_ios_dump_app_diagnostics() {
 }
 
 #
+# The simulator's appearance: "light" or "dark", read from the simulator the scenario's app was started on. Every other platform
+# library has this, and without it scenario 68-system-theme failed in the Release iOS app-smoke-tests job with
+# "photosphere_platform_system_theme: command not found", then waited for the page's theme to be ''.
+# Usage: photosphere_platform_system_theme <test_dir>
+#
+photosphere_platform_system_theme() {
+    local test_dir="$1"
+    local appearance
+    appearance="$(xcrun simctl ui "$(cat "$test_dir/$IOS_UDID_FILE_NAME")" appearance)" || return 1
+    case "$appearance" in
+        light|dark)
+            printf '%s\n' "$appearance"
+            ;;
+        *)
+            echo "the simulator's appearance is '$appearance', which is neither light nor dark" >&2
+            return 1
+            ;;
+    esac
+}
+
+#
 # Clears everything the app has stored on the simulator, as the mobile suite's ios_reset_app_state does: uninstalling the app removes
 # its container (Documents, Library and the web view's storage), and the simulator's keychain, which holds items outside the container,
 # is reset. The app is then installed again, so its empty container is there for a scenario to seed before its start, as the reset on
