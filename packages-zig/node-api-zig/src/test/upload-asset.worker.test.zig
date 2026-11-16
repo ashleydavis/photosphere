@@ -293,6 +293,34 @@ test "returns correct assetRecord hash" {
     try std.testing.expectEqualStrings("aabbcc", (try context.record(result)).get("hash").?.string);
 }
 
+//
+// A file extracted from a zip is uploaded from a temporary file whose name is a UUID, while its
+// logical path holds the zip's path and the entry's own name. The test uploads from a temporary
+// file under a different logical path and checks that the record's name, path and folder labels
+// all come from the logical path.
+//
+test "the asset record's name, path and labels come from the logical path, not the file uploaded" {
+    const log = utils.mute_log.MuteLog.init();
+    var context: UploadTest = undefined;
+    try context.init();
+    defer context.deinit(log);
+    var data = context.makeUploadAssetData();
+    data.dryRun = true;
+    data.logicalPath = "/photos/holiday.zip/beach.jpg";
+    try std.testing.expect(!std.mem.eql(u8, std.fs.path.basename(data.filePath), "beach.jpg"));
+
+    const result = try context.run(log, data);
+
+    const assetRecord = try context.record(result);
+    try std.testing.expectEqualStrings("beach.jpg", assetRecord.get("origFileName").?.string);
+    try std.testing.expectEqualStrings("/photos/holiday.zip", assetRecord.get("origPath").?.string);
+    const labels = assetRecord.get("labels").?.array;
+    try std.testing.expectEqual(@as(usize, 3), labels.len);
+    try std.testing.expectEqualStrings("photos", labels[0].string);
+    try std.testing.expectEqualStrings("photos", labels[1].string);
+    try std.testing.expectEqualStrings("holiday.zip", labels[2].string);
+}
+
 test "the asset record carries the size of the original file" {
     const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;

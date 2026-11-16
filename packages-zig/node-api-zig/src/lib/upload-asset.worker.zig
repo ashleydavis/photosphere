@@ -755,7 +755,12 @@ fn uploadAndDescribe(
         }
     }
 
-    const fileDir = path.dirname(filePath);
+    //
+    // The asset's name, path and folder labels come from the logical path, not filePath: for a file
+    // extracted from a zip, filePath is a temporary file named with a UUID, and the logical path is
+    // the zip's path followed by the entry's own name. For any other file the two are the same.
+    //
+    const fileDir = path.dirname(data.logicalPath);
     const labels = try buildLabels(allocator, data.labels, fileDir);
 
     if (context.isCancelled(io, allocator)) {
@@ -827,7 +832,7 @@ fn uploadAndDescribe(
         },
         .{
             .key = "origFileName",
-            .value = .{ .string = path.basename(filePath) },
+            .value = .{ .string = path.basename(data.logicalPath) },
         },
         .{
             .key = "origPath",
