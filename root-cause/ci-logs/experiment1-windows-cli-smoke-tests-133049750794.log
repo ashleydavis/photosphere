@@ -1,0 +1,961 @@
+﻿2026-11-16T02:16:52.3487059Z Current runner version: '2.338.2'
+2026-11-16T02:16:52.3527285Z ##[group]Runner Image Provisioner
+2026-11-16T02:16:52.3527868Z Hosted Compute Agent
+2026-11-16T02:16:52.3528244Z Version: 20261103.629
+2026-11-16T02:16:52.3528617Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-16T02:16:52.3529041Z Build Date: 2026-11-03T17:26:59Z
+2026-11-16T02:16:52.3529478Z Worker ID: {13b34b2a-755a-4247-80a0-9f7b69826b79}
+2026-11-16T02:16:52.3529893Z Region: southcentralus
+2026-11-16T02:16:52.3530223Z Cloud: Azure
+2026-11-16T02:16:52.3530684Z ##[endgroup]
+2026-11-16T02:16:52.3531696Z ##[group]Operating System
+2026-11-16T02:16:52.3532077Z Microsoft Windows Server 2025
+2026-11-16T02:16:52.3532431Z 10.0.26100
+2026-11-16T02:16:52.3532761Z Datacenter
+2026-11-16T02:16:52.3533134Z ##[endgroup]
+2026-11-16T02:16:52.3533506Z ##[group]Runner Image
+2026-11-16T02:16:52.3533887Z Image: windows-2025-vs2026
+2026-11-16T02:16:52.3534263Z Version: 20261103.298.1
+2026-11-16T02:16:52.3535310Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261103.298/images/windows/Windows2025-VS2026-Readme.md
+2026-11-16T02:16:52.3536253Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261103.298
+2026-11-16T02:16:52.3536850Z ##[endgroup]
+2026-11-16T02:16:52.3537603Z ##[group]GITHUB_TOKEN Permissions
+2026-11-16T02:16:52.3538902Z Contents: read
+2026-11-16T02:16:52.3539232Z Metadata: read
+2026-11-16T02:16:52.3539559Z Packages: read
+2026-11-16T02:16:52.3539898Z ##[endgroup]
+2026-11-16T02:16:52.3541297Z Secret source: Actions
+2026-11-16T02:16:52.3541858Z Cache mode: write
+2026-11-16T02:16:52.3542329Z Prepare workflow directory
+2026-11-16T02:16:52.3805767Z Prepare all required actions
+2026-11-16T02:16:52.3851351Z Getting action download info
+2026-11-16T02:16:52.6672186Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-16T02:16:52.7505405Z Download action repository 'oven-sh/setup-bun@v2' (SHA:0c5077e51419868618aeaa5fe8019c62421857d6)
+2026-11-16T02:16:53.1269762Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-16T02:16:53.2265102Z Download action repository 'jdx/mise-action@v2' (SHA:c37c93293d6b742fc901e1406b8f764f6fb19dac)
+2026-11-16T02:16:53.6359570Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-11-16T02:16:53.7246243Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-16T02:16:54.0049617Z Complete job name: cli-smoke-tests
+2026-11-16T02:16:54.1342089Z ##[group]Run actions/checkout@v4
+2026-11-16T02:16:54.1343035Z with:
+2026-11-16T02:16:54.1343469Z   repository: ashleydavis/photosphere
+2026-11-16T02:16:54.1347514Z   token: ***
+2026-11-16T02:16:54.1347921Z   ssh-strict: true
+2026-11-16T02:16:54.1348328Z   ssh-user: git
+2026-11-16T02:16:54.1348757Z   persist-credentials: true
+2026-11-16T02:16:54.1349226Z   clean: true
+2026-11-16T02:16:54.1349682Z   sparse-checkout-cone-mode: true
+2026-11-16T02:16:54.1350180Z   fetch-depth: 1
+2026-11-16T02:16:54.1350590Z   fetch-tags: false
+2026-11-16T02:16:54.1350998Z   show-progress: true
+2026-11-16T02:16:54.1351410Z   lfs: false
+2026-11-16T02:16:54.1351792Z   submodules: false
+2026-11-16T02:16:54.1352207Z   set-safe-directory: true
+2026-11-16T02:16:54.1353118Z   allow-unsafe-pr-checkout: false
+2026-11-16T02:16:54.1353721Z env:
+2026-11-16T02:16:54.1354097Z   BUN_VERSION: 1.3.14
+2026-11-16T02:16:54.1354521Z   NODE_VERSION: 24.15.0
+2026-11-16T02:16:54.1354993Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:16:54.1355466Z   RELEASE_PLATFORM: windows
+2026-11-16T02:16:54.1355948Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:16:54.1356421Z ##[endgroup]
+2026-11-16T02:16:54.2451557Z Syncing repository: ashleydavis/photosphere
+2026-11-16T02:16:54.2453277Z ##[group]Getting Git version info
+2026-11-16T02:16:54.2453932Z Working directory is 'D:\a\photosphere\photosphere'
+2026-11-16T02:16:54.2881725Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-16T02:16:54.5748013Z git version 2.56.0.windows.4
+2026-11-16T02:16:54.5789033Z ##[endgroup]
+2026-11-16T02:16:54.5804239Z Temporarily overriding HOME='D:\a\_temp\af0979d8-9d6c-45c8-b90d-63aff721914b' before making global git config changes
+2026-11-16T02:16:54.5805493Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-16T02:16:54.5811979Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\photosphere\photosphere
+2026-11-16T02:16:54.6368452Z Deleting the contents of 'D:\a\photosphere\photosphere'
+2026-11-16T02:16:54.6372866Z ##[group]Initializing the repository
+2026-11-16T02:16:54.6379576Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\photosphere\photosphere
+2026-11-16T02:16:54.7033248Z Initialized empty Git repository in D:/a/photosphere/photosphere/.git/
+2026-11-16T02:16:54.7076205Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/ashleydavis/photosphere
+2026-11-16T02:16:54.7690271Z ##[endgroup]
+2026-11-16T02:16:54.7691416Z ##[group]Disabling automatic garbage collection
+2026-11-16T02:16:54.7698223Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-16T02:16:54.8005704Z ##[endgroup]
+2026-11-16T02:16:54.8006481Z ##[group]Setting up auth
+2026-11-16T02:16:54.8015811Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T02:16:54.8321074Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-16T02:16:56.1154515Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T02:16:56.1434872Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-16T02:16:56.5682847Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T02:16:56.5971763Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-16T02:16:57.0249228Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-11-16T02:16:57.0522677Z ##[endgroup]
+2026-11-16T02:16:57.0523126Z ##[group]Fetching the repository
+2026-11-16T02:16:57.0531313Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +0a24975e05a4d681b7803f62ac169d7544d4c005:refs/remotes/origin/root-cause-windows-linux-smoke
+2026-11-16T02:16:59.6340248Z From https://github.com/ashleydavis/photosphere
+2026-11-16T02:16:59.6343884Z  * [new ref]         0a24975e05a4d681b7803f62ac169d7544d4c005 -> origin/root-cause-windows-linux-smoke
+2026-11-16T02:16:59.6384370Z ##[endgroup]
+2026-11-16T02:16:59.6384757Z ##[group]Determining the checkout info
+2026-11-16T02:16:59.6387350Z ##[endgroup]
+2026-11-16T02:16:59.6395367Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-16T02:16:59.6853176Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-16T02:16:59.7156243Z ##[group]Checking out the ref
+2026-11-16T02:16:59.7156921Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B root-cause-windows-linux-smoke refs/remotes/origin/root-cause-windows-linux-smoke
+2026-11-16T02:17:00.7756105Z Updating files:  58% (5988/10166)
+2026-11-16T02:17:00.7932425Z Updating files:  59% (5998/10166)
+2026-11-16T02:17:00.8087893Z Updating files:  60% (6100/10166)
+2026-11-16T02:17:00.8229197Z Updating files:  61% (6202/10166)
+2026-11-16T02:17:01.0538633Z Updating files:  62% (6303/10166)
+2026-11-16T02:17:01.4629871Z Updating files:  63% (6405/10166)
+2026-11-16T02:17:01.4783521Z Updating files:  64% (6507/10166)
+2026-11-16T02:17:01.4944172Z Updating files:  65% (6608/10166)
+2026-11-16T02:17:01.5075685Z Updating files:  66% (6710/10166)
+2026-11-16T02:17:01.5227451Z Updating files:  67% (6812/10166)
+2026-11-16T02:17:01.5379946Z Updating files:  68% (6913/10166)
+2026-11-16T02:17:01.5533922Z Updating files:  69% (7015/10166)
+2026-11-16T02:17:01.5725403Z Updating files:  70% (7117/10166)
+2026-11-16T02:17:01.5870954Z Updating files:  71% (7218/10166)
+2026-11-16T02:17:01.6006969Z Updating files:  72% (7320/10166)
+2026-11-16T02:17:01.6153392Z Updating files:  73% (7422/10166)
+2026-11-16T02:17:01.6300680Z Updating files:  74% (7523/10166)
+2026-11-16T02:17:01.6452498Z Updating files:  75% (7625/10166)
+2026-11-16T02:17:01.6591071Z Updating files:  76% (7727/10166)
+2026-11-16T02:17:01.6772800Z Updating files:  77% (7828/10166)
+2026-11-16T02:17:01.6929592Z Updating files:  78% (7930/10166)
+2026-11-16T02:17:01.7099854Z Updating files:  79% (8032/10166)
+2026-11-16T02:17:01.7261746Z Updating files:  80% (8133/10166)
+2026-11-16T02:17:01.7389833Z Updating files:  81% (8235/10166)
+2026-11-16T02:17:01.7509920Z Updating files:  82% (8337/10166)
+2026-11-16T02:17:01.7632119Z Updating files:  83% (8438/10166)
+2026-11-16T02:17:01.7775690Z Updating files:  84% (8540/10166)
+2026-11-16T02:17:01.7817261Z Updating files:  85% (8642/10166)
+2026-11-16T02:17:01.8023560Z Updating files:  85% (8658/10166)
+2026-11-16T02:17:01.8221710Z Updating files:  86% (8743/10166)
+2026-11-16T02:17:01.8430917Z Updating files:  87% (8845/10166)
+2026-11-16T02:17:01.8627743Z Updating files:  88% (8947/10166)
+2026-11-16T02:17:01.8859899Z Updating files:  89% (9048/10166)
+2026-11-16T02:17:01.9014831Z Updating files:  90% (9150/10166)
+2026-11-16T02:17:01.9261373Z Updating files:  91% (9252/10166)
+2026-11-16T02:17:01.9473112Z Updating files:  92% (9353/10166)
+2026-11-16T02:17:01.9652047Z Updating files:  93% (9455/10166)
+2026-11-16T02:17:01.9799809Z Updating files:  94% (9557/10166)
+2026-11-16T02:17:01.9959688Z Updating files:  95% (9658/10166)
+2026-11-16T02:17:02.0118328Z Updating files:  96% (9760/10166)
+2026-11-16T02:17:02.0286210Z Updating files:  97% (9862/10166)
+2026-11-16T02:17:02.0462292Z Updating files:  98% (9963/10166)
+2026-11-16T02:17:02.0657110Z Updating files:  99% (10065/10166)
+2026-11-16T02:17:02.0657388Z Updating files: 100% (10166/10166)
+2026-11-16T02:17:02.0657776Z Updating files: 100% (10166/10166), done.
+2026-11-16T02:17:02.0834594Z Switched to a new branch 'root-cause-windows-linux-smoke'
+2026-11-16T02:17:02.0846976Z branch 'root-cause-windows-linux-smoke' set up to track 'origin/root-cause-windows-linux-smoke'.
+2026-11-16T02:17:02.0956301Z ##[endgroup]
+2026-11-16T02:17:02.1266921Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-16T02:17:02.1524724Z 0a24975e05a4d681b7803f62ac169d7544d4c005
+2026-11-16T02:17:02.1896052Z ##[group]Run oven-sh/setup-bun@v2
+2026-11-16T02:17:02.1896233Z with:
+2026-11-16T02:17:02.1896345Z   bun-version: 1.3.14
+2026-11-16T02:17:02.1896464Z   no-cache: false
+2026-11-16T02:17:02.1897991Z   token: ***
+2026-11-16T02:17:02.1898090Z env:
+2026-11-16T02:17:02.1898187Z   BUN_VERSION: 1.3.14
+2026-11-16T02:17:02.1898302Z   NODE_VERSION: 24.15.0
+2026-11-16T02:17:02.1898425Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:17:02.1898557Z   RELEASE_PLATFORM: windows
+2026-11-16T02:17:02.1898694Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:17:02.1898827Z ##[endgroup]
+2026-11-16T02:17:02.6239484Z Downloading a new version of Bun: https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-windows-x64.zip
+2026-11-16T02:17:03.2240831Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command "$ErrorActionPreference = 'Stop' ; try { Add-Type -AssemblyName System.IO.Compression.ZipFile } catch { } ; try { [System.IO.Compression.ZipFile]::ExtractToDirectory('D:\a\_temp\11da4231-6254-4cc8-bb7c-55566a38b585.zip', 'D:\a\_temp\47251c86-49b4-4af0-8d32-59b6d85a2280', $true) } catch { if (($_.Exception.GetType().FullName -eq 'System.Management.Automation.MethodException') -or ($_.Exception.GetType().FullName -eq 'System.Management.Automation.RuntimeException') ){ Expand-Archive -LiteralPath 'D:\a\_temp\11da4231-6254-4cc8-bb7c-55566a38b585.zip' -DestinationPath 'D:\a\_temp\47251c86-49b4-4af0-8d32-59b6d85a2280' -Force } else { throw $_ } } ;"
+2026-11-16T02:17:04.1174961Z [command]C:\Users\runneradmin\.bun\bin\bun.exe --revision
+2026-11-16T02:17:04.6773613Z 1.3.14+0d9b296af
+2026-11-16T02:17:04.7041229Z ##[group]Run actions/setup-node@v4
+2026-11-16T02:17:04.7041439Z with:
+2026-11-16T02:17:04.7041553Z   node-version: 24.15.0
+2026-11-16T02:17:04.7041676Z   always-auth: false
+2026-11-16T02:17:04.7041789Z   check-latest: false
+2026-11-16T02:17:04.7043504Z   token: ***
+2026-11-16T02:17:04.7043610Z env:
+2026-11-16T02:17:04.7043729Z   BUN_VERSION: 1.3.14
+2026-11-16T02:17:04.7043848Z   NODE_VERSION: 24.15.0
+2026-11-16T02:17:04.7043972Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:17:04.7044111Z   RELEASE_PLATFORM: windows
+2026-11-16T02:17:04.7044246Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:17:04.7044383Z ##[endgroup]
+2026-11-16T02:17:04.8220861Z Attempting to download 24.15.0...
+2026-11-16T02:17:04.8351745Z (node:2076) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:17:04.8352695Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:17:05.6111911Z Acquiring 24.15.0 - x64 from https://github.com/actions/node-versions/releases/download/24.15.0-24511264946/node-24.15.0-win32-x64.7z
+2026-11-16T02:17:06.0176374Z Extracting ...
+2026-11-16T02:17:07.6101139Z Adding to the cache ...
+2026-11-16T02:17:10.1259316Z ##[group]Environment details
+2026-11-16T02:17:11.0776846Z node: v24.15.0
+2026-11-16T02:17:11.0777092Z npm: 11.12.1
+2026-11-16T02:17:11.0777237Z yarn: 1.22.22
+2026-11-16T02:17:11.0777810Z ##[endgroup]
+2026-11-16T02:17:11.1035617Z ##[group]Run jdx/mise-action@v2
+2026-11-16T02:17:11.1035796Z with:
+2026-11-16T02:17:11.1035911Z   install_args: zig
+2026-11-16T02:17:11.1036031Z   install: true
+2026-11-16T02:17:11.1036133Z   cache: true
+2026-11-16T02:17:11.1036235Z   cache_save: true
+2026-11-16T02:17:11.1036349Z   cache_key_prefix: mise-v0
+2026-11-16T02:17:11.1036477Z   experimental: false
+2026-11-16T02:17:11.1036590Z   log_level: info
+2026-11-16T02:17:11.1036695Z   reshim: false
+2026-11-16T02:17:11.1038168Z   github_token: ***
+2026-11-16T02:17:11.1038282Z   fetch_from_github: true
+2026-11-16T02:17:11.1038397Z env:
+2026-11-16T02:17:11.1038501Z   BUN_VERSION: 1.3.14
+2026-11-16T02:17:11.1038613Z   NODE_VERSION: 24.15.0
+2026-11-16T02:17:11.1038736Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:17:11.1038871Z   RELEASE_PLATFORM: windows
+2026-11-16T02:17:11.1039002Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:17:11.1039146Z ##[endgroup]
+2026-11-16T02:17:11.2012816Z ##[group]Restoring mise cache
+2026-11-16T02:17:13.8330030Z Cache hit for: mise-v0-windows-x64-e95f48bf5c96f5dbb6d323dc2c37f3ec267d4773c2a6a4871ecf48d4297b50f1-77ebfe9993f116e089f21a982b4afcb67e3761529a29b52d5c88c65b467514e4
+2026-11-16T02:17:15.4182263Z Received 134217728 of 162810907 (82.4%), 91.2 MBs/sec
+2026-11-16T02:17:15.6433784Z Received 162810907 of 162810907 (100.0%), 95.2 MBs/sec
+2026-11-16T02:17:15.6437345Z Cache Size: ~155 MB (162810907 B)
+2026-11-16T02:17:15.6517499Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/338277c2-17ed-4edf-88a4-2686ed4b7b37/cache.tzst -P -C D:/a/photosphere/photosphere --force-local --use-compress-program "zstd -d"
+2026-11-16T02:17:28.9728250Z Cache restored successfully
+2026-11-16T02:17:28.9827283Z mise cache restored from key: mise-v0-windows-x64-e95f48bf5c96f5dbb6d323dc2c37f3ec267d4773c2a6a4871ecf48d4297b50f1-77ebfe9993f116e089f21a982b4afcb67e3761529a29b52d5c88c65b467514e4
+2026-11-16T02:17:28.9833220Z ##[group]Setting env vars
+2026-11-16T02:17:28.9833921Z Setting MISE_LOG_LEVEL=info
+2026-11-16T02:17:28.9838822Z Setting GITHUB_TOKEN=***
+2026-11-16T02:17:28.9839355Z Setting MISE_TRUSTED_CONFIG_PATHS=D:\a\photosphere\photosphere
+2026-11-16T02:17:28.9843665Z Setting MISE_YES=1
+2026-11-16T02:17:28.9845656Z Adding C:\Users\runneradmin\AppData\Local\mise\shims to PATH
+2026-11-16T02:17:28.9848661Z ##[group]Running mise --version
+2026-11-16T02:17:29.0198456Z [command]C:\Users\runneradmin\AppData\Local\mise\bin\mise.exe --version
+2026-11-16T02:17:30.0249719Z 2026.11.8 windows-x64 (2026-11-13)
+2026-11-16T02:17:30.0322038Z ##[endgroup]
+2026-11-16T02:17:30.0322432Z ##[group]Running mise install zig
+2026-11-16T02:17:30.0668546Z [command]C:\Users\runneradmin\AppData\Local\mise\bin\mise.exe install zig
+2026-11-16T02:17:30.0944911Z [2mmise[0m [2mby @jdx[0m – installing 1 tool
+2026-11-16T02:17:30.5812791Z [2mmise[0m [38;5;11m⇢[0m [34mzig[0m@0.16.0  485ms · already installed
+2026-11-16T02:17:30.5815678Z [2mmise[0m [36m████████████████[0m[31m[0m[2m[0m 1/1 · installed 0 tools · 1 already installed in 487ms
+2026-11-16T02:17:30.7204646Z [33mmise[0m [33mWARN[0m  mise-shim.exe not found next to C:\Users\runneradmin\AppData\Local\mise\bin\mise.exe or on PATH, falling back to "file" shim mode
+2026-11-16T02:17:30.7423944Z ##[endgroup]
+2026-11-16T02:17:30.7424423Z ##[group]Running mise ls
+2026-11-16T02:17:30.7732264Z [command]C:\Users\runneradmin\AppData\Local\mise\bin\mise.exe ls
+2026-11-16T02:17:30.8048713Z bun                              1.3.14 (missing)   D:\a\photosphere\photosphere\mise.toml  1.3.14
+2026-11-16T02:17:30.8049390Z github:ashleydavis/what-changed  0.0.6 (missing)    D:\a\photosphere\photosphere\mise.toml  0.0.6
+2026-11-16T02:17:30.8050958Z jq                               1.7.1 (missing)    D:\a\photosphere\photosphere\mise.toml  1.7.1
+2026-11-16T02:17:30.8051448Z node                             24.15.0 (missing)  D:\a\photosphere\photosphere\mise.toml  24.15.0
+2026-11-16T02:17:30.8056356Z zig                              0.16.0             D:\a\photosphere\photosphere\mise.toml  0.16.0
+2026-11-16T02:17:30.8105382Z ##[endgroup]
+2026-11-16T02:17:30.8588776Z Prepare all required actions
+2026-11-16T02:17:30.8589285Z Getting action download info
+2026-11-16T02:17:30.9818287Z ##[group]Run ./.github/actions/zig-packages
+2026-11-16T02:17:30.9818462Z env:
+2026-11-16T02:17:30.9818567Z   BUN_VERSION: 1.3.14
+2026-11-16T02:17:30.9818693Z   NODE_VERSION: 24.15.0
+2026-11-16T02:17:30.9818837Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:17:30.9818973Z   RELEASE_PLATFORM: windows
+2026-11-16T02:17:30.9819117Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:17:30.9819259Z   MISE_LOG_LEVEL: info
+2026-11-16T02:17:30.9820875Z   GITHUB_TOKEN: ***
+2026-11-16T02:17:30.9821170Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:17:30.9821360Z   MISE_YES: 1
+2026-11-16T02:17:30.9821473Z ##[endgroup]
+2026-11-16T02:17:30.9867534Z ##[start-action display=Restore the packages Zig fetches;id=__self.cache]
+2026-11-16T02:17:31.0825876Z ##[group]Run actions/cache@v4
+2026-11-16T02:17:31.0826037Z with:
+2026-11-16T02:17:31.0826227Z   path: ~/AppData/Local/zig/p
+2026-11-16T02:17:31.0826518Z   key: Windows-X64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b
+2026-11-16T02:17:31.0826817Z   enableCrossOsArchive: false
+2026-11-16T02:17:31.0826968Z   fail-on-cache-miss: false
+2026-11-16T02:17:31.0827108Z   lookup-only: false
+2026-11-16T02:17:31.0827229Z   save-always: false
+2026-11-16T02:17:31.0827343Z env:
+2026-11-16T02:17:31.0827452Z   BUN_VERSION: 1.3.14
+2026-11-16T02:17:31.0827579Z   NODE_VERSION: 24.15.0
+2026-11-16T02:17:31.0827710Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:17:31.0827856Z   RELEASE_PLATFORM: windows
+2026-11-16T02:17:31.0827997Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:17:31.0828144Z   MISE_LOG_LEVEL: info
+2026-11-16T02:17:31.0829891Z   GITHUB_TOKEN: ***
+2026-11-16T02:17:31.0830057Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:17:31.0831292Z   MISE_YES: 1
+2026-11-16T02:17:31.0831408Z ##[endgroup]
+2026-11-16T02:17:31.1783503Z (node:2724) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:17:31.1784172Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:17:31.3755312Z Cache hit for: Windows-X64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b
+2026-11-16T02:17:31.3840314Z (node:2724) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:17:32.5481001Z Received 125829120 of 166175624 (75.7%), 119.9 MBs/sec
+2026-11-16T02:17:33.3251290Z Received 166175624 of 166175624 (100.0%), 89.1 MBs/sec
+2026-11-16T02:17:33.3254779Z Cache Size: ~158 MB (166175624 B)
+2026-11-16T02:17:33.3348162Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/be7a3853-89bd-4e09-a02c-b4a7fe5fb7e0/cache.tzst -P -C D:/a/photosphere/photosphere --force-local --use-compress-program "zstd -d"
+2026-11-16T02:17:33.5708631Z Cache restored successfully
+2026-11-16T02:17:33.5888478Z Cache restored from key: Windows-X64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b
+2026-11-16T02:17:33.6027224Z ##[end-action id=__self.cache;outcome=success;conclusion=success;duration_ms=2615]
+2026-11-16T02:17:33.6030846Z ##[start-action display=Fetch every package the build.zig.zon files name;id=__self.__self]
+2026-11-16T02:17:33.6037404Z ##[end-action id=__self.__self;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:17:33.6921438Z ##[group]Run actions/cache@v4
+2026-11-16T02:17:33.6921800Z with:
+2026-11-16T02:17:33.6921930Z   path: ~/.bun/install/cache
+2026-11-16T02:17:33.6922192Z   key: Windows-X64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f
+2026-11-16T02:17:33.6922496Z   restore-keys: Windows-X64-bun-
+
+2026-11-16T02:17:33.6922660Z   enableCrossOsArchive: false
+2026-11-16T02:17:33.6922815Z   fail-on-cache-miss: false
+2026-11-16T02:17:33.6922955Z   lookup-only: false
+2026-11-16T02:17:33.6923076Z   save-always: false
+2026-11-16T02:17:33.6923197Z env:
+2026-11-16T02:17:33.6923306Z   BUN_VERSION: 1.3.14
+2026-11-16T02:17:33.6923436Z   NODE_VERSION: 24.15.0
+2026-11-16T02:17:33.6923570Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:17:33.6923713Z   RELEASE_PLATFORM: windows
+2026-11-16T02:17:33.6923861Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:17:33.6924004Z   MISE_LOG_LEVEL: info
+2026-11-16T02:17:33.6925846Z   GITHUB_TOKEN: ***
+2026-11-16T02:17:33.6926037Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:17:33.6926230Z   MISE_YES: 1
+2026-11-16T02:17:33.6926342Z ##[endgroup]
+2026-11-16T02:17:33.7908589Z (node:5104) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:17:33.8362889Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:17:33.9871704Z Cache not found for input keys: Windows-X64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f, Windows-X64-bun-
+2026-11-16T02:17:34.0087435Z Prepare all required actions
+2026-11-16T02:17:34.0131602Z ##[group]Run ./.github/actions/retry-install
+2026-11-16T02:17:34.0131791Z with:
+2026-11-16T02:17:34.0131915Z   run: bun install
+2026-11-16T02:17:34.0132038Z   attempts: 3
+2026-11-16T02:17:34.0132300Z   delay-seconds: 15
+2026-11-16T02:17:34.0132420Z env:
+2026-11-16T02:17:34.0132537Z   BUN_VERSION: 1.3.14
+2026-11-16T02:17:34.0132671Z   NODE_VERSION: 24.15.0
+2026-11-16T02:17:34.0132926Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:17:34.0133084Z   RELEASE_PLATFORM: windows
+2026-11-16T02:17:34.0133230Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:17:34.0133377Z   MISE_LOG_LEVEL: info
+2026-11-16T02:17:34.0135117Z   GITHUB_TOKEN: ***
+2026-11-16T02:17:34.0135441Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:17:34.0135626Z   MISE_YES: 1
+2026-11-16T02:17:34.0135740Z ##[endgroup]
+2026-11-16T02:17:34.0139542Z ##[start-action display=Run set -uo pipefail;id=__self_2.__run]
+2026-11-16T02:17:34.0243209Z ##[group]Run set -uo pipefail
+2026-11-16T02:17:34.0243450Z [36;1mset -uo pipefail[0m
+2026-11-16T02:17:34.0243598Z [36;1m[0m
+2026-11-16T02:17:34.0243711Z [36;1m#[0m
+2026-11-16T02:17:34.0243957Z [36;1m# Prints the verify entries that are not satisfied, each preceded by a space. Empty when they[0m
+2026-11-16T02:17:34.0244345Z [36;1m# all resolve. Word splitting on the input is intended: it is a space-separated list. An entry[0m
+2026-11-16T02:17:34.0244693Z [36;1m# holding "|"-separated alternatives is satisfied by any one of them.[0m
+2026-11-16T02:17:34.0244919Z [36;1m#[0m
+2026-11-16T02:17:34.0245039Z [36;1mmissing_tools() {[0m
+2026-11-16T02:17:34.0245187Z [36;1m    local missing=""[0m
+2026-11-16T02:17:34.0245350Z [36;1m    local entry[0m
+2026-11-16T02:17:34.0245490Z [36;1m    local alternative[0m
+2026-11-16T02:17:34.0245644Z [36;1m    local found[0m
+2026-11-16T02:17:34.0245796Z [36;1m    for entry in $RETRY_INSTALL_VERIFY; do[0m
+2026-11-16T02:17:34.0245973Z [36;1m        found=""[0m
+2026-11-16T02:17:34.0246132Z [36;1m        for alternative in ${entry//|/ }; do[0m
+2026-11-16T02:17:34.0246345Z [36;1m            if command -v "$alternative" >/dev/null 2>&1; then[0m
+2026-11-16T02:17:34.0246547Z [36;1m                found="yes"[0m
+2026-11-16T02:17:34.0246696Z [36;1m                break[0m
+2026-11-16T02:17:34.0246829Z [36;1m            fi[0m
+2026-11-16T02:17:34.0246959Z [36;1m        done[0m
+2026-11-16T02:17:34.0247095Z [36;1m        if [ -z "$found" ]; then[0m
+2026-11-16T02:17:34.0247270Z [36;1m            missing="$missing $entry"[0m
+2026-11-16T02:17:34.0247433Z [36;1m        fi[0m
+2026-11-16T02:17:34.0247550Z [36;1m    done[0m
+2026-11-16T02:17:34.0247677Z [36;1m    echo "$missing"[0m
+2026-11-16T02:17:34.0247813Z [36;1m}[0m
+2026-11-16T02:17:34.0247918Z [36;1m[0m
+2026-11-16T02:17:34.0248024Z [36;1minstallStatus=0[0m
+2026-11-16T02:17:34.0248154Z [36;1mmissing=""[0m
+2026-11-16T02:17:34.0248271Z [36;1mattempt=1[0m
+2026-11-16T02:17:34.0248465Z [36;1m[0m
+2026-11-16T02:17:34.0248911Z [36;1mwhile [ "$attempt" -le "$RETRY_INSTALL_ATTEMPTS" ]; do[0m
+2026-11-16T02:17:34.0249103Z [36;1m    installStatus=0[0m
+2026-11-16T02:17:34.0249273Z [36;1m    bash -c "$RETRY_INSTALL_RUN" || installStatus=$?[0m
+2026-11-16T02:17:34.0249469Z [36;1m    missing="$(missing_tools)"[0m
+2026-11-16T02:17:34.0249610Z [36;1m[0m
+2026-11-16T02:17:34.0249764Z [36;1m    if [ "$installStatus" -eq 0 ] && [ -z "$missing" ]; then[0m
+2026-11-16T02:17:34.0249955Z [36;1m        exit 0[0m
+2026-11-16T02:17:34.0250072Z [36;1m    fi[0m
+2026-11-16T02:17:34.0250180Z [36;1m[0m
+2026-11-16T02:17:34.0250305Z [36;1m    if [ "$installStatus" -ne 0 ]; then[0m
+2026-11-16T02:17:34.0250559Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS exited $installStatus."[0m
+2026-11-16T02:17:34.0250788Z [36;1m    fi[0m
+2026-11-16T02:17:34.0250908Z [36;1m    if [ -n "$missing" ]; then[0m
+2026-11-16T02:17:34.0252691Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS reported success but left these missing:$missing"[0m
+2026-11-16T02:17:34.0253027Z [36;1m    fi[0m
+2026-11-16T02:17:34.0253148Z [36;1m[0m
+2026-11-16T02:17:34.0253295Z [36;1m    if [ "$attempt" -eq "$RETRY_INSTALL_ATTEMPTS" ]; then[0m
+2026-11-16T02:17:34.0253481Z [36;1m        break[0m
+2026-11-16T02:17:34.0253602Z [36;1m    fi[0m
+2026-11-16T02:17:34.0253709Z [36;1m[0m
+2026-11-16T02:17:34.0253845Z [36;1m    delay=$((RETRY_INSTALL_DELAY * attempt))[0m
+2026-11-16T02:17:34.0254043Z [36;1m    echo "Waiting ${delay}s before retrying."[0m
+2026-11-16T02:17:34.0254224Z [36;1m    sleep "$delay"[0m
+2026-11-16T02:17:34.0254368Z [36;1m    attempt=$((attempt + 1))[0m
+2026-11-16T02:17:34.0254655Z [36;1mdone[0m
+2026-11-16T02:17:34.0254764Z [36;1m[0m
+2026-11-16T02:17:34.0254876Z [36;1mif [ -n "$missing" ]; then[0m
+2026-11-16T02:17:34.0255139Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts; still missing:$missing"[0m
+2026-11-16T02:17:34.0255412Z [36;1melse[0m
+2026-11-16T02:17:34.0255641Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts (last exit $installStatus)."[0m
+2026-11-16T02:17:34.0255904Z [36;1mfi[0m
+2026-11-16T02:17:34.0256010Z [36;1mexit 1[0m
+2026-11-16T02:17:34.0269528Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:17:34.0269760Z env:
+2026-11-16T02:17:34.0269870Z   BUN_VERSION: 1.3.14
+2026-11-16T02:17:34.0270001Z   NODE_VERSION: 24.15.0
+2026-11-16T02:17:34.0270131Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:17:34.0270278Z   RELEASE_PLATFORM: windows
+2026-11-16T02:17:34.0270419Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:17:34.0270572Z   MISE_LOG_LEVEL: info
+2026-11-16T02:17:34.0272131Z   GITHUB_TOKEN: ***
+2026-11-16T02:17:34.0272294Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:17:34.0272472Z   MISE_YES: 1
+2026-11-16T02:17:34.0272590Z   RETRY_INSTALL_RUN: bun install
+2026-11-16T02:17:34.0272740Z   RETRY_INSTALL_VERIFY: 
+2026-11-16T02:17:34.0272875Z   RETRY_INSTALL_ATTEMPTS: 3
+2026-11-16T02:17:34.0273007Z   RETRY_INSTALL_DELAY: 15
+2026-11-16T02:17:34.0273141Z ##[endgroup]
+2026-11-16T02:17:34.4400502Z bun install v1.3.14 (0d9b296a)
+2026-11-16T02:18:45.7715939Z 
+2026-11-16T02:18:45.7717204Z + @aws-sdk/client-s3@3.1016.0
+2026-11-16T02:18:45.7717853Z + ziggy-remote-control-server@github:ashleydavis/ziggy#9ff4aa5
+2026-11-16T02:18:45.7718132Z 
+2026-11-16T02:18:45.7718417Z 755 packages installed [71.34s]
+2026-11-16T02:18:45.8001332Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=71785]
+2026-11-16T02:18:45.8139941Z Prepare all required actions
+2026-11-16T02:18:45.8180727Z ##[group]Run ./.github/actions/install-ffmpeg-windows
+2026-11-16T02:18:45.8181019Z with:
+2026-11-16T02:18:45.8181188Z   release-tag: latest
+2026-11-16T02:18:45.8181414Z   asset: ffmpeg-n8.1-latest-win64-gpl-8.1.zip
+2026-11-16T02:18:45.8181674Z env:
+2026-11-16T02:18:45.8181833Z   BUN_VERSION: 1.3.14
+2026-11-16T02:18:45.8182021Z   NODE_VERSION: 24.15.0
+2026-11-16T02:18:45.8182228Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:18:45.8182450Z   RELEASE_PLATFORM: windows
+2026-11-16T02:18:45.8182672Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:18:45.8182898Z   MISE_LOG_LEVEL: info
+2026-11-16T02:18:45.8185734Z   GITHUB_TOKEN: ***
+2026-11-16T02:18:45.8185985Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:18:45.8186276Z   MISE_YES: 1
+2026-11-16T02:18:45.8186454Z ##[endgroup]
+2026-11-16T02:18:45.8190454Z ##[start-action display=Download and install ffmpeg;id=__self_3.__run]
+2026-11-16T02:18:45.8297686Z ##[group]Run set -euo pipefail
+2026-11-16T02:18:45.8297920Z [36;1mset -euo pipefail[0m
+2026-11-16T02:18:45.8298052Z [36;1m[0m
+2026-11-16T02:18:45.8298260Z [36;1mif command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then[0m
+2026-11-16T02:18:45.8298545Z [36;1m    echo "ffmpeg and ffprobe are already on PATH."[0m
+2026-11-16T02:18:45.8298724Z [36;1m    exit 0[0m
+2026-11-16T02:18:45.8298843Z [36;1mfi[0m
+2026-11-16T02:18:45.8298950Z [36;1m[0m
+2026-11-16T02:18:45.8299078Z [36;1minstall_dir="$RUNNER_TEMP/ffmpeg-bin"[0m
+2026-11-16T02:18:45.8299259Z [36;1mmkdir -p "$install_dir"[0m
+2026-11-16T02:18:45.8299398Z [36;1m[0m
+2026-11-16T02:18:45.8299586Z [36;1mgh release download "$FFMPEG_RELEASE_TAG" --repo BtbN/FFmpeg-Builds \[0m
+2026-11-16T02:18:45.8299849Z [36;1m    --pattern "$FFMPEG_ASSET" --dir "$RUNNER_TEMP"[0m
+2026-11-16T02:18:45.8300115Z [36;1munzip -q "$RUNNER_TEMP/$FFMPEG_ASSET" -d "$RUNNER_TEMP/ffmpeg-extracted"[0m
+2026-11-16T02:18:45.8300340Z [36;1m[0m
+2026-11-16T02:18:45.8300564Z [36;1m# The zip holds one top-level directory whose name carries the build hash, so the binaries are[0m
+2026-11-16T02:18:45.8300969Z [36;1m# found rather than named.[0m
+2026-11-16T02:18:45.8301237Z [36;1mffmpegBinary="$(find "$RUNNER_TEMP/ffmpeg-extracted" -name 'ffmpeg.exe' -type f | head -1)"[0m
+2026-11-16T02:18:45.8301613Z [36;1mffprobeBinary="$(find "$RUNNER_TEMP/ffmpeg-extracted" -name 'ffprobe.exe' -type f | head -1)"[0m
+2026-11-16T02:18:45.8301915Z [36;1mif [ -z "$ffmpegBinary" ] || [ -z "$ffprobeBinary" ]; then[0m
+2026-11-16T02:18:45.8302228Z [36;1m    echo "::error::The ffmpeg release asset $FFMPEG_ASSET did not contain ffmpeg.exe and ffprobe.exe."[0m
+2026-11-16T02:18:45.8302503Z [36;1m    exit 1[0m
+2026-11-16T02:18:45.8302621Z [36;1mfi[0m
+2026-11-16T02:18:45.8302734Z [36;1m[0m
+2026-11-16T02:18:45.8302883Z [36;1mcp "$ffmpegBinary" "$ffprobeBinary" "$install_dir/"[0m
+2026-11-16T02:18:45.8303066Z [36;1m[0m
+2026-11-16T02:18:45.8303284Z [36;1m# GITHUB_PATH rather than copying into a system directory, which needs no elevation and is how[0m
+2026-11-16T02:18:45.8303564Z [36;1m# install-what-changed does it.[0m
+2026-11-16T02:18:45.8303740Z [36;1mecho "$install_dir" >> "$GITHUB_PATH"[0m
+2026-11-16T02:18:45.8303893Z [36;1m[0m
+2026-11-16T02:18:45.8304031Z [36;1m"$install_dir/ffmpeg.exe" -version | head -1[0m
+2026-11-16T02:18:45.8314700Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:18:45.8314927Z env:
+2026-11-16T02:18:45.8315040Z   BUN_VERSION: 1.3.14
+2026-11-16T02:18:45.8315165Z   NODE_VERSION: 24.15.0
+2026-11-16T02:18:45.8315300Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:18:45.8315440Z   RELEASE_PLATFORM: windows
+2026-11-16T02:18:45.8315589Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:18:45.8315732Z   MISE_LOG_LEVEL: info
+2026-11-16T02:18:45.8317315Z   GITHUB_TOKEN: ***
+2026-11-16T02:18:45.8317474Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:18:45.8319147Z   MISE_YES: 1
+2026-11-16T02:18:45.8320669Z   GH_TOKEN: ***
+2026-11-16T02:18:45.8320792Z   FFMPEG_RELEASE_TAG: latest
+2026-11-16T02:18:45.8320962Z   FFMPEG_ASSET: ffmpeg-n8.1-latest-win64-gpl-8.1.zip
+2026-11-16T02:18:45.8321138Z ##[endgroup]
+2026-11-16T02:18:56.8276621Z ffmpeg version n8.1.3-35-gf1acb0a266-20261115 Copyright (c) 2000-2026 the FFmpeg developers
+2026-11-16T02:18:56.8316335Z ##[end-action id=__self_3.__run;outcome=success;conclusion=success;duration_ms=11012]
+2026-11-16T02:18:56.8487444Z Prepare all required actions
+2026-11-16T02:18:56.8524957Z ##[group]Run ./.github/actions/retry-install
+2026-11-16T02:18:56.8525134Z with:
+2026-11-16T02:18:56.8525265Z   run: choco install imagemagick -y
+2026-11-16T02:18:56.8525425Z   verify: magick|convert
+2026-11-16T02:18:56.8525564Z   attempts: 3
+2026-11-16T02:18:56.8525685Z   delay-seconds: 15
+2026-11-16T02:18:56.8525803Z env:
+2026-11-16T02:18:56.8525917Z   BUN_VERSION: 1.3.14
+2026-11-16T02:18:56.8526039Z   NODE_VERSION: 24.15.0
+2026-11-16T02:18:56.8526176Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:18:56.8526344Z   RELEASE_PLATFORM: windows
+2026-11-16T02:18:56.8526490Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:18:56.8526638Z   MISE_LOG_LEVEL: info
+2026-11-16T02:18:56.8528183Z   GITHUB_TOKEN: ***
+2026-11-16T02:18:56.8528351Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:18:56.8528541Z   MISE_YES: 1
+2026-11-16T02:18:56.8528668Z ##[endgroup]
+2026-11-16T02:18:56.8531677Z ##[start-action display=Run set -uo pipefail;id=__self_4.__run]
+2026-11-16T02:18:56.8620259Z ##[group]Run set -uo pipefail
+2026-11-16T02:18:56.8620459Z [36;1mset -uo pipefail[0m
+2026-11-16T02:18:56.8620593Z [36;1m[0m
+2026-11-16T02:18:56.8620693Z [36;1m#[0m
+2026-11-16T02:18:56.8620917Z [36;1m# Prints the verify entries that are not satisfied, each preceded by a space. Empty when they[0m
+2026-11-16T02:18:56.8621293Z [36;1m# all resolve. Word splitting on the input is intended: it is a space-separated list. An entry[0m
+2026-11-16T02:18:56.8621626Z [36;1m# holding "|"-separated alternatives is satisfied by any one of them.[0m
+2026-11-16T02:18:56.8622320Z [36;1m#[0m
+2026-11-16T02:18:56.8622428Z [36;1mmissing_tools() {[0m
+2026-11-16T02:18:56.8622563Z [36;1m    local missing=""[0m
+2026-11-16T02:18:56.8622702Z [36;1m    local entry[0m
+2026-11-16T02:18:56.8622833Z [36;1m    local alternative[0m
+2026-11-16T02:18:56.8622969Z [36;1m    local found[0m
+2026-11-16T02:18:56.8623124Z [36;1m    for entry in $RETRY_INSTALL_VERIFY; do[0m
+2026-11-16T02:18:56.8623289Z [36;1m        found=""[0m
+2026-11-16T02:18:56.8623441Z [36;1m        for alternative in ${entry//|/ }; do[0m
+2026-11-16T02:18:56.8623647Z [36;1m            if command -v "$alternative" >/dev/null 2>&1; then[0m
+2026-11-16T02:18:56.8623835Z [36;1m                found="yes"[0m
+2026-11-16T02:18:56.8623980Z [36;1m                break[0m
+2026-11-16T02:18:56.8624110Z [36;1m            fi[0m
+2026-11-16T02:18:56.8624230Z [36;1m        done[0m
+2026-11-16T02:18:56.8624358Z [36;1m        if [ -z "$found" ]; then[0m
+2026-11-16T02:18:56.8624524Z [36;1m            missing="$missing $entry"[0m
+2026-11-16T02:18:56.8624683Z [36;1m        fi[0m
+2026-11-16T02:18:56.8624792Z [36;1m    done[0m
+2026-11-16T02:18:56.8624906Z [36;1m    echo "$missing"[0m
+2026-11-16T02:18:56.8625037Z [36;1m}[0m
+2026-11-16T02:18:56.8625135Z [36;1m[0m
+2026-11-16T02:18:56.8625244Z [36;1minstallStatus=0[0m
+2026-11-16T02:18:56.8625369Z [36;1mmissing=""[0m
+2026-11-16T02:18:56.8625485Z [36;1mattempt=1[0m
+2026-11-16T02:18:56.8625601Z [36;1m[0m
+2026-11-16T02:18:56.8625752Z [36;1mwhile [ "$attempt" -le "$RETRY_INSTALL_ATTEMPTS" ]; do[0m
+2026-11-16T02:18:56.8625944Z [36;1m    installStatus=0[0m
+2026-11-16T02:18:56.8626117Z [36;1m    bash -c "$RETRY_INSTALL_RUN" || installStatus=$?[0m
+2026-11-16T02:18:56.8626308Z [36;1m    missing="$(missing_tools)"[0m
+2026-11-16T02:18:56.8626450Z [36;1m[0m
+2026-11-16T02:18:56.8626596Z [36;1m    if [ "$installStatus" -eq 0 ] && [ -z "$missing" ]; then[0m
+2026-11-16T02:18:56.8626783Z [36;1m        exit 0[0m
+2026-11-16T02:18:56.8626903Z [36;1m    fi[0m
+2026-11-16T02:18:56.8627007Z [36;1m[0m
+2026-11-16T02:18:56.8627132Z [36;1m    if [ "$installStatus" -ne 0 ]; then[0m
+2026-11-16T02:18:56.8627378Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS exited $installStatus."[0m
+2026-11-16T02:18:56.8627602Z [36;1m    fi[0m
+2026-11-16T02:18:56.8628745Z [36;1m    if [ -n "$missing" ]; then[0m
+2026-11-16T02:18:56.8629033Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS reported success but left these missing:$missing"[0m
+2026-11-16T02:18:56.8629307Z [36;1m    fi[0m
+2026-11-16T02:18:56.8629425Z [36;1m[0m
+2026-11-16T02:18:56.8629579Z [36;1m    if [ "$attempt" -eq "$RETRY_INSTALL_ATTEMPTS" ]; then[0m
+2026-11-16T02:18:56.8629776Z [36;1m        break[0m
+2026-11-16T02:18:56.8629901Z [36;1m    fi[0m
+2026-11-16T02:18:56.8630007Z [36;1m[0m
+2026-11-16T02:18:56.8630154Z [36;1m    delay=$((RETRY_INSTALL_DELAY * attempt))[0m
+2026-11-16T02:18:56.8630360Z [36;1m    echo "Waiting ${delay}s before retrying."[0m
+2026-11-16T02:18:56.8630549Z [36;1m    sleep "$delay"[0m
+2026-11-16T02:18:56.8630695Z [36;1m    attempt=$((attempt + 1))[0m
+2026-11-16T02:18:56.8630846Z [36;1mdone[0m
+2026-11-16T02:18:56.8630964Z [36;1m[0m
+2026-11-16T02:18:56.8631081Z [36;1mif [ -n "$missing" ]; then[0m
+2026-11-16T02:18:56.8631497Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts; still missing:$missing"[0m
+2026-11-16T02:18:56.8631766Z [36;1melse[0m
+2026-11-16T02:18:56.8632003Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts (last exit $installStatus)."[0m
+2026-11-16T02:18:56.8632273Z [36;1mfi[0m
+2026-11-16T02:18:56.8632385Z [36;1mexit 1[0m
+2026-11-16T02:18:56.8641960Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:18:56.8642181Z env:
+2026-11-16T02:18:56.8642301Z   BUN_VERSION: 1.3.14
+2026-11-16T02:18:56.8642524Z   NODE_VERSION: 24.15.0
+2026-11-16T02:18:56.8642655Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:18:56.8642802Z   RELEASE_PLATFORM: windows
+2026-11-16T02:18:56.8642941Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:18:56.8643085Z   MISE_LOG_LEVEL: info
+2026-11-16T02:18:56.8644652Z   GITHUB_TOKEN: ***
+2026-11-16T02:18:56.8644816Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:18:56.8645000Z   MISE_YES: 1
+2026-11-16T02:18:56.8645138Z   RETRY_INSTALL_RUN: choco install imagemagick -y
+2026-11-16T02:18:56.8645325Z   RETRY_INSTALL_VERIFY: magick|convert
+2026-11-16T02:18:56.8645482Z   RETRY_INSTALL_ATTEMPTS: 3
+2026-11-16T02:18:56.8645623Z   RETRY_INSTALL_DELAY: 15
+2026-11-16T02:18:56.8645762Z ##[endgroup]
+2026-11-16T02:18:59.1766190Z Chocolatey v2.7.5
+2026-11-16T02:18:59.3803951Z Installing the following packages:
+2026-11-16T02:18:59.3809293Z imagemagick
+2026-11-16T02:18:59.3812384Z By installing, you accept licenses for the packages.
+2026-11-16T02:19:01.3774751Z imagemagick v7.1.2.2500 already installed.
+2026-11-16T02:19:01.3775136Z  Use --force to reinstall, specify a version to install, or try upgrade.
+2026-11-16T02:19:01.3838788Z 
+2026-11-16T02:19:01.3839020Z Chocolatey installed 0/1 packages. 
+2026-11-16T02:19:01.3839379Z  See the log for details (C:\ProgramData\chocolatey\logs\chocolatey.log).
+2026-11-16T02:19:01.3841239Z 
+2026-11-16T02:19:01.3842985Z Warnings:
+2026-11-16T02:19:01.3846367Z  - imagemagick - imagemagick v7.1.2.2500 already installed.
+2026-11-16T02:19:01.3846765Z  Use --force to reinstall, specify a version to install, or try upgrade.
+2026-11-16T02:19:01.4506763Z ##[end-action id=__self_4.__run;outcome=success;conclusion=success;duration_ms=4597]
+2026-11-16T02:19:01.4613225Z ##[group]Run df -h .
+2026-11-16T02:19:01.4613439Z [36;1mdf -h .[0m
+2026-11-16T02:19:01.4613703Z [36;1mdu -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true[0m
+2026-11-16T02:19:01.4623218Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:19:01.4623457Z env:
+2026-11-16T02:19:01.4623635Z   BUN_VERSION: 1.3.14
+2026-11-16T02:19:01.4623825Z   NODE_VERSION: 24.15.0
+2026-11-16T02:19:01.4623987Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:19:01.4624129Z   RELEASE_PLATFORM: windows
+2026-11-16T02:19:01.4624276Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:19:01.4624417Z   MISE_LOG_LEVEL: info
+2026-11-16T02:19:01.4626261Z   GITHUB_TOKEN: ***
+2026-11-16T02:19:01.4637747Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:19:01.4637946Z   MISE_YES: 1
+2026-11-16T02:19:01.4638070Z ##[endgroup]
+2026-11-16T02:19:01.5171191Z Filesystem      Size  Used Avail Use% Mounted on
+2026-11-16T02:19:01.5171502Z D:              220G  2.2G  218G   1% /d
+2026-11-16T02:19:01.5565025Z ##[group]Run actions/cache/restore@v4
+2026-11-16T02:19:01.5565251Z with:
+2026-11-16T02:19:01.5565559Z   path: out
+.zig-cache
+third-party/aws/zig-out
+third-party/zlib-ng/zig-out
+third-party/imagemagick/zig-out
+third-party/ffmpeg/zig-out
+
+2026-11-16T02:19:01.5566021Z   key: photosphere-cli-windows-0a24975e05a4d681b7803f62ac169d7544d4c005-43789582519
+2026-11-16T02:19:01.5566287Z   enableCrossOsArchive: true
+2026-11-16T02:19:01.5566435Z   fail-on-cache-miss: true
+2026-11-16T02:19:01.5566576Z   lookup-only: false
+2026-11-16T02:19:01.5566691Z env:
+2026-11-16T02:19:01.5566796Z   BUN_VERSION: 1.3.14
+2026-11-16T02:19:01.5566926Z   NODE_VERSION: 24.15.0
+2026-11-16T02:19:01.5567056Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:19:01.5567193Z   RELEASE_PLATFORM: windows
+2026-11-16T02:19:01.5567341Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:19:01.5567485Z   MISE_LOG_LEVEL: info
+2026-11-16T02:19:01.5569045Z   GITHUB_TOKEN: ***
+2026-11-16T02:19:01.5569234Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:19:01.5569410Z   MISE_YES: 1
+2026-11-16T02:19:01.5569520Z ##[endgroup]
+2026-11-16T02:19:01.6465014Z (node:8860) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:19:01.6466136Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:19:01.8459277Z Cache hit for: photosphere-cli-windows-0a24975e05a4d681b7803f62ac169d7544d4c005-43789582519
+2026-11-16T02:19:01.8531726Z (node:8860) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:19:02.7935306Z Received 57198136 of 57198136 (100.0%), 69.2 MBs/sec
+2026-11-16T02:19:02.7937147Z Cache Size: ~55 MB (57198136 B)
+2026-11-16T02:19:02.7968274Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/7c5c70b4-847f-4612-a285-ad3b7077453e/cache.tzst -P -C D:/a/photosphere/photosphere --force-local --use-compress-program "zstd -d"
+2026-11-16T02:19:03.1195483Z Cache restored successfully
+2026-11-16T02:19:03.1312197Z Cache restored from key: photosphere-cli-windows-0a24975e05a4d681b7803f62ac169d7544d4c005-43789582519
+2026-11-16T02:19:03.1533216Z ##[group]Run mkdir -p zig-out/bin
+2026-11-16T02:19:03.1533564Z [36;1mmkdir -p zig-out/bin[0m
+2026-11-16T02:19:03.1533895Z [36;1mcp out/photosphere-cli-zig-windows-x64 zig-out/bin/psi.exe[0m
+2026-11-16T02:19:03.1534383Z [36;1m# The smoke suites fail with exit 126 (found but not executable) without the executable bit.[0m
+2026-11-16T02:19:03.1534807Z [36;1mchmod +x zig-out/bin/psi.exe[0m
+2026-11-16T02:19:03.1535056Z [36;1mls -la zig-out/bin[0m
+2026-11-16T02:19:03.1545165Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:19:03.1545398Z env:
+2026-11-16T02:19:03.1545510Z   BUN_VERSION: 1.3.14
+2026-11-16T02:19:03.1545640Z   NODE_VERSION: 24.15.0
+2026-11-16T02:19:03.1545772Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:19:03.1545934Z   RELEASE_PLATFORM: windows
+2026-11-16T02:19:03.1546075Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:19:03.1546219Z   MISE_LOG_LEVEL: info
+2026-11-16T02:19:03.1547830Z   GITHUB_TOKEN: ***
+2026-11-16T02:19:03.1548001Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:19:03.1548190Z   MISE_YES: 1
+2026-11-16T02:19:03.1548313Z ##[endgroup]
+2026-11-16T02:19:03.2723611Z total 21836
+2026-11-16T02:19:03.2723891Z drwxr-xr-x 1 runneradmin 197121        0 Nov 16 02:19 .
+2026-11-16T02:19:03.2724240Z drwxr-xr-x 1 runneradmin 197121        0 Nov 16 02:19 ..
+2026-11-16T02:19:03.2724631Z -rwxr-xr-x 1 runneradmin 197121 22360064 Nov 16 02:19 psi.exe
+2026-11-16T02:19:03.2850676Z ##[group]Run set +e
+2026-11-16T02:19:03.2850861Z [36;1mset +e[0m
+2026-11-16T02:19:03.2851030Z [36;1mecho "=== $(date -u +%FT%TZ) side A: test 88 as committed"[0m
+2026-11-16T02:19:03.2851353Z [36;1mPHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/../../zig-out/bin/psi.exe")" ./smoke-tests-zig.sh 88[0m
+2026-11-16T02:19:03.2851627Z [36;1mecho "=== side A exit code: $?"[0m
+2026-11-16T02:19:03.2851864Z [36;1mgit -C ../.. apply root-cause/experiments/windows-side-b.patch || exit 1[0m
+2026-11-16T02:19:03.2852109Z [36;1mgit -C ../.. diff[0m
+2026-11-16T02:19:03.2852312Z [36;1mecho "=== $(date -u +%FT%TZ) side B: test 88 accepting either separator"[0m
+2026-11-16T02:19:03.2852627Z [36;1mPHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/../../zig-out/bin/psi.exe")" ./smoke-tests-zig.sh 88[0m
+2026-11-16T02:19:03.2852895Z [36;1mecho "=== side B exit code: $?"[0m
+2026-11-16T02:19:03.2862169Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:19:03.2862422Z env:
+2026-11-16T02:19:03.2862536Z   BUN_VERSION: 1.3.14
+2026-11-16T02:19:03.2862670Z   NODE_VERSION: 24.15.0
+2026-11-16T02:19:03.2862803Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:19:03.2862947Z   RELEASE_PLATFORM: windows
+2026-11-16T02:19:03.2863088Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:19:03.2863235Z   MISE_LOG_LEVEL: info
+2026-11-16T02:19:03.2864798Z   GITHUB_TOKEN: ***
+2026-11-16T02:19:03.2864959Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:19:03.2865292Z   MISE_YES: 1
+2026-11-16T02:19:03.2865403Z ##[endgroup]
+2026-11-16T02:19:03.3342552Z === 2026-11-16T02:19:03Z side A: test 88 as committed
+2026-11-16T02:19:03.6329469Z [0;34m[INFO][0m Building the Zig CLI for this run
+2026-11-16T02:19:03.6330427Z ======================================
+2026-11-16T02:19:03.6330713Z Photosphere Zig CLI Smoke Tests
+2026-11-16T02:19:03.6330896Z ======================================
+2026-11-16T02:19:03.6331165Z [0;34m[INFO][0m Running specific test: 88
+2026-11-16T02:19:03.6593774Z 
+2026-11-16T02:19:03.6594111Z === CHECK TOOLS ===
+2026-11-16T02:19:03.6594570Z [0;34m[INFO][0m Changing to CLI directory
+2026-11-16T02:19:03.6597193Z [0;34m[INFO][0m Using CLI command: D:/a/photosphere/photosphere/zig-out/bin/psi.exe
+2026-11-16T02:19:03.6597662Z [0;34m[INFO][0m NODE_ENV is set to: testing
+2026-11-16T02:19:03.6598090Z [0;32m[PASS][0m NODE_ENV=testing is set for deterministic UUID generation
+2026-11-16T02:19:03.6598783Z [0;34m[INFO][0m Checking for required tools in system PATH
+2026-11-16T02:19:03.6599149Z [0;34m[INFO][0m Running: Check tools
+2026-11-16T02:19:03.6599393Z 
+2026-11-16T02:19:03.6599527Z [1;33mNODE_ENV:[0m testing
+2026-11-16T02:19:03.6599764Z [1;33mCommand:[0m
+2026-11-16T02:19:03.6600123Z [0;34mD:/a/photosphere/photosphere/zig-out/bin/psi.exe tools --yes[0m
+2026-11-16T02:19:03.6600292Z 
+2026-11-16T02:19:03.6600377Z >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+2026-11-16T02:19:04.0662251Z 
+2026-11-16T02:19:04.0662898Z 📰 News:
+2026-11-16T02:19:04.0663255Z    Welcome to Photosphere. Thanks for trying it out!
+2026-11-16T02:19:04.0663836Z    Read the docs: https://github.com/ashleydavis/photosphere/wiki
+2026-11-16T02:19:04.0664326Z    What's new: https://github.com/ashleydavis/photosphere/releases/latest
+2026-11-16T02:19:04.0664613Z 
+2026-11-16T02:19:04.0664764Z 📦 Media Processing Tools
+2026-11-16T02:19:04.0664912Z 
+2026-11-16T02:19:04.0670705Z Built into psi:
+2026-11-16T02:19:04.0670839Z 
+2026-11-16T02:19:04.0670975Z ImageMagick (magick): v7.1.2-33
+2026-11-16T02:19:04.0671355Z    Image processing - resizing, format conversion, metadata extraction
+2026-11-16T02:19:04.0671621Z 
+2026-11-16T02:19:04.0671703Z ffmpeg: v9.0.2
+2026-11-16T02:19:04.0672001Z    Video processing - format conversion and thumbnail extraction
+2026-11-16T02:19:04.0672253Z 
+2026-11-16T02:19:04.0672333Z ffprobe: v9.0.2
+2026-11-16T02:19:04.0672642Z    Video analysis - metadata extraction, duration, dimensions, codecs
+2026-11-16T02:19:04.0674343Z 
+2026-11-16T02:19:04.0710663Z <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+2026-11-16T02:19:04.0711255Z [0;32m[PASS][0m Check tools
+2026-11-16T02:19:04.0711544Z 
+2026-11-16T02:19:04.0711907Z [0;34m[INFO][0m Verifying tools are installed and working...
+2026-11-16T02:19:04.6325604Z [0;32m[PASS][0m ImageMagick 7.x verified (using 'magick identify'):
+2026-11-16T02:19:04.6326418Z Version: ImageMagick 7.1.2-25 Q16-HDRI x64 04a04ea:20260604 https://imagemagick.org
+2026-11-16T02:19:04.6327023Z Copyright: (C) 1999 ImageMagick Studio LLC
+2026-11-16T02:19:04.6327445Z License: https://imagemagick.org/license/
+2026-11-16T02:19:04.6327980Z Features: Channel-masks(64-bit) Cipher DPC HDRI Modules OpenCL OpenMP(2.0) 
+2026-11-16T02:19:04.6329053Z Delegates (built-in): bzlib cairo freetype gslib heic jng jp2 jpeg jxl lcms lqr lzma openexr pangocairo png ps raqm raw rsvg tiff webp xml zip zlib
+2026-11-16T02:19:04.6329853Z Compiler: Visual Studio 2026 (195136244)
+2026-11-16T02:19:05.3619716Z [0;32m[PASS][0m ffprobe verified: version n8.1.3-35-gf1acb0a266-20261115
+2026-11-16T02:19:05.4087063Z [0;32m[PASS][0m ffmpeg verified: version n8.1.3-35-gf1acb0a266-20261115
+2026-11-16T02:19:05.4087453Z [0;32m[PASS][0m All tools verified and working correctly
+2026-11-16T02:19:05.7577890Z [0;34mRUN [0m  88  config-file
+2026-11-16T02:19:06.3953745Z [0;31mFAIL[0m  88  config-file                     1s  (log: C:/Users/runneradmin/AppData/Local/Temp/photosphere-tests/88-config-file-meMOfC/test-run.log)
+2026-11-16T02:19:06.4063486Z 
+2026-11-16T02:19:06.4064613Z ============================================================================
+2026-11-16T02:19:06.4065640Z [0;31m✗✗✗ SMOKE TESTS FAILED ✗✗✗[0m
+2026-11-16T02:19:06.4066015Z ============================================================================
+2026-11-16T02:19:06.4085234Z === side A exit code: 1
+2026-11-16T02:19:06.5261748Z diff --git a/apps/cli-zig/smoke-tests-zig/88-config-file/test.sh b/apps/cli-zig/smoke-tests-zig/88-config-file/test.sh
+2026-11-16T02:19:06.5262185Z index 3c9ad4d..d4bd37f 100755
+2026-11-16T02:19:06.5262409Z --- a/apps/cli-zig/smoke-tests-zig/88-config-file/test.sh
+2026-11-16T02:19:06.5262660Z +++ b/apps/cli-zig/smoke-tests-zig/88-config-file/test.sh
+2026-11-16T02:19:06.5262896Z @@ -129,8 +129,8 @@ test_config_file() {
+2026-11-16T02:19:06.5263061Z  
+2026-11-16T02:19:06.5263186Z      local version_output
+2026-11-16T02:19:06.5263453Z      invoke_command "Run the version command" "$(get_zig_cli_command) version" 0 "version_output"
+2026-11-16T02:19:06.5263915Z -    expect_output_string "$version_output" "$PHOTOSPHERE_CONFIG_DIR/config.toml" "psi version names the config file"
+2026-11-16T02:19:06.5264378Z -    expect_output_string "$version_output" "$PHOTOSPHERE_STATE_DIR/state.json" "psi version names the state file"
+2026-11-16T02:19:06.5264843Z +    expect_output_string "$version_output" "$PHOTOSPHERE_CONFIG_DIR[\\/]config.toml" "psi version names the config file"
+2026-11-16T02:19:06.5265312Z +    expect_output_string "$version_output" "$PHOTOSPHERE_STATE_DIR[\\/]state.json" "psi version names the state file"
+2026-11-16T02:19:06.5265592Z  
+2026-11-16T02:19:06.5265733Z      export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+2026-11-16T02:19:06.5265942Z      export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+2026-11-16T02:19:06.5429668Z === 2026-11-16T02:19:06Z side B: test 88 accepting either separator
+2026-11-16T02:19:06.7900393Z [0;34m[INFO][0m Building the Zig CLI for this run
+2026-11-16T02:19:06.7901205Z ======================================
+2026-11-16T02:19:06.7901862Z Photosphere Zig CLI Smoke Tests
+2026-11-16T02:19:06.7902147Z ======================================
+2026-11-16T02:19:06.7902550Z [0;34m[INFO][0m Running specific test: 88
+2026-11-16T02:19:06.8275017Z 
+2026-11-16T02:19:06.8275553Z === CHECK TOOLS ===
+2026-11-16T02:19:06.8276139Z [0;34m[INFO][0m Changing to CLI directory
+2026-11-16T02:19:06.8279186Z [0;34m[INFO][0m Using CLI command: D:/a/photosphere/photosphere/zig-out/bin/psi.exe
+2026-11-16T02:19:06.8280558Z [0;34m[INFO][0m NODE_ENV is set to: testing
+2026-11-16T02:19:06.8280999Z [0;32m[PASS][0m NODE_ENV=testing is set for deterministic UUID generation
+2026-11-16T02:19:06.8281411Z [0;34m[INFO][0m Checking for required tools in system PATH
+2026-11-16T02:19:06.8281661Z [0;34m[INFO][0m Running: Check tools
+2026-11-16T02:19:06.8281771Z 
+2026-11-16T02:19:06.8281866Z [1;33mNODE_ENV:[0m testing
+2026-11-16T02:19:06.8282026Z [1;33mCommand:[0m
+2026-11-16T02:19:06.8282288Z [0;34mD:/a/photosphere/photosphere/zig-out/bin/psi.exe tools --yes[0m
+2026-11-16T02:19:06.8282480Z 
+2026-11-16T02:19:06.8282591Z >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+2026-11-16T02:19:06.9112195Z 
+2026-11-16T02:19:06.9112954Z 📰 News:
+2026-11-16T02:19:06.9113230Z    Welcome to Photosphere. Thanks for trying it out!
+2026-11-16T02:19:06.9113526Z    Read the docs: https://github.com/ashleydavis/photosphere/wiki
+2026-11-16T02:19:06.9113823Z    What's new: https://github.com/ashleydavis/photosphere/releases/latest
+2026-11-16T02:19:06.9114039Z 
+2026-11-16T02:19:06.9114188Z 📦 Media Processing Tools
+2026-11-16T02:19:06.9114306Z 
+2026-11-16T02:19:06.9119566Z Built into psi:
+2026-11-16T02:19:06.9119679Z 
+2026-11-16T02:19:06.9119789Z ImageMagick (magick): v7.1.2-33
+2026-11-16T02:19:06.9120061Z    Image processing - resizing, format conversion, metadata extraction
+2026-11-16T02:19:06.9120225Z 
+2026-11-16T02:19:06.9120276Z ffmpeg: v9.0.2
+2026-11-16T02:19:06.9120461Z    Video processing - format conversion and thumbnail extraction
+2026-11-16T02:19:06.9120837Z 
+2026-11-16T02:19:06.9120886Z ffprobe: v9.0.2
+2026-11-16T02:19:06.9121077Z    Video analysis - metadata extraction, duration, dimensions, codecs
+2026-11-16T02:19:06.9121229Z 
+2026-11-16T02:19:06.9154206Z <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+2026-11-16T02:19:06.9154878Z [0;32m[PASS][0m Check tools
+2026-11-16T02:19:06.9155024Z 
+2026-11-16T02:19:06.9155265Z [0;34m[INFO][0m Verifying tools are installed and working...
+2026-11-16T02:19:06.9543338Z [0;32m[PASS][0m ImageMagick 7.x verified (using 'magick identify'):
+2026-11-16T02:19:06.9544063Z Version: ImageMagick 7.1.2-25 Q16-HDRI x64 04a04ea:20260604 https://imagemagick.org
+2026-11-16T02:19:06.9544500Z Copyright: (C) 1999 ImageMagick Studio LLC
+2026-11-16T02:19:06.9544827Z License: https://imagemagick.org/license/
+2026-11-16T02:19:06.9545257Z Features: Channel-masks(64-bit) Cipher DPC HDRI Modules OpenCL OpenMP(2.0) 
+2026-11-16T02:19:06.9546061Z Delegates (built-in): bzlib cairo freetype gslib heic jng jp2 jpeg jxl lcms lqr lzma openexr pangocairo png ps raqm raw rsvg tiff webp xml zip zlib
+2026-11-16T02:19:06.9546669Z Compiler: Visual Studio 2026 (195136244)
+2026-11-16T02:19:07.0020158Z [0;32m[PASS][0m ffprobe verified: version n8.1.3-35-gf1acb0a266-20261115
+2026-11-16T02:19:07.0499540Z [0;32m[PASS][0m ffmpeg verified: version n8.1.3-35-gf1acb0a266-20261115
+2026-11-16T02:19:07.0499936Z [0;32m[PASS][0m All tools verified and working correctly
+2026-11-16T02:19:07.2880886Z [0;34mRUN [0m  88  config-file
+2026-11-16T02:19:07.9115591Z [0;32mPASS[0m  88  config-file                     0s
+2026-11-16T02:19:07.9115826Z 
+2026-11-16T02:19:07.9115910Z ======================================
+2026-11-16T02:19:07.9116086Z INDIVIDUAL TEST SUMMARY
+2026-11-16T02:19:07.9116241Z ======================================
+2026-11-16T02:19:07.9116463Z Tests Passed: [0;32m0[0m
+2026-11-16T02:19:07.9116717Z Tests Failed: [0;31m0[0m
+2026-11-16T02:19:07.9116811Z 
+2026-11-16T02:19:07.9116967Z [0;32mTEST PASSED[0m
+2026-11-16T02:19:07.9184199Z 
+2026-11-16T02:19:07.9185120Z ============================================================================
+2026-11-16T02:19:07.9186745Z [0;32m✓✓✓ ALL SMOKE TESTS PASSED ✓✓✓[0m
+2026-11-16T02:19:07.9187164Z ============================================================================
+2026-11-16T02:19:07.9193883Z === side B exit code: 0
+2026-11-16T02:19:07.9355800Z ##[group]Run echo "Testing version command after building..."
+2026-11-16T02:19:07.9356116Z [36;1mecho "Testing version command after building..."[0m
+2026-11-16T02:19:07.9356320Z [36;1m../../zig-out/bin/psi version[0m
+2026-11-16T02:19:07.9366402Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:19:07.9366630Z env:
+2026-11-16T02:19:07.9366740Z   BUN_VERSION: 1.3.14
+2026-11-16T02:19:07.9366867Z   NODE_VERSION: 24.15.0
+2026-11-16T02:19:07.9366995Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:19:07.9367143Z   RELEASE_PLATFORM: windows
+2026-11-16T02:19:07.9367298Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:19:07.9367441Z   MISE_LOG_LEVEL: info
+2026-11-16T02:19:07.9368973Z   GITHUB_TOKEN: ***
+2026-11-16T02:19:07.9369131Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:19:07.9369313Z   MISE_YES: 1
+2026-11-16T02:19:07.9369425Z ##[endgroup]
+2026-11-16T02:19:07.9635584Z Testing version command after building...
+2026-11-16T02:19:08.0870128Z 
+2026-11-16T02:19:08.0871130Z [1m📰 News:[22m
+2026-11-16T02:19:08.0871420Z    Welcome to Photosphere. Thanks for trying it out!
+2026-11-16T02:19:08.0871802Z [2m   Read the docs: https://github.com/ashleydavis/photosphere/wiki[22m
+2026-11-16T02:19:08.0872177Z [2m   What's new: https://github.com/ashleydavis/photosphere/releases/latest[22m
+2026-11-16T02:19:08.0872364Z 
+2026-11-16T02:19:08.0872461Z [1m📋 Version Information
+2026-11-16T02:19:08.0872716Z [22m
+2026-11-16T02:19:08.0872968Z [1mPhotosphere[22m: [32mdev-nightly.20261116T020414[39m
+2026-11-16T02:19:08.0873556Z [1mDatabase version[22m: [32m6[39m
+2026-11-16T02:19:08.0873758Z [1mCommit[22m: [36m0a24975e[39m
+2026-11-16T02:19:08.0873978Z [1mBuilt[22m: [2m2026-11-16T02:04:14Z[22m
+2026-11-16T02:19:08.0874185Z [1mType[22m: [33mNightly Build[39m
+2026-11-16T02:19:08.0877389Z 
+2026-11-16T02:19:08.0877529Z [1mDependencies:[22m
+2026-11-16T02:19:08.0877835Z   [1mImageMagick (magick)[22m: [32m7.1.2-33[39m
+2026-11-16T02:19:08.0878155Z   [1mffmpeg[22m: [32m9.0.2[39m
+2026-11-16T02:19:08.0878445Z   [1mffprobe[22m: [32m9.0.2[39m
+2026-11-16T02:19:08.0878813Z 
+2026-11-16T02:19:08.0878943Z [1mDirectories:[22m
+2026-11-16T02:19:08.0879197Z   [1mConfig[22m: [36mC:\Users\runneradmin\.config\photosphere[39m
+2026-11-16T02:19:08.0879549Z   [1mConfig file[22m: [36mC:\Users\runneradmin\AppData\Roaming\Photosphere\config.toml[39m
+2026-11-16T02:19:08.0879938Z   [1mState file[22m: [36mC:\Users\runneradmin\AppData\Local\Photosphere\state.json[39m
+2026-11-16T02:19:08.0880280Z   [1mTemp[22m: [36mC:\Users\RUNNER~1\AppData\Local\Temp\photosphere[39m
+2026-11-16T02:19:08.0880625Z   [1mLog files[22m: [36mC:\Users\RUNNER~1\AppData\Local\Temp\photosphere\logs[39m
+2026-11-16T02:19:08.0880959Z   [1mCache[22m: [36mC:\Users\runneradmin\AppData\Local\photosphere\cache[39m
+2026-11-16T02:19:08.1052132Z ##[group]Run mkdir -p "$RUNNER_TEMP/cli-smoke-logs"
+2026-11-16T02:19:08.1052414Z [36;1mmkdir -p "$RUNNER_TEMP/cli-smoke-logs"[0m
+2026-11-16T02:19:08.1052638Z [36;1mif [ -d "${TMPDIR:-/tmp}/photosphere-tests" ]; then[0m
+2026-11-16T02:19:08.1052900Z [36;1m    cp -R "${TMPDIR:-/tmp}/photosphere-tests" "$RUNNER_TEMP/cli-smoke-logs/"[0m
+2026-11-16T02:19:08.1053129Z [36;1mfi[0m
+2026-11-16T02:19:08.1062568Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:19:08.1062797Z env:
+2026-11-16T02:19:08.1062909Z   BUN_VERSION: 1.3.14
+2026-11-16T02:19:08.1063042Z   NODE_VERSION: 24.15.0
+2026-11-16T02:19:08.1063169Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:19:08.1063328Z   RELEASE_PLATFORM: windows
+2026-11-16T02:19:08.1063464Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:19:08.1063606Z   MISE_LOG_LEVEL: info
+2026-11-16T02:19:08.1065162Z   GITHUB_TOKEN: ***
+2026-11-16T02:19:08.1065465Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:19:08.1065663Z   MISE_YES: 1
+2026-11-16T02:19:08.1065778Z ##[endgroup]
+2026-11-16T02:19:08.1816699Z ##[group]Run actions/upload-artifact@v4
+2026-11-16T02:19:08.1816976Z with:
+2026-11-16T02:19:08.1817109Z   name: cli-smoke-logs-windows
+2026-11-16T02:19:08.1817262Z   path: D:\a\_temp/cli-smoke-logs
+2026-11-16T02:19:08.1817404Z   retention-days: 5
+2026-11-16T02:19:08.1817528Z   if-no-files-found: warn
+2026-11-16T02:19:08.1817660Z   compression-level: 6
+2026-11-16T02:19:08.1817790Z   overwrite: false
+2026-11-16T02:19:08.1817910Z   include-hidden-files: false
+2026-11-16T02:19:08.1818044Z env:
+2026-11-16T02:19:08.1818153Z   BUN_VERSION: 1.3.14
+2026-11-16T02:19:08.1818272Z   NODE_VERSION: 24.15.0
+2026-11-16T02:19:08.1818416Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:19:08.1818559Z   RELEASE_PLATFORM: windows
+2026-11-16T02:19:08.1818696Z   RELEASE_PLATFORM_NAME: Windows
+2026-11-16T02:19:08.1818837Z   MISE_LOG_LEVEL: info
+2026-11-16T02:19:08.1820739Z   GITHUB_TOKEN: ***
+2026-11-16T02:19:08.1820891Z   MISE_TRUSTED_CONFIG_PATHS: D:\a\photosphere\photosphere
+2026-11-16T02:19:08.1821099Z   MISE_YES: 1
+2026-11-16T02:19:08.1821212Z ##[endgroup]
+2026-11-16T02:19:08.3174266Z (node:8500) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:19:08.3174739Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:19:08.3268879Z With the provided path, there will be 8 files uploaded
+2026-11-16T02:19:08.3272150Z Artifact name is valid!
+2026-11-16T02:19:08.3272983Z Root directory input is valid!
+2026-11-16T02:19:08.6132380Z Beginning upload of artifact content to blob storage
+2026-11-16T02:19:08.6344869Z (node:8500) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:19:08.7640882Z Uploaded bytes 4964
+2026-11-16T02:19:08.8024401Z Finished uploading artifact content to blob storage!
+2026-11-16T02:19:08.8025088Z SHA256 digest of uploaded artifact zip is 3a63c6bf36e47057a415ab299f60b2a261f83e0acf910f875ae3479c2e9c7bd8
+2026-11-16T02:19:08.8026323Z Finalizing artifact upload
+2026-11-16T02:19:09.1453581Z Artifact cli-smoke-logs-windows.zip successfully finalized. Artifact ID 14191474951
+2026-11-16T02:19:09.1454197Z Artifact cli-smoke-logs-windows has been successfully uploaded! Final size is 4964 bytes. Artifact ID is 14191474951
+2026-11-16T02:19:09.1462976Z Artifact download URL: https://github.com/ashleydavis/photosphere/actions/runs/43789582519/artifacts/14191474951
+2026-11-16T02:19:09.2421141Z Post job cleanup.
+2026-11-16T02:19:09.3320342Z (node:9852) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:19:09.3320826Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:19:09.3956888Z [command]"C:\Program Files\Git\usr\bin\tar.exe" --posix -cf cache.tzst --exclude cache.tzst -P -C D:/a/photosphere/photosphere --files-from manifest.txt --force-local --use-compress-program "zstd -T0"
+2026-11-16T02:19:16.5857857Z (node:9852) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:19:17.5896652Z Sent 54928836 of 54928836 (100.0%), 51.9 MBs/sec
+2026-11-16T02:19:18.0132051Z Cache saved with key: Windows-X64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f
+2026-11-16T02:19:18.0366941Z Post job cleanup.
+2026-11-16T02:19:18.0370805Z ##[start-action display=Restore the packages Zig fetches;id=__ba17aeca-f075-468e-bfb5-e49913aa214a.cache]
+2026-11-16T02:19:18.1262328Z Post job cleanup.
+2026-11-16T02:19:18.2229459Z Cache hit occurred on the primary key Windows-X64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b, not saving cache.
+2026-11-16T02:19:18.2230484Z (node:1864) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:19:18.2231109Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:19:18.2318769Z ##[end-action id=__ba17aeca-f075-468e-bfb5-e49913aa214a.cache;outcome=success;conclusion=success;duration_ms=194]
+2026-11-16T02:19:18.2444181Z Post job cleanup.
+2026-11-16T02:19:18.3454028Z (node:9916) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:19:18.3454764Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:19:18.3704799Z Post job cleanup.
+2026-11-16T02:19:18.5518875Z [command]"C:\Program Files\Git\usr\bin\tar.exe" --posix -cf cache.tzst --exclude cache.tzst -P -C D:/a/photosphere/photosphere --files-from manifest.txt --force-local --use-compress-program "zstd -T0"
+2026-11-16T02:19:19.9791512Z Sent 36521309 of 36521309 (100.0%), 34.5 MBs/sec
+2026-11-16T02:19:20.2758275Z Post job cleanup.
+2026-11-16T02:19:20.4020306Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-16T02:19:20.4442285Z git version 2.56.0.windows.4
+2026-11-16T02:19:20.4490350Z Temporarily overriding HOME='D:\a\_temp\2607c733-b702-4c63-9e40-3c5b2bb55e4c' before making global git config changes
+2026-11-16T02:19:20.4491135Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-16T02:19:20.4496923Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\photosphere\photosphere
+2026-11-16T02:19:20.4764048Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T02:19:20.5018710Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-16T02:19:20.9012207Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T02:19:20.9236223Z http.https://github.com/.extraheader
+2026-11-16T02:19:20.9265147Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-11-16T02:19:20.9522718Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-16T02:19:21.3852959Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T02:19:21.4124603Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-16T02:19:21.8072122Z Cleaning up orphan processes
+2026-11-16T02:19:21.8204204Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache/restore@v4, actions/cache@v4, actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4, jdx/mise-action@v2. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

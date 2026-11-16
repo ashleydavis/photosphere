@@ -477,8 +477,16 @@ jobs:
           Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           export DISPLAY=:99
           export XDG_CURRENT_DESKTOP=GNOME
+          # Experiment 3: with the GNOME backend installed the portal still exported no Settings (experiment 2), choosing every other
+          # interface "via the deprecated UseIn key". portals.conf names the backend for Settings outright, and the portal's own debug
+          # output says what it decided.
+          cat /usr/share/xdg-desktop-portal/portals/gnome.portal
+          ls /usr/share/xdg-desktop-portal/
+          mkdir -p "$HOME/.config/xdg-desktop-portal"
+          printf '[preferred]\ndefault=gnome;gtk;\norg.freedesktop.impl.portal.Settings=gnome;gtk;\n' > "$HOME/.config/xdg-desktop-portal/portals.conf"
           echo "=== $(date -u +%FT%TZ) side B: scenario 69 with a desktop portal"
-          dbus-run-session -- bash -c '
+          G_MESSAGES_DEBUG=all dbus-run-session -- bash -c '
+              unset G_MESSAGES_DEBUG
               echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
               echo "portal before: $(gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.ReadOne org.freedesktop.appearance color-scheme 2>&1)"
               echo "gsettings before: $(gsettings get org.gnome.desktop.interface color-scheme 2>&1)"

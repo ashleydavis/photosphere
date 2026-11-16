@@ -1,0 +1,99 @@
+
+============================================================================
+============================================================================
+=== TEST 88: CONFIG FILE ===
+============================================================================
+============================================================================
+[0;34m[INFO][0m Running: Add a database
+
+[1;33mNODE_ENV:[0m testing
+[1;33mCommand:[0m
+[0;34mD:/a/photosphere/photosphere/zig-out/bin/psi.exe dbs add --yes --name config-file-db --path C:/Users/runneradmin/AppData/Local/Temp/photosphere-tests/88-config-file-meMOfC/config-file/db[0m
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+📰 News:
+   Welcome to Photosphere. Thanks for trying it out!
+   Read the docs: https://github.com/ashleydavis/photosphere/wiki
+   What's new: https://github.com/ashleydavis/photosphere/releases/latest
+✓ Database "config-file-db" added.
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+[0;32m[PASS][0m Add a database
+[0;32m[PASS][0m The database list is written to its own databases.toml
+[0;34m[INFO][0m Running: Run the news command
+
+[1;33mNODE_ENV:[0m testing
+[1;33mCommand:[0m
+[0;34mPHOTOSPHERE_NEWS_URL="file:///D:/a/photosphere/photosphere/test/demo-news.yaml" D:/a/photosphere/photosphere/zig-out/bin/psi.exe news[0m
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+📋 Photosphere News
+
+Running version: vdev-nightly.20261116T020414
+
+★ Heads up: scheduled maintenance window this weekend (no link, no button). (new)
+★ Photosphere v1.5 is out: much faster sync and a redesigned navbar. (new)
+     Release notes: https://example.com/photosphere/releases/v1.5
+     Upgrade now: https://example.com/photosphere/download
+★ New blog post: how Photosphere stores your photos end-to-end encrypted. (new)
+     Read the post: https://example.com/photosphere/blog/e2ee
+★ We'd love your feedback. Take our 2-minute user survey! (new)
+     Open the survey: https://example.com/photosphere/survey
+★ Welcome to Photosphere. Thanks for trying it out! (new)
+     Read the docs: https://github.com/ashleydavis/photosphere/wiki
+     What's new: https://github.com/ashleydavis/photosphere/releases/latest
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+[0;32m[PASS][0m Run the news command
+[0;32m[PASS][0m What the app remembered is written to state.json
+[0;32m[PASS][0m No config.toml is written, because the CLI has no settings to write
+[0;32m[PASS][0m No desktop.toml is written
+[0;32m[PASS][0m No auto-import.toml is written
+[0;32m[PASS][0m No sync.toml is written
+[0;32m[PASS][0m No news.yaml is written
+[0;32m[PASS][0m The old settings file does not come back
+[0;32m[PASS][0m The old state file does not come back
+[0;32m[PASS][0m state.json has a news section
+[0;32m[PASS][0m databases.toml holds the database that was added
+[0;32m[PASS][0m state.json does not hold the database list
+[0;32m[PASS][0m databases.toml does not hold the news state
+[0;34m[INFO][0m Running: Run the version command
+
+[1;33mNODE_ENV:[0m testing
+[1;33mCommand:[0m
+[0;34mD:/a/photosphere/photosphere/zig-out/bin/psi.exe version[0m
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+📋 Version Information
+
+Photosphere: dev-nightly.20261116T020414
+Database version: 6
+Commit: 0a24975e
+Built: 2026-11-16T02:04:14Z
+Type: Nightly Build
+
+Dependencies:
+  ImageMagick (magick): 7.1.2-33
+  ffmpeg: 9.0.2
+  ffprobe: 9.0.2
+
+Directories:
+  Config: C:/Users/runneradmin/AppData/Local/Temp/photosphere-tests/88-config-file-meMOfC/config-file/config
+  Config file: C:/Users/runneradmin/AppData/Local/Temp/photosphere-tests/88-config-file-meMOfC/config-file/config\config.toml
+  State file: C:/Users/runneradmin/AppData/Local/Temp/photosphere-tests/88-config-file-meMOfC/config-file/state\state.json
+  Temp: C:\Users\runneradmin\AppData\Local\Temp\photosphere-tests\88-config-file-meMOfC\tmp\photosphere
+  Log files: C:\Users\runneradmin\AppData\Local\Temp\photosphere-tests\88-config-file-meMOfC\tmp\photosphere\logs
+  Cache: C:/Users/runneradmin/AppData/Local/Temp/photosphere-tests/88-config-file-meMOfC/cache
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+[0;32m[PASS][0m Run the version command
+[0;31m[FAIL][0m psi version names the config file (pattern 'C:/Users/runneradmin/AppData/Local/Temp/photosphere-tests/88-config-file-meMOfC/config-file/config/config.toml' not found in output)
+
+
+============================================================================
+============================================================================
+[0;31m✗✗✗ SMOKE TESTS FAILED ✗✗✗[0m
+[0;31mExit Code: 1[0m
+[0;31mTest execution was aborted (likely due to an assertion failure)[0m
+============================================================================
+============================================================================
