@@ -1,0 +1,28 @@
+ziggy native app: no graphics card could be set up, so the web view draws without one.
+SPLASH-EVENT started 1794792997747
+SPLASH-EVENT app-started 1794792997864
+The state file /tmp/photosphere-tests/photosphere-app-69-system-theme-change-wuEO5L/config/state.json does not exist yet, so the app starts with an empty state.
+Photosphere Desktop starting...
+[EVENT] Instance started (pid=101056, packaged=true)
+--- Tool Versions ---
+ImageMagick: 7.1.2-33
+FFmpeg: 9.0.2
+FFprobe: 9.0.2
+Worker pool initialized
+[EVENT] Single instance lock acquired (pid=101056, packaged=true)
+ziggy native app: could not read the system theme from the desktop portal (the settings proxy could not be made), so it is light
+SPLASH-EVENT app-web-view-created 1794793022893
+Asset server listening on http://127.0.0.1:37845
+REST API initialized on port 37845
+[EVENT] Main window created
+MCP server initialized on port 41165
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+SPLASH-EVENT frontend-ready-received 1794793023271
+SPLASH-EVENT app-web-view-visible 1794793023271
+[Frontend] Form factor: desktop (viewport width 1200px, breakpoint 768px)
+[Frontend] Automatic sync decided from: syncEnabled=false, wifiOnly=true, connected=true, connection=unknown
+Sync gate set to false
+Stopped the background automatic import.
+[Frontend] Automatic sync decided from: syncEnabled=false, wifiOnly=true, connected=true, connection=unknown
+Sync gate set to false

@@ -1,0 +1,15 @@
+diff --git a/apps/photosphere-smoke-tests/lib/ios.sh b/apps/photosphere-smoke-tests/lib/ios.sh
+index 36902c413..bd7de46ac 100644
+--- a/apps/photosphere-smoke-tests/lib/ios.sh
++++ b/apps/photosphere-smoke-tests/lib/ios.sh
+@@ -896,3 +896,10 @@ photosphere_platform_screenshot() {
+ ios_cancel_next_download() {
+     send_command "$1" stage-export '{"exportOutcome":"cancelled"}'
+ }
++
++#
++# The simulator's appearance: "light" or "dark". Usage: photosphere_platform_system_theme <test_dir>
++#
++photosphere_platform_system_theme() {
++    xcrun simctl ui "$(cat "$1/$IOS_UDID_FILE_NAME")" appearance
++}

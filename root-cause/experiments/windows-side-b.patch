@@ -1,0 +1,15 @@
+diff --git a/apps/cli-zig/smoke-tests-zig/88-config-file/test.sh b/apps/cli-zig/smoke-tests-zig/88-config-file/test.sh
+index 3c9ad4d0e..d4bd37ffe 100755
+--- a/apps/cli-zig/smoke-tests-zig/88-config-file/test.sh
++++ b/apps/cli-zig/smoke-tests-zig/88-config-file/test.sh
+@@ -129,8 +129,8 @@ test_config_file() {
+ 
+     local version_output
+     invoke_command "Run the version command" "$(get_zig_cli_command) version" 0 "version_output"
+-    expect_output_string "$version_output" "$PHOTOSPHERE_CONFIG_DIR/config.toml" "psi version names the config file"
+-    expect_output_string "$version_output" "$PHOTOSPHERE_STATE_DIR/state.json" "psi version names the state file"
++    expect_output_string "$version_output" "$PHOTOSPHERE_CONFIG_DIR[\\/]config.toml" "psi version names the config file"
++    expect_output_string "$version_output" "$PHOTOSPHERE_STATE_DIR[\\/]state.json" "psi version names the state file"
+ 
+     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+     export PHOTOSPHERE_CONFIG_DIR="$saved_config"

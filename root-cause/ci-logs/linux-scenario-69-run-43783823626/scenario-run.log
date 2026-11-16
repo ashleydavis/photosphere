@@ -1,0 +1,5 @@
+[0;34m[INFO][0m LAN share discovery port: 29050
+[0;34m[INFO][0m App started (PID 101032, control port 40725)
+[0;34m[INFO][0m Waiting for app to be ready on port 40725...
+[0;34m[INFO][0m App is ready
+[0;31m[FAIL][0m Timed out waiting for the document's data-joy-color-scheme to be 'dark' (last value: light)
