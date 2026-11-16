@@ -29,5 +29,10 @@ runs:
           for manifest in $(git ls-files -- '*build.zig.zon'); do
               directory="$(dirname "$manifest")"
               echo "Fetching the packages of $directory"
-              (cd "$directory" && zig build --fetch=all)
+              # The local cache goes in the runner's temporary directory, not in the build's own directory. A fetch in
+              # third-party/<library> otherwise leaves a .zig-cache there, and build.zig takes a library with that directory beside
+              # it as built there by hand and builds it again over the restored artifact. On a branch whose package cache missed, the
+              # Release iOS app-build did that and failed: "ImageMagick's generated headers for aarch64-ios-simulator are not in
+              # config/aarch64-ios-simulator".
+              (cd "$directory" && zig build --fetch=all --cache-dir "$RUNNER_TEMP/zig-fetch-cache")
           done
