@@ -392,10 +392,9 @@ jobs:
         timeout-minutes: 75
         env:
           PHOTOSPHERE_SMOKE_BUILD: ${{ github.workspace }}/out/app
-        # Root-cause experiment 2: the app is built with addDatabase re-reading the list 500 ms late for an entry named
-        # "Root cause delay ...". Side B: scenario 8 as committed, whose entry is "My Test DB", so nothing is delayed (10 runs).
-        # Side A: only the entry's name changed to "Root cause delay DB", so the list's re-render comes after "Database opened"
-        # (5 runs, root-cause/experiments/experiment2-side-a-test.sh).
+        # Experiment 3, the proposed fix: the same app build as experiment 2 (addDatabase re-reads the list 500 ms late for an entry
+        # named "Root cause delay ..."). Side A: the fixed test with the entry named "Root cause delay DB", so the list's re-render
+        # comes after "Database opened", the failing order (5 runs). Side B: the fixed test as it is on the fix branch (10 runs).
         run: |
           set +e
           T=apps/photosphere-smoke-tests/8-share-database/test.sh
@@ -407,10 +406,12 @@ jobs:
                   echo "=== RESULT $side run $i exit code: $?"
               done
           }
-          run_side side-B 10
-          cp root-cause/experiments/experiment2-side-a-test.sh "$T"
+          cp root-cause/experiments/experiment3-side-a-test.sh "$T"
           git diff -- "$T"
           run_side side-A 5
+          cp root-cause/experiments/experiment3-side-b-test.sh "$T"
+          git diff -- "$T"
+          run_side side-B 10
           exit 0
 
       # Scenarios 30 (the app never became ready, its log ending at "Main window created") and 58 (syncing was never held back for
