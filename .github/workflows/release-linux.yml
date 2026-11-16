@@ -471,7 +471,9 @@ jobs:
           PHOTOSPHERE_SMOKE_SCENARIO=69 PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/photosphere-cli-zig-linux-x64" bun run test:ziggy
           echo "=== side A exit code: $?"
           grep -h "desktop portal" "${TMPDIR:-/tmp}"/photosphere-tests/photosphere-app-69-*/app.log
-          sudo apt-get install -y --no-install-recommends xdg-desktop-portal xdg-desktop-portal-gtk dconf-service dconf-gsettings-backend dbus-x11 > /dev/null || exit 1
+          # Experiment 2: xdg-desktop-portal-gtk 1.15 has no Settings backend (experiment 1's side B answered "No such interface
+          # org.freedesktop.portal.Settings"), so the GNOME backend, which serves Settings from GSettings, is added.
+          sudo apt-get install -y --no-install-recommends xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome dconf-service dconf-gsettings-backend dbus-x11 > /dev/null || exit 1
           Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           export DISPLAY=:99
           export XDG_CURRENT_DESKTOP=GNOME
@@ -479,6 +481,13 @@ jobs:
           dbus-run-session -- bash -c '
               echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
               echo "portal before: $(gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.ReadOne org.freedesktop.appearance color-scheme 2>&1)"
+              echo "gsettings before: $(gsettings get org.gnome.desktop.interface color-scheme 2>&1)"
+              gsettings set org.gnome.desktop.interface color-scheme prefer-dark
+              sleep 1
+              echo "portal after gsettings set prefer-dark: $(gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.ReadOne org.freedesktop.appearance color-scheme 2>&1)"
+              gsettings reset org.gnome.desktop.interface color-scheme
+              sleep 1
+              echo "portal after gsettings reset: $(gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.ReadOne org.freedesktop.appearance color-scheme 2>&1)"
               PHOTOSPHERE_SMOKE_SCENARIO=69 PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/photosphere-cli-zig-linux-x64" bun run test:ziggy
               echo "=== side B exit code: $?"
           '
