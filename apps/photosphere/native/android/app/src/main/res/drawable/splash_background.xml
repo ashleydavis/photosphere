@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/splash_background"/>
+    <!-- drawable/splash.png is a copy of drawable-port/splash.png. Ziggy's generate-app-assets.sh wrote only the
+         -port and -land images, and with no default the release lint (lintVitalRelease) fails with
+         MissingDefaultResource: a configuration that is neither portrait nor landscape would crash. -->
     <item>
         <bitmap android:src="@drawable/splash" android:gravity="fill"/>
     </item>
