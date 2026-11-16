@@ -129,8 +129,16 @@ test_config_file() {
 
     local version_output
     invoke_command "Run the version command" "$(get_zig_cli_command) version" 0 "version_output"
-    expect_output_string "$version_output" "$PHOTOSPHERE_CONFIG_DIR/config.toml" "psi version names the config file"
-    expect_output_string "$version_output" "$PHOTOSPHERE_STATE_DIR/state.json" "psi version names the state file"
+    # Ziggy joins the directory and the file name with the platform's separator, so on Windows psi prints
+    # ".../config\config.toml". Expecting "/" there failed this test in the Release Windows cli-smoke-tests job
+    # ("pattern '.../config-file/config/config.toml' not found in output"), so the separator expected is the
+    # platform's. It is a grep pattern, and a backslash is written there as the bracket expression [\].
+    local separator="/"
+    if [ "$(detect_platform)" = "win" ]; then
+        separator='[\]'
+    fi
+    expect_output_string "$version_output" "$PHOTOSPHERE_CONFIG_DIR${separator}config.toml" "psi version names the config file"
+    expect_output_string "$version_output" "$PHOTOSPHERE_STATE_DIR${separator}state.json" "psi version names the state file"
 
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
