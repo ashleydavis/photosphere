@@ -116,6 +116,15 @@ export function AppContextProvider({ children }: IProps) {
     //
     async function addDatabase(entry: IDatabaseEntry): Promise<IDatabaseEntry> {
         const created = await platform.addDatabase(entry);
+        // Root-cause experiment only: for an entry whose name starts "Root cause delay", re-read the list 500 ms later instead of
+        // before returning, so the open the add dialog starts next logs "Database opened" before the list's re-render logs
+        // "Databases page loaded", the order Release iOS run 43827893187 logged them in.
+        if (entry.name.startsWith('Root cause delay')) {
+            setTimeout(() => {
+                refreshDbs().catch(error => log.exception('Root-cause experiment: the delayed refresh failed', error as Error));
+            }, 500);
+            return created;
+        }
         await refreshDbs();
         return created;
     }

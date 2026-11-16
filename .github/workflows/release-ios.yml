@@ -392,9 +392,10 @@ jobs:
         timeout-minutes: 75
         env:
           PHOTOSPHERE_SMOKE_BUILD: ${{ github.workspace }}/out/app
-        # Root-cause experiment: scenario 8 as committed (baseline, 10 runs), with the test held until the app has logged
-        # "Database opened" and a later "Databases page loaded" (side A, 5 runs), and with that hold plus only the wait for
-        # "Database opened" moved to straight after "Database entry added" (side B, 10 runs). The test files are in root-cause/experiments.
+        # Root-cause experiment 2: the app is built with addDatabase re-reading the list 500 ms late for an entry named
+        # "Root cause delay ...". Side B: scenario 8 as committed, whose entry is "My Test DB", so nothing is delayed (10 runs).
+        # Side A: only the entry's name changed to "Root cause delay DB", so the list's re-render comes after "Database opened"
+        # (5 runs, root-cause/experiments/experiment2-side-a-test.sh).
         run: |
           set +e
           T=apps/photosphere-smoke-tests/8-share-database/test.sh
@@ -406,14 +407,10 @@ jobs:
                   echo "=== RESULT $side run $i exit code: $?"
               done
           }
-          run_side baseline 10
-          cp root-cause/experiments/side-a-test.sh "$T"
-          git diff
-          run_side side-A 5
-          cp root-cause/experiments/side-b-test.sh "$T"
-          git diff
           run_side side-B 10
-          echo "=== SUMMARY"
+          cp root-cause/experiments/experiment2-side-a-test.sh "$T"
+          git diff -- "$T"
+          run_side side-A 5
           exit 0
 
       # Scenarios 30 (the app never became ready, its log ending at "Main window created") and 58 (syncing was never held back for
