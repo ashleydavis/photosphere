@@ -534,6 +534,18 @@ jobs:
           packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav xvfb imagemagick ffmpeg
           verify: xvfb-run magick|convert ffmpeg ffprobe
 
+      # Ziggy's Linux app reads and follows the system's theme only through the desktop portal's Settings interface on the session
+      # bus. The runner has neither, so scenario 69-system-theme-change failed here: the app logged "could not read the system theme
+      # from the desktop portal" and stayed light while the scenario switched gsettings to dark. The GNOME backend serves Settings from
+      # GSettings (the GTK one has no Settings), and portals.conf names it for Settings. The smoke tests below run on a session bus
+      # this portal answers on.
+      - name: Install the desktop portal the app reads the system's theme from (Linux)
+        shell: bash
+        run: |
+          sudo apt-get install -y --no-install-recommends xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-gnome dconf-service dconf-gsettings-backend dbus-x11
+          mkdir -p "$HOME/.config/xdg-desktop-portal"
+          printf '[preferred]\ndefault=gnome;gtk;\norg.freedesktop.impl.portal.Settings=gnome;gtk;\n' > "$HOME/.config/xdg-desktop-portal/portals.conf"
+
       - name: Restore the Photosphere App build
         uses: actions/cache/restore@v4
         with:
@@ -568,7 +580,13 @@ jobs:
         run: |
           # cli-smoke-tests runs this same restored psi only after giving it the executable bit (exit 126 without it), so this does too.
           chmod +x out/photosphere-cli-zig-linux-x64
-          PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/photosphere-cli-zig-linux-x64" bun run test:ziggy
+          # The scenarios and the apps they start share one session bus, on which the desktop portal installed above starts on demand.
+          # The portal gets a display of its own and XDG_CURRENT_DESKTOP naming GNOME, as in the run that showed scenario 69 passing
+          # with this portal.
+          Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          export DISPLAY=:99
+          export XDG_CURRENT_DESKTOP=GNOME
+          PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/photosphere-cli-zig-linux-x64" dbus-run-session -- bun run test:ziggy
 
       # A failed scenario keeps its directory, which holds the app's log, its output and the core's own log. Without this upload a
       # failure that did not happen again left nothing to diagnose it from once the runner had gone.
