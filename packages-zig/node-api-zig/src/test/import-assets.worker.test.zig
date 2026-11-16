@@ -1176,6 +1176,28 @@ test "skips duplicate hashes discovered in the same scan" {
     try std.testing.expectEqual(@as(usize, 1), (try context.backend.tasksOfType(context.arena.allocator(), "upload-asset")).len);
 }
 
+//
+// Checks that a file whose content an earlier file in the same scan is already being imported with
+// is reported as skipped, so whatever counts the import's events counts it. Two files hash the same
+// and the upload succeeds: one import-success and one import-skipped are expected, and the run's
+// result lists the second file as skipped.
+//
+test "sends import-skipped message for a duplicate hash discovered in the same scan" {
+    const log = utils.mute_log.MuteLog.init();
+    var context: ImportTest = undefined;
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
+    _ = try context.writePhoto("img1.jpg");
+    _ = try context.writePhoto("img2.jpg");
+
+    const result = try context.run(log, try context.makeData(false));
+
+    const allocator = context.arena.allocator();
+    try std.testing.expectEqual(@as(usize, 1), (try context.messages.ofType(allocator, "import-success")).len);
+    try std.testing.expectEqual(@as(usize, 1), (try context.messages.ofType(allocator, "import-skipped")).len);
+    try std.testing.expectEqual(@as(usize, 1), result.object.get("skipped").?.array.items.len);
+}
+
 test "sends import-skipped message when hash already in database" {
     const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;

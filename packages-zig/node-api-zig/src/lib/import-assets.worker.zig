@@ -631,6 +631,33 @@ const ImportRun = struct {
     }
 
     //
+    // Records a hashed file whose content the database already holds, or that an earlier file in
+    // this scan is already being imported with, as skipped: in the run's result, in the import
+    // record and as an import-skipped event, so addPaths and the import panel count it as already
+    // added. Then tells the scanner the import has finished with it.
+    //
+    fn skipFile(self: *ImportRun, log: ILog, hashFileData: IHashFileData, contentHash: []const u8) !void {
+        try self.skipped.append(self.allocator, .{
+            .logicalPath = hashFileData.logicalPath,
+            .contentHash = contentHash,
+        });
+        try self.recordImportOutcome(log, .{
+            .assetId = hashFileData.assetId,
+            .logicalPath = hashFileData.logicalPath,
+            .outcome = .skipped,
+            .importedAt = try self.nowIsoString(),
+            .source = self.importSource,
+        });
+        try self.sendStringMessage(log, &.{
+            .{ "type", "import-skipped" },
+            .{ "assetId", hashFileData.assetId },
+            .{ "logicalPath", hashFileData.logicalPath },
+        });
+        // Nothing more will read this file.
+        self.releaseFile(log, hashFileData.filePath);
+    }
+
+    //
     // Hands as many waiting files to the queue as the concurrency limit allows.
     //
     // Uploads go before hashes, because an upload finishes a file that has already been paid for:
@@ -1012,30 +1039,13 @@ const ImportRun = struct {
                 }
 
                 if (filesAlreadyAdded) {
-                    try self.skipped.append(allocator, .{
-                        .logicalPath = hashFileData.logicalPath,
-                        .contentHash = hashResult.hash,
-                    });
-                    try self.recordImportOutcome(log, .{
-                        .assetId = hashFileData.assetId,
-                        .logicalPath = hashFileData.logicalPath,
-                        .outcome = .skipped,
-                        .importedAt = try self.nowIsoString(),
-                        .source = self.importSource,
-                    });
-                    try self.sendStringMessage(log, &.{
-                        .{ "type", "import-skipped" },
-                        .{ "assetId", hashFileData.assetId },
-                        .{ "logicalPath", hashFileData.logicalPath },
-                    });
-                    // Nothing more will read this file.
-                    self.releaseFile(log, hashFileData.filePath);
+                    try self.skipFile(log, hashFileData, hashResult.hash);
                 }
                 else {
                     if (try self.hashesQueuedForImport.has(hashBuffer)) {
                         // The file name in this log line is empty: the logical path is not included in it.
                         log.verbose("File \"\" is a duplicate in this scan, skipping.");
-                        self.releaseFile(log, hashFileData.filePath);
+                        try self.skipFile(log, hashFileData, hashResult.hash);
                     }
                     else {
                         _ = try self.hashesQueuedForImport.add(hashBuffer);
