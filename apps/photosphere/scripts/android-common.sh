@@ -49,8 +49,12 @@ photosphere_android_min_sdk() {
 #
 # Runs Gradle in Photosphere's Android project. Usage: photosphere_android_gradle <gradle arguments...>
 #
+# GIT_INDEX_FILE is removed from Gradle's environment. Git sets it for its hooks, pointing at this repository's index, and Gradle's
+# clone of Ziggy (settings.gradle's sourceControl) then fails with "Could not populate working directory from Git repository at
+# https://github.com/ashleydavis/ziggy.git", which failed test:ziggy:and in the pre-commit hook of every new worktree.
+#
 photosphere_android_gradle() {
-    (cd "$PHOTOSPHERE_ANDROID_PROJECT_DIR" && ./gradlew "$@")
+    (cd "$PHOTOSPHERE_ANDROID_PROJECT_DIR" && env -u GIT_INDEX_FILE ./gradlew "$@")
 }
 
 #
