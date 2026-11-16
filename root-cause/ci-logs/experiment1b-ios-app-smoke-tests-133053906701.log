@@ -1,0 +1,1754 @@
+﻿2026-11-16T02:29:46.5936800Z Current runner version: '2.338.2'
+2026-11-16T02:29:46.5965180Z ##[group]Runner Image Provisioner
+2026-11-16T02:29:46.5966890Z Hosted Compute Agent
+2026-11-16T02:29:46.5967960Z Version: 20261028.624
+2026-11-16T02:29:46.5969030Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-16T02:29:46.5970470Z Build Date: 2026-10-28T21:51:42Z
+2026-11-16T02:29:46.5971670Z Worker ID: {4229088f-df36-490b-9c75-d0adb63f74c9}
+2026-11-16T02:29:46.5972940Z Region: westus
+2026-11-16T02:29:46.5973880Z Cloud: MacCloud
+2026-11-16T02:29:46.5974820Z ##[endgroup]
+2026-11-16T02:29:46.5977380Z ##[group]Operating System
+2026-11-16T02:29:46.5978490Z macOS
+2026-11-16T02:29:46.5979310Z 26.7.2
+2026-11-16T02:29:46.5980210Z 25G332
+2026-11-16T02:29:46.5981080Z ##[endgroup]
+2026-11-16T02:29:46.5982110Z ##[group]Runner Image
+2026-11-16T02:29:46.5983170Z Image: macos-26-arm64
+2026-11-16T02:29:46.5984480Z Version: 20261102.0473.1
+2026-11-16T02:29:46.5987230Z Included Software: https://github.com/actions/runner-images/blob/macos-26-arm64/20261102.0473/images/macos/macos-26-arm64-Readme.md
+2026-11-16T02:29:46.5990270Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-26-arm64%2F20261102.0473
+2026-11-16T02:29:46.5992160Z ##[endgroup]
+2026-11-16T02:29:46.5994500Z ##[group]GITHUB_TOKEN Permissions
+2026-11-16T02:29:46.5999380Z Contents: read
+2026-11-16T02:29:46.5999920Z Metadata: read
+2026-11-16T02:29:46.6000320Z Packages: read
+2026-11-16T02:29:46.6000760Z ##[endgroup]
+2026-11-16T02:29:46.6003510Z Secret source: Actions
+2026-11-16T02:29:46.6004280Z Cache mode: write
+2026-11-16T02:29:46.6006420Z Prepare workflow directory
+2026-11-16T02:29:46.6452190Z Prepare all required actions
+2026-11-16T02:29:46.6524480Z Getting action download info
+2026-11-16T02:29:46.8480700Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-16T02:29:47.3646360Z Download action repository 'oven-sh/setup-bun@v2' (SHA:0c5077e51419868618aeaa5fe8019c62421857d6)
+2026-11-16T02:29:48.1374690Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-16T02:29:48.3630890Z Download action repository 'jdx/mise-action@v2' (SHA:c37c93293d6b742fc901e1406b8f764f6fb19dac)
+2026-11-16T02:29:49.1392960Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-11-16T02:29:49.3023460Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-16T02:29:49.6537160Z Complete job name: app-smoke-tests
+2026-11-16T02:29:49.7644270Z ##[group]Run actions/checkout@v4
+2026-11-16T02:29:49.7645270Z with:
+2026-11-16T02:29:49.7645640Z   repository: ashleydavis/photosphere
+2026-11-16T02:29:49.7651340Z   token: ***
+2026-11-16T02:29:49.7652160Z   ssh-strict: true
+2026-11-16T02:29:49.7652460Z   ssh-user: git
+2026-11-16T02:29:49.7652720Z   persist-credentials: true
+2026-11-16T02:29:49.7653080Z   clean: true
+2026-11-16T02:29:49.7653380Z   sparse-checkout-cone-mode: true
+2026-11-16T02:29:49.7653680Z   fetch-depth: 1
+2026-11-16T02:29:49.7654080Z   fetch-tags: false
+2026-11-16T02:29:49.7654410Z   show-progress: true
+2026-11-16T02:29:49.7654750Z   lfs: false
+2026-11-16T02:29:49.7655000Z   submodules: false
+2026-11-16T02:29:49.7655280Z   set-safe-directory: true
+2026-11-16T02:29:49.7655640Z   allow-unsafe-pr-checkout: false
+2026-11-16T02:29:49.7657110Z env:
+2026-11-16T02:29:49.7657340Z   BUN_VERSION: 1.3.14
+2026-11-16T02:29:49.7657580Z   NODE_VERSION: 24.15.0
+2026-11-16T02:29:49.7657910Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:29:49.7658370Z   RELEASE_PLATFORM: ios
+2026-11-16T02:29:49.7658730Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:29:49.7658990Z ##[endgroup]
+2026-11-16T02:29:50.4818630Z Syncing repository: ashleydavis/photosphere
+2026-11-16T02:29:50.4820800Z ##[group]Getting Git version info
+2026-11-16T02:29:50.4821580Z Working directory is '/Users/runner/work/photosphere/photosphere'
+2026-11-16T02:29:50.4822430Z [command]/opt/homebrew/bin/git version
+2026-11-16T02:29:50.5454280Z git version 2.56.0
+2026-11-16T02:29:50.5495830Z ##[endgroup]
+2026-11-16T02:29:50.5516150Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/14f23e1b-1ee4-410a-a328-2e760512fbf6/.gitconfig'
+2026-11-16T02:29:50.5537910Z Temporarily overriding HOME='/Users/runner/work/_temp/14f23e1b-1ee4-410a-a328-2e760512fbf6' before making global git config changes
+2026-11-16T02:29:50.5549730Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-16T02:29:50.5552750Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/photosphere/photosphere
+2026-11-16T02:29:50.5719010Z Deleting the contents of '/Users/runner/work/photosphere/photosphere'
+2026-11-16T02:29:50.5723050Z ##[group]Initializing the repository
+2026-11-16T02:29:50.5726590Z [command]/opt/homebrew/bin/git init /Users/runner/work/photosphere/photosphere
+2026-11-16T02:29:50.6212250Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-16T02:29:50.6227120Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-16T02:29:50.6268200Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-16T02:29:50.6269390Z hint: call:
+2026-11-16T02:29:50.6273330Z hint:
+2026-11-16T02:29:50.6274740Z hint: 	git config --global init.defaultBranch <name>
+2026-11-16T02:29:50.6277750Z hint:
+2026-11-16T02:29:50.6279460Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-16T02:29:50.6281590Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-16T02:29:50.6282940Z hint:
+2026-11-16T02:29:50.6284150Z hint: 	git branch -m <name>
+2026-11-16T02:29:50.6285150Z hint:
+2026-11-16T02:29:50.6287040Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-16T02:29:50.6289600Z Initialized empty Git repository in /Users/runner/work/photosphere/photosphere/.git/
+2026-11-16T02:29:50.6294620Z [command]/opt/homebrew/bin/git remote add origin https://github.com/ashleydavis/photosphere
+2026-11-16T02:29:50.6415140Z ##[endgroup]
+2026-11-16T02:29:50.6417500Z ##[group]Disabling automatic garbage collection
+2026-11-16T02:29:50.6426710Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-11-16T02:29:50.6592460Z ##[endgroup]
+2026-11-16T02:29:50.6594090Z ##[group]Setting up auth
+2026-11-16T02:29:50.6598770Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T02:29:50.6773230Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-16T02:29:50.9030350Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T02:29:50.9130420Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-16T02:29:51.1576110Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T02:29:51.1839660Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-16T02:29:51.4537650Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-16T02:29:51.4863030Z ##[endgroup]
+2026-11-16T02:29:51.4975840Z ##[group]Fetching the repository
+2026-11-16T02:29:51.5075880Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +e962c39654f2cb988618efa77873ed2b856cfdd9:refs/remotes/origin/root-cause-windows-linux-smoke
+2026-11-16T02:29:54.7660670Z From https://github.com/ashleydavis/photosphere
+2026-11-16T02:29:54.7739970Z  * [new ref]         e962c39654f2cb988618efa77873ed2b856cfdd9 -> origin/root-cause-windows-linux-smoke
+2026-11-16T02:29:54.7841390Z ##[endgroup]
+2026-11-16T02:29:54.7842670Z ##[group]Determining the checkout info
+2026-11-16T02:29:54.7843470Z ##[endgroup]
+2026-11-16T02:29:54.7844200Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-11-16T02:29:54.7856210Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-16T02:29:54.7991940Z ##[group]Checking out the ref
+2026-11-16T02:29:54.8000040Z [command]/opt/homebrew/bin/git checkout --progress --force -B root-cause-windows-linux-smoke refs/remotes/origin/root-cause-windows-linux-smoke
+2026-11-16T02:29:55.9148780Z Updating files:  31% (3204/10167)
+2026-11-16T02:29:55.9485130Z Updating files:  32% (3254/10167)
+2026-11-16T02:29:55.9864400Z Updating files:  33% (3356/10167)
+2026-11-16T02:29:56.0060270Z Updating files:  34% (3457/10167)
+2026-11-16T02:29:56.0251000Z Updating files:  35% (3559/10167)
+2026-11-16T02:29:56.0433100Z Updating files:  36% (3661/10167)
+2026-11-16T02:29:56.0846640Z Updating files:  37% (3762/10167)
+2026-11-16T02:29:56.1183180Z Updating files:  38% (3864/10167)
+2026-11-16T02:29:56.1557270Z Updating files:  39% (3966/10167)
+2026-11-16T02:29:56.1860900Z Updating files:  40% (4067/10167)
+2026-11-16T02:29:56.2166350Z Updating files:  41% (4169/10167)
+2026-11-16T02:29:56.2400710Z Updating files:  42% (4271/10167)
+2026-11-16T02:29:56.2622490Z Updating files:  43% (4372/10167)
+2026-11-16T02:29:56.3046160Z Updating files:  44% (4474/10167)
+2026-11-16T02:29:56.3397910Z Updating files:  45% (4576/10167)
+2026-11-16T02:29:56.3694490Z Updating files:  46% (4677/10167)
+2026-11-16T02:29:56.4052850Z Updating files:  47% (4779/10167)
+2026-11-16T02:29:56.4334950Z Updating files:  48% (4881/10167)
+2026-11-16T02:29:56.4674060Z Updating files:  49% (4982/10167)
+2026-11-16T02:29:56.5010150Z Updating files:  50% (5084/10167)
+2026-11-16T02:29:56.5287500Z Updating files:  51% (5186/10167)
+2026-11-16T02:29:56.5750880Z Updating files:  52% (5287/10167)
+2026-11-16T02:29:56.6085320Z Updating files:  53% (5389/10167)
+2026-11-16T02:29:56.6388950Z Updating files:  54% (5491/10167)
+2026-11-16T02:29:56.7006810Z Updating files:  55% (5592/10167)
+2026-11-16T02:29:56.7247850Z Updating files:  56% (5694/10167)
+2026-11-16T02:29:56.7877910Z Updating files:  57% (5796/10167)
+2026-11-16T02:29:56.8144600Z Updating files:  58% (5897/10167)
+2026-11-16T02:29:56.8298470Z Updating files:  59% (5999/10167)
+2026-11-16T02:29:56.8389920Z Updating files:  59% (6069/10167)
+2026-11-16T02:29:56.9549890Z Updating files:  60% (6101/10167)
+2026-11-16T02:29:56.9854360Z Updating files:  61% (6202/10167)
+2026-11-16T02:29:57.0261400Z Updating files:  62% (6304/10167)
+2026-11-16T02:29:57.0574370Z Updating files:  63% (6406/10167)
+2026-11-16T02:29:57.0892480Z Updating files:  64% (6507/10167)
+2026-11-16T02:29:57.1075010Z Updating files:  65% (6609/10167)
+2026-11-16T02:29:57.1252260Z Updating files:  66% (6711/10167)
+2026-11-16T02:29:57.1499540Z Updating files:  67% (6812/10167)
+2026-11-16T02:29:57.1749010Z Updating files:  68% (6914/10167)
+2026-11-16T02:29:57.1991540Z Updating files:  69% (7016/10167)
+2026-11-16T02:29:57.2399510Z Updating files:  70% (7117/10167)
+2026-11-16T02:29:57.2669190Z Updating files:  71% (7219/10167)
+2026-11-16T02:29:57.2859520Z Updating files:  72% (7321/10167)
+2026-11-16T02:29:57.3025150Z Updating files:  73% (7422/10167)
+2026-11-16T02:29:57.3642380Z Updating files:  74% (7524/10167)
+2026-11-16T02:29:57.4415470Z Updating files:  75% (7626/10167)
+2026-11-16T02:29:57.4976780Z Updating files:  76% (7727/10167)
+2026-11-16T02:29:57.5178720Z Updating files:  77% (7829/10167)
+2026-11-16T02:29:57.5383620Z Updating files:  78% (7931/10167)
+2026-11-16T02:29:57.5587240Z Updating files:  79% (8032/10167)
+2026-11-16T02:29:57.5898850Z Updating files:  80% (8134/10167)
+2026-11-16T02:29:57.6107170Z Updating files:  81% (8236/10167)
+2026-11-16T02:29:57.7134700Z Updating files:  82% (8337/10167)
+2026-11-16T02:29:57.7519340Z Updating files:  83% (8439/10167)
+2026-11-16T02:29:57.7833780Z Updating files:  84% (8541/10167)
+2026-11-16T02:29:57.8343810Z Updating files:  85% (8642/10167)
+2026-11-16T02:29:57.8355110Z Updating files:  86% (8744/10167)
+2026-11-16T02:29:57.8735150Z Updating files:  86% (8758/10167)
+2026-11-16T02:29:57.9240080Z Updating files:  87% (8846/10167)
+2026-11-16T02:29:57.9543660Z Updating files:  88% (8947/10167)
+2026-11-16T02:29:57.9955240Z Updating files:  89% (9049/10167)
+2026-11-16T02:29:58.0260220Z Updating files:  90% (9151/10167)
+2026-11-16T02:29:58.0752670Z Updating files:  91% (9252/10167)
+2026-11-16T02:29:58.1256790Z Updating files:  92% (9354/10167)
+2026-11-16T02:29:58.1624650Z Updating files:  93% (9456/10167)
+2026-11-16T02:29:58.1908510Z Updating files:  94% (9557/10167)
+2026-11-16T02:29:58.2297180Z Updating files:  95% (9659/10167)
+2026-11-16T02:29:58.2565720Z Updating files:  96% (9761/10167)
+2026-11-16T02:29:58.2871620Z Updating files:  97% (9862/10167)
+2026-11-16T02:29:58.3265610Z Updating files:  98% (9964/10167)
+2026-11-16T02:29:58.3777640Z Updating files:  99% (10066/10167)
+2026-11-16T02:29:58.3779590Z Updating files: 100% (10167/10167)
+2026-11-16T02:29:58.3781550Z Updating files: 100% (10167/10167), done.
+2026-11-16T02:29:58.3999180Z Switched to a new branch 'root-cause-windows-linux-smoke'
+2026-11-16T02:29:58.4014250Z branch 'root-cause-windows-linux-smoke' set up to track 'origin/root-cause-windows-linux-smoke'.
+2026-11-16T02:29:58.4086420Z ##[endgroup]
+2026-11-16T02:29:58.4416180Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-11-16T02:29:58.4626710Z e962c39654f2cb988618efa77873ed2b856cfdd9
+2026-11-16T02:29:58.7438940Z ##[group]Run oven-sh/setup-bun@v2
+2026-11-16T02:29:58.7439330Z with:
+2026-11-16T02:29:58.7439800Z   bun-version: 1.3.14
+2026-11-16T02:29:58.7440180Z   no-cache: false
+2026-11-16T02:29:58.7442690Z   token: ***
+2026-11-16T02:29:58.7442940Z env:
+2026-11-16T02:29:58.7443120Z   BUN_VERSION: 1.3.14
+2026-11-16T02:29:58.7443500Z   NODE_VERSION: 24.15.0
+2026-11-16T02:29:58.7443850Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:29:58.7444220Z   RELEASE_PLATFORM: ios
+2026-11-16T02:29:58.7444470Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:29:58.7444800Z ##[endgroup]
+2026-11-16T02:29:59.2897320Z Cache hit for: bun-kSmiCOujAb+jFWQqTDn70+CxniQ=
+2026-11-16T02:29:59.7684770Z Received 21289718 of 21289718 (100.0%), 53.7 MBs/sec
+2026-11-16T02:29:59.7706440Z Cache Size: ~20 MB (21289718 B)
+2026-11-16T02:29:59.7774470Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/1e0f86d5-764a-427a-89a5-03cc8fd3eca9/cache.tzst -P -C /Users/runner/work/photosphere/photosphere --delay-directory-restore --use-compress-program unzstd
+2026-11-16T02:30:00.1531680Z Cache restored successfully
+2026-11-16T02:30:00.1643620Z [command]/Users/runner/.bun/bin/bun --revision
+2026-11-16T02:30:00.1927050Z 1.3.14+0d9b296af
+2026-11-16T02:30:00.1941570Z Using a cached version of Bun: 1.3.14+0d9b296af
+2026-11-16T02:30:00.2239340Z ##[group]Run actions/setup-node@v4
+2026-11-16T02:30:00.2240400Z with:
+2026-11-16T02:30:00.2241050Z   node-version: 24.15.0
+2026-11-16T02:30:00.2241650Z   always-auth: false
+2026-11-16T02:30:00.2242330Z   check-latest: false
+2026-11-16T02:30:00.2248270Z   token: ***
+2026-11-16T02:30:00.2248830Z env:
+2026-11-16T02:30:00.2249390Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:00.2249990Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:00.2250550Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:00.2251810Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:00.2252400Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:00.2252920Z ##[endgroup]
+2026-11-16T02:30:00.5837870Z Attempting to download 24.15.0...
+2026-11-16T02:30:00.5995470Z (node:4206) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:30:00.5998910Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:30:01.7376910Z Acquiring 24.15.0 - arm64 from https://github.com/actions/node-versions/releases/download/24.15.0-24511264946/node-24.15.0-darwin-arm64.tar.gz
+2026-11-16T02:30:02.6667240Z Extracting ...
+2026-11-16T02:30:02.6974180Z [command]/usr/bin/tar xz --strip 1 -C /Users/runner/work/_temp/cd2de9ce-346b-4728-bdf0-69ca5cef5bdc -f /Users/runner/work/_temp/ac3ca017-89eb-40f7-8173-04a84f835ff5
+2026-11-16T02:30:05.1736220Z Adding to the cache ...
+2026-11-16T02:30:09.2126130Z ##[group]Environment details
+2026-11-16T02:30:09.9305450Z node: v24.15.0
+2026-11-16T02:30:09.9306660Z npm: 11.12.1
+2026-11-16T02:30:09.9307600Z yarn: 1.22.22
+2026-11-16T02:30:09.9309370Z ##[endgroup]
+2026-11-16T02:30:10.0022730Z ##[group]Run jdx/mise-action@v2
+2026-11-16T02:30:10.0023190Z with:
+2026-11-16T02:30:10.0023630Z   install_args: zig jq
+2026-11-16T02:30:10.0024050Z   install: true
+2026-11-16T02:30:10.0024280Z   cache: true
+2026-11-16T02:30:10.0024680Z   cache_save: true
+2026-11-16T02:30:10.0025010Z   cache_key_prefix: mise-v0
+2026-11-16T02:30:10.0025220Z   experimental: false
+2026-11-16T02:30:10.0025610Z   log_level: info
+2026-11-16T02:30:10.0025900Z   reshim: false
+2026-11-16T02:30:10.0028650Z   github_token: ***
+2026-11-16T02:30:10.0029040Z   fetch_from_github: true
+2026-11-16T02:30:10.0029240Z env:
+2026-11-16T02:30:10.0029570Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:10.0030110Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:10.0030460Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:10.0030720Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:10.0031070Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:10.0031470Z ##[endgroup]
+2026-11-16T02:30:10.3898090Z ##[group]Restoring mise cache
+2026-11-16T02:30:12.5744700Z Cache hit for: mise-v0-macos-arm64-e95f48bf5c96f5dbb6d323dc2c37f3ec267d4773c2a6a4871ecf48d4297b50f1-3bf4a0d67d88dc5aa5be7ff0ac03c5258bf51c307989c5c5477fdc7134d93fb1
+2026-11-16T02:30:13.6024770Z Received 100663296 of 127671944 (78.8%), 95.6 MBs/sec
+2026-11-16T02:30:13.8290360Z Received 127671944 of 127671944 (100.0%), 99.0 MBs/sec
+2026-11-16T02:30:13.8319890Z Cache Size: ~122 MB (127671944 B)
+2026-11-16T02:30:13.8516940Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/f8e0f1e2-31c9-4f8f-9b7b-b642878df7e7/cache.tzst -P -C /Users/runner/work/photosphere/photosphere --delay-directory-restore --use-compress-program unzstd
+2026-11-16T02:30:20.1263000Z Cache restored successfully
+2026-11-16T02:30:20.1370820Z mise cache restored from key: mise-v0-macos-arm64-e95f48bf5c96f5dbb6d323dc2c37f3ec267d4773c2a6a4871ecf48d4297b50f1-3bf4a0d67d88dc5aa5be7ff0ac03c5258bf51c307989c5c5477fdc7134d93fb1
+2026-11-16T02:30:20.1473060Z ##[group]Setting env vars
+2026-11-16T02:30:20.1576740Z Setting MISE_LOG_LEVEL=info
+2026-11-16T02:30:20.1682500Z Setting GITHUB_TOKEN=***
+2026-11-16T02:30:20.1685870Z Setting MISE_TRUSTED_CONFIG_PATHS=/Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:20.1687520Z Setting MISE_YES=1
+2026-11-16T02:30:20.1689580Z Adding /Users/runner/.local/share/mise/shims to PATH
+2026-11-16T02:30:20.1706010Z ##[group]Running mise --version
+2026-11-16T02:30:20.1708110Z [command]/Users/runner/.local/share/mise/bin/mise --version
+2026-11-16T02:30:20.2179360Z 2026.11.8 macos-arm64 (2026-11-13)
+2026-11-16T02:30:20.2314810Z ##[endgroup]
+2026-11-16T02:30:20.2417450Z ##[group]Running mise install zig jq
+2026-11-16T02:30:20.2520320Z [command]/Users/runner/.local/share/mise/bin/mise install zig jq
+2026-11-16T02:30:20.2771820Z [2mmise[0m [2mby @jdx[0m – installing 2 tools
+2026-11-16T02:30:20.4564190Z [2mmise[0m [38;5;11m⇢[0m [34mzig[0m@0.16.0  178ms · already installed
+2026-11-16T02:30:20.6010130Z [2mmise[0m [38;5;11m⇢[0m [34mjq[0m@1.7.1    323ms · already installed
+2026-11-16T02:30:20.6013250Z [2mmise[0m [36m████████████████[0m[31m[0m[2m[0m 2/2 · installed 0 tools · 2 already installed in 325ms
+2026-11-16T02:30:20.6716430Z ##[endgroup]
+2026-11-16T02:30:20.6738170Z ##[group]Running mise ls
+2026-11-16T02:30:20.6836630Z [command]/Users/runner/.local/share/mise/bin/mise ls
+2026-11-16T02:30:20.7015560Z bun                              1.3.14 (missing)   ~/work/photosphere/photosphere/mise.toml  1.3.14
+2026-11-16T02:30:20.7016650Z github:ashleydavis/what-changed  0.0.6 (missing)    ~/work/photosphere/photosphere/mise.toml  0.0.6
+2026-11-16T02:30:20.7017640Z jq                               1.7.1              ~/work/photosphere/photosphere/mise.toml  1.7.1
+2026-11-16T02:30:20.7019430Z node                             24.15.0 (missing)  ~/work/photosphere/photosphere/mise.toml  24.15.0
+2026-11-16T02:30:20.7020280Z zig                              0.16.0             ~/work/photosphere/photosphere/mise.toml  0.16.0
+2026-11-16T02:30:20.7043560Z ##[endgroup]
+2026-11-16T02:30:20.7753000Z Prepare all required actions
+2026-11-16T02:30:20.7753660Z Getting action download info
+2026-11-16T02:30:20.8587480Z ##[group]Run ./.github/actions/zig-packages
+2026-11-16T02:30:20.8588430Z env:
+2026-11-16T02:30:20.8589040Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:20.8589590Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:20.8590190Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:20.8590730Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:20.8591500Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:20.8592050Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:20.8597280Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:20.8597890Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:20.8598360Z   MISE_YES: 1
+2026-11-16T02:30:20.8598720Z ##[endgroup]
+2026-11-16T02:30:20.8688880Z ##[start-action display=Restore the packages Zig fetches;id=__self.cache]
+2026-11-16T02:30:21.1832940Z ##[group]Run actions/cache@v4
+2026-11-16T02:30:21.1833370Z with:
+2026-11-16T02:30:21.1835000Z   path: ~/.cache/zig/p
+2026-11-16T02:30:21.1836300Z   key: macOS-ARM64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b
+2026-11-16T02:30:21.1836890Z   enableCrossOsArchive: false
+2026-11-16T02:30:21.1837170Z   fail-on-cache-miss: false
+2026-11-16T02:30:21.1837400Z   lookup-only: false
+2026-11-16T02:30:21.1837610Z   save-always: false
+2026-11-16T02:30:21.1837870Z env:
+2026-11-16T02:30:21.1838070Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:21.1838290Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:21.1838530Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:21.1838810Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:21.1839060Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:21.1839350Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:21.1842430Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:21.1843500Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:21.1844430Z   MISE_YES: 1
+2026-11-16T02:30:21.1844930Z ##[endgroup]
+2026-11-16T02:30:21.5371160Z (node:4667) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:30:21.5474050Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:30:21.6426230Z (node:4667) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:30:21.6739880Z Cache hit for: macOS-ARM64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b
+2026-11-16T02:30:22.7035400Z Received 100663296 of 166187727 (60.6%), 95.9 MBs/sec
+2026-11-16T02:30:23.2624600Z Received 166187727 of 166187727 (100.0%), 101.6 MBs/sec
+2026-11-16T02:30:23.2679570Z Cache Size: ~158 MB (166187727 B)
+2026-11-16T02:30:23.2863460Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/fc82b602-0c22-4331-843a-d883dde1bf8b/cache.tzst -P -C /Users/runner/work/photosphere/photosphere --delay-directory-restore --use-compress-program unzstd
+2026-11-16T02:30:23.7699790Z Cache restored successfully
+2026-11-16T02:30:23.7901910Z Cache restored from key: macOS-ARM64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b
+2026-11-16T02:30:23.8042860Z ##[end-action id=__self.cache;outcome=success;conclusion=success;duration_ms=2935]
+2026-11-16T02:30:23.8046820Z ##[start-action display=Fetch every package the build.zig.zon files name;id=__self.__self]
+2026-11-16T02:30:23.8054680Z ##[end-action id=__self.__self;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:30:23.9479380Z ##[group]Run actions/cache@v4
+2026-11-16T02:30:23.9479940Z with:
+2026-11-16T02:30:23.9480200Z   path: ~/.bun/install/cache
+2026-11-16T02:30:23.9481180Z   key: macOS-ARM64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f
+2026-11-16T02:30:23.9481630Z   restore-keys: macOS-ARM64-bun-
+
+2026-11-16T02:30:23.9481920Z   enableCrossOsArchive: false
+2026-11-16T02:30:23.9482180Z   fail-on-cache-miss: false
+2026-11-16T02:30:23.9482410Z   lookup-only: false
+2026-11-16T02:30:23.9482620Z   save-always: false
+2026-11-16T02:30:23.9482810Z env:
+2026-11-16T02:30:23.9483110Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:23.9483310Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:23.9483560Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:23.9483830Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:23.9484210Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:23.9484470Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:23.9487400Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:23.9487990Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:23.9488440Z   MISE_YES: 1
+2026-11-16T02:30:23.9488720Z ##[endgroup]
+2026-11-16T02:30:24.1086280Z (node:4702) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:30:24.1088760Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:30:24.1928140Z Cache hit for: macOS-ARM64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f
+2026-11-16T02:30:24.2022900Z (node:4702) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:30:24.7470800Z Received 56444087 of 56444087 (100.0%), 110.8 MBs/sec
+2026-11-16T02:30:24.7502540Z Cache Size: ~54 MB (56444087 B)
+2026-11-16T02:30:24.7609120Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/4bed4642-6ea0-4144-8b23-799f4074da14/cache.tzst -P -C /Users/runner/work/photosphere/photosphere --delay-directory-restore --use-compress-program unzstd
+2026-11-16T02:30:44.2263700Z Cache restored successfully
+2026-11-16T02:30:44.2550830Z Cache restored from key: macOS-ARM64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f
+2026-11-16T02:30:44.3005820Z Prepare all required actions
+2026-11-16T02:30:44.3103600Z ##[group]Run ./.github/actions/install-what-changed
+2026-11-16T02:30:44.3104470Z env:
+2026-11-16T02:30:44.3105170Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:44.3105880Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:44.3106680Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:44.3107460Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:44.3108440Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:44.3109390Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:44.3118350Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:44.3119850Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:44.3121770Z   MISE_YES: 1
+2026-11-16T02:30:44.3123250Z ##[endgroup]
+2026-11-16T02:30:44.3157870Z ##[start-action display=Download and install what-changed;id=__self_2.__run]
+2026-11-16T02:30:44.3254440Z ##[group]Run set -euo pipefail
+2026-11-16T02:30:44.3255560Z [36;1mset -euo pipefail[0m
+2026-11-16T02:30:44.3255970Z [36;1m[0m
+2026-11-16T02:30:44.3257310Z [36;1m# Runner OS and architecture pick the release asset. Only the combinations the jobs[0m
+2026-11-16T02:30:44.3258170Z [36;1m# needing what-changed actually run on are handled; anything else fails here rather than[0m
+2026-11-16T02:30:44.3258950Z [36;1m# later, on a missing command, in whichever script happens to reach it first.[0m
+2026-11-16T02:30:44.3259550Z [36;1mcase "$RUNNER_OS-$RUNNER_ARCH" in[0m
+2026-11-16T02:30:44.3259990Z [36;1m    Linux-X64) asset="what-changed-linux-x64.tar.gz";;[0m
+2026-11-16T02:30:44.3260610Z [36;1m    macOS-ARM64) asset="what-changed-macos-arm64.tar.gz";;[0m
+2026-11-16T02:30:44.3261210Z [36;1m    macOS-X64) asset="what-changed-macos-x64.tar.gz";;[0m
+2026-11-16T02:30:44.3261970Z [36;1m    # Windows jobs failed here with "No what-changed release asset for Windows-X64" because this list[0m
+2026-11-16T02:30:44.3262790Z [36;1m    # had no Windows entry, although the release publishes what-changed-windows-x64.zip.[0m
+2026-11-16T02:30:44.3276560Z [36;1m    Windows-X64) asset="what-changed-windows-x64.zip";;[0m
+2026-11-16T02:30:44.3277210Z [36;1m    *) echo "::error::No what-changed release asset for $RUNNER_OS-$RUNNER_ARCH"; exit 1;;[0m
+2026-11-16T02:30:44.3277870Z [36;1mesac[0m
+2026-11-16T02:30:44.3278320Z [36;1m[0m
+2026-11-16T02:30:44.3278870Z [36;1minstall_dir="$RUNNER_TEMP/what-changed-bin"[0m
+2026-11-16T02:30:44.3281810Z [36;1mmkdir -p "$install_dir"[0m
+2026-11-16T02:30:44.3282900Z [36;1mgh release download "$WHAT_CHANGED_VERSION" --repo ashleydavis/what-changed \[0m
+2026-11-16T02:30:44.3283510Z [36;1m    --pattern "$asset" --dir "$RUNNER_TEMP"[0m
+2026-11-16T02:30:44.3283970Z [36;1mcase "$asset" in[0m
+2026-11-16T02:30:44.3285040Z [36;1m    *.zip) unzip -o -q "$RUNNER_TEMP/$asset" -d "$install_dir";;[0m
+2026-11-16T02:30:44.3285820Z [36;1m    *) tar -xzf "$RUNNER_TEMP/$asset" -C "$install_dir";;[0m
+2026-11-16T02:30:44.3286360Z [36;1mesac[0m
+2026-11-16T02:30:44.3287340Z [36;1mchmod +x "$install_dir"/what-changed*[0m
+2026-11-16T02:30:44.3287830Z [36;1m[0m
+2026-11-16T02:30:44.3289100Z [36;1m# GITHUB_PATH rather than a symlink into /usr/local/bin, so this needs no sudo and works the[0m
+2026-11-16T02:30:44.3289840Z [36;1m# same on both runner families.[0m
+2026-11-16T02:30:44.3290390Z [36;1mecho "$install_dir" >> "$GITHUB_PATH"[0m
+2026-11-16T02:30:44.5249620Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:30:44.5250110Z env:
+2026-11-16T02:30:44.5250620Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:44.5251120Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:44.5251570Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:44.5251990Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:44.5252350Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:44.5252690Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:44.5255430Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:44.5255990Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:44.5256470Z   MISE_YES: 1
+2026-11-16T02:30:44.5258860Z   GH_TOKEN: ***
+2026-11-16T02:30:44.5259880Z ##[endgroup]
+2026-11-16T02:30:46.2000020Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=1883]
+2026-11-16T02:30:46.2096240Z Prepare all required actions
+2026-11-16T02:30:46.2317490Z ##[group]Run ./.github/actions/retry-install
+2026-11-16T02:30:46.2317810Z with:
+2026-11-16T02:30:46.2318080Z   run: bun install
+2026-11-16T02:30:46.2318270Z   attempts: 3
+2026-11-16T02:30:46.2318490Z   delay-seconds: 15
+2026-11-16T02:30:46.2318790Z env:
+2026-11-16T02:30:46.2318970Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:46.2319240Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:46.2319520Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:46.2319800Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:46.2320890Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:46.2321610Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:46.2327320Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:46.2327640Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:46.2348790Z   MISE_YES: 1
+2026-11-16T02:30:46.2349050Z ##[endgroup]
+2026-11-16T02:30:46.2364410Z ##[start-action display=Run set -uo pipefail;id=__self_3.__run]
+2026-11-16T02:30:46.2414110Z ##[group]Run set -uo pipefail
+2026-11-16T02:30:46.2414580Z [36;1mset -uo pipefail[0m
+2026-11-16T02:30:46.2414850Z [36;1m[0m
+2026-11-16T02:30:46.2415020Z [36;1m#[0m
+2026-11-16T02:30:46.2415570Z [36;1m# Prints the verify entries that are not satisfied, each preceded by a space. Empty when they[0m
+2026-11-16T02:30:46.2416210Z [36;1m# all resolve. Word splitting on the input is intended: it is a space-separated list. An entry[0m
+2026-11-16T02:30:46.2417870Z [36;1m# holding "|"-separated alternatives is satisfied by any one of them.[0m
+2026-11-16T02:30:46.2419180Z [36;1m#[0m
+2026-11-16T02:30:46.2419750Z [36;1mmissing_tools() {[0m
+2026-11-16T02:30:46.2420430Z [36;1m    local missing=""[0m
+2026-11-16T02:30:46.2421070Z [36;1m    local entry[0m
+2026-11-16T02:30:46.2422570Z [36;1m    local alternative[0m
+2026-11-16T02:30:46.2423800Z [36;1m    local found[0m
+2026-11-16T02:30:46.2424560Z [36;1m    for entry in $RETRY_INSTALL_VERIFY; do[0m
+2026-11-16T02:30:46.2425310Z [36;1m        found=""[0m
+2026-11-16T02:30:46.2425960Z [36;1m        for alternative in ${entry//|/ }; do[0m
+2026-11-16T02:30:46.2426820Z [36;1m            if command -v "$alternative" >/dev/null 2>&1; then[0m
+2026-11-16T02:30:46.2427600Z [36;1m                found="yes"[0m
+2026-11-16T02:30:46.2428340Z [36;1m                break[0m
+2026-11-16T02:30:46.2429120Z [36;1m            fi[0m
+2026-11-16T02:30:46.2430770Z [36;1m        done[0m
+2026-11-16T02:30:46.2431100Z [36;1m        if [ -z "$found" ]; then[0m
+2026-11-16T02:30:46.2431550Z [36;1m            missing="$missing $entry"[0m
+2026-11-16T02:30:46.2431810Z [36;1m        fi[0m
+2026-11-16T02:30:46.2432000Z [36;1m    done[0m
+2026-11-16T02:30:46.2432170Z [36;1m    echo "$missing"[0m
+2026-11-16T02:30:46.2432480Z [36;1m}[0m
+2026-11-16T02:30:46.2432650Z [36;1m[0m
+2026-11-16T02:30:46.2432840Z [36;1minstallStatus=0[0m
+2026-11-16T02:30:46.2433320Z [36;1mmissing=""[0m
+2026-11-16T02:30:46.2433530Z [36;1mattempt=1[0m
+2026-11-16T02:30:46.2433760Z [36;1m[0m
+2026-11-16T02:30:46.2434090Z [36;1mwhile [ "$attempt" -le "$RETRY_INSTALL_ATTEMPTS" ]; do[0m
+2026-11-16T02:30:46.2434490Z [36;1m    installStatus=0[0m
+2026-11-16T02:30:46.2434780Z [36;1m    bash -c "$RETRY_INSTALL_RUN" || installStatus=$?[0m
+2026-11-16T02:30:46.2435180Z [36;1m    missing="$(missing_tools)"[0m
+2026-11-16T02:30:46.2435460Z [36;1m[0m
+2026-11-16T02:30:46.2435760Z [36;1m    if [ "$installStatus" -eq 0 ] && [ -z "$missing" ]; then[0m
+2026-11-16T02:30:46.2436090Z [36;1m        exit 0[0m
+2026-11-16T02:30:46.2436300Z [36;1m    fi[0m
+2026-11-16T02:30:46.2436480Z [36;1m[0m
+2026-11-16T02:30:46.2436850Z [36;1m    if [ "$installStatus" -ne 0 ]; then[0m
+2026-11-16T02:30:46.2437300Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS exited $installStatus."[0m
+2026-11-16T02:30:46.2437670Z [36;1m    fi[0m
+2026-11-16T02:30:46.2437930Z [36;1m    if [ -n "$missing" ]; then[0m
+2026-11-16T02:30:46.2439390Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS reported success but left these missing:$missing"[0m
+2026-11-16T02:30:46.2440160Z [36;1m    fi[0m
+2026-11-16T02:30:46.2440410Z [36;1m[0m
+2026-11-16T02:30:46.2440630Z [36;1m    if [ "$attempt" -eq "$RETRY_INSTALL_ATTEMPTS" ]; then[0m
+2026-11-16T02:30:46.2441060Z [36;1m        break[0m
+2026-11-16T02:30:46.2441270Z [36;1m    fi[0m
+2026-11-16T02:30:46.2441440Z [36;1m[0m
+2026-11-16T02:30:46.2441640Z [36;1m    delay=$((RETRY_INSTALL_DELAY * attempt))[0m
+2026-11-16T02:30:46.2441950Z [36;1m    echo "Waiting ${delay}s before retrying."[0m
+2026-11-16T02:30:46.2442200Z [36;1m    sleep "$delay"[0m
+2026-11-16T02:30:46.2442400Z [36;1m    attempt=$((attempt + 1))[0m
+2026-11-16T02:30:46.2442710Z [36;1mdone[0m
+2026-11-16T02:30:46.2442930Z [36;1m[0m
+2026-11-16T02:30:46.2443180Z [36;1mif [ -n "$missing" ]; then[0m
+2026-11-16T02:30:46.2444590Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts; still missing:$missing"[0m
+2026-11-16T02:30:46.2445090Z [36;1melse[0m
+2026-11-16T02:30:46.2445480Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts (last exit $installStatus)."[0m
+2026-11-16T02:30:46.2445920Z [36;1mfi[0m
+2026-11-16T02:30:46.2446070Z [36;1mexit 1[0m
+2026-11-16T02:30:46.2525360Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:30:46.2525730Z env:
+2026-11-16T02:30:46.2525970Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:46.2526200Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:46.2526450Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:46.2526720Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:46.2526960Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:46.2527200Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:46.2529560Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:46.2549530Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:46.2551820Z   MISE_YES: 1
+2026-11-16T02:30:46.2552030Z   RETRY_INSTALL_RUN: bun install
+2026-11-16T02:30:46.2552680Z   RETRY_INSTALL_VERIFY: 
+2026-11-16T02:30:46.2552900Z   RETRY_INSTALL_ATTEMPTS: 3
+2026-11-16T02:30:46.2553100Z   RETRY_INSTALL_DELAY: 15
+2026-11-16T02:30:46.2553280Z ##[endgroup]
+2026-11-16T02:30:46.4037920Z bun install v1.3.14 (0d9b296a)
+2026-11-16T02:30:48.4389140Z 
+2026-11-16T02:30:48.4396420Z + @aws-sdk/client-s3@3.1016.0
+2026-11-16T02:30:48.4406470Z + ziggy-remote-control-server@github:ashleydavis/ziggy#9ff4aa5
+2026-11-16T02:30:48.4406910Z 
+2026-11-16T02:30:48.4407160Z 756 packages installed [2.07s]
+2026-11-16T02:30:48.4415220Z ##[end-action id=__self_3.__run;outcome=success;conclusion=success;duration_ms=2204]
+2026-11-16T02:30:48.4502100Z Prepare all required actions
+2026-11-16T02:30:48.4633240Z ##[group]Run ./.github/actions/retry-install
+2026-11-16T02:30:48.4633800Z with:
+2026-11-16T02:30:48.4634090Z   run: brew install imagemagick ffmpeg tree rsync
+2026-11-16T02:30:48.4634550Z   verify: magick|convert ffmpeg ffprobe
+2026-11-16T02:30:48.4634840Z   attempts: 3
+2026-11-16T02:30:48.4635080Z   delay-seconds: 15
+2026-11-16T02:30:48.4635310Z env:
+2026-11-16T02:30:48.4635550Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:48.4635810Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:48.4636020Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:48.4636450Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:48.4637290Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:48.4637690Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:48.4640490Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:48.4640910Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:48.4641340Z   MISE_YES: 1
+2026-11-16T02:30:48.4641560Z ##[endgroup]
+2026-11-16T02:30:48.4649110Z ##[start-action display=Run set -uo pipefail;id=__self_4.__run]
+2026-11-16T02:30:48.4690990Z ##[group]Run set -uo pipefail
+2026-11-16T02:30:48.4691770Z [36;1mset -uo pipefail[0m
+2026-11-16T02:30:48.4692150Z [36;1m[0m
+2026-11-16T02:30:48.4692390Z [36;1m#[0m
+2026-11-16T02:30:48.4692800Z [36;1m# Prints the verify entries that are not satisfied, each preceded by a space. Empty when they[0m
+2026-11-16T02:30:48.4693450Z [36;1m# all resolve. Word splitting on the input is intended: it is a space-separated list. An entry[0m
+2026-11-16T02:30:48.4694110Z [36;1m# holding "|"-separated alternatives is satisfied by any one of them.[0m
+2026-11-16T02:30:48.4694570Z [36;1m#[0m
+2026-11-16T02:30:48.4694790Z [36;1mmissing_tools() {[0m
+2026-11-16T02:30:48.4695090Z [36;1m    local missing=""[0m
+2026-11-16T02:30:48.4695420Z [36;1m    local entry[0m
+2026-11-16T02:30:48.4695740Z [36;1m    local alternative[0m
+2026-11-16T02:30:48.4696070Z [36;1m    local found[0m
+2026-11-16T02:30:48.4696370Z [36;1m    for entry in $RETRY_INSTALL_VERIFY; do[0m
+2026-11-16T02:30:48.4696760Z [36;1m        found=""[0m
+2026-11-16T02:30:48.4697040Z [36;1m        for alternative in ${entry//|/ }; do[0m
+2026-11-16T02:30:48.4697410Z [36;1m            if command -v "$alternative" >/dev/null 2>&1; then[0m
+2026-11-16T02:30:48.4697800Z [36;1m                found="yes"[0m
+2026-11-16T02:30:48.4698190Z [36;1m                break[0m
+2026-11-16T02:30:48.4698460Z [36;1m            fi[0m
+2026-11-16T02:30:48.4698710Z [36;1m        done[0m
+2026-11-16T02:30:48.4699800Z [36;1m        if [ -z "$found" ]; then[0m
+2026-11-16T02:30:48.4700690Z [36;1m            missing="$missing $entry"[0m
+2026-11-16T02:30:48.4701340Z [36;1m        fi[0m
+2026-11-16T02:30:48.4701950Z [36;1m    done[0m
+2026-11-16T02:30:48.4722630Z [36;1m    echo "$missing"[0m
+2026-11-16T02:30:48.4722980Z [36;1m}[0m
+2026-11-16T02:30:48.4723160Z [36;1m[0m
+2026-11-16T02:30:48.4723350Z [36;1minstallStatus=0[0m
+2026-11-16T02:30:48.4723610Z [36;1mmissing=""[0m
+2026-11-16T02:30:48.4723830Z [36;1mattempt=1[0m
+2026-11-16T02:30:48.4724260Z [36;1m[0m
+2026-11-16T02:30:48.4724620Z [36;1mwhile [ "$attempt" -le "$RETRY_INSTALL_ATTEMPTS" ]; do[0m
+2026-11-16T02:30:48.4725030Z [36;1m    installStatus=0[0m
+2026-11-16T02:30:48.4725950Z [36;1m    bash -c "$RETRY_INSTALL_RUN" || installStatus=$?[0m
+2026-11-16T02:30:48.4726260Z [36;1m    missing="$(missing_tools)"[0m
+2026-11-16T02:30:48.4726490Z [36;1m[0m
+2026-11-16T02:30:48.4726720Z [36;1m    if [ "$installStatus" -eq 0 ] && [ -z "$missing" ]; then[0m
+2026-11-16T02:30:48.4727050Z [36;1m        exit 0[0m
+2026-11-16T02:30:48.4727270Z [36;1m    fi[0m
+2026-11-16T02:30:48.4727430Z [36;1m[0m
+2026-11-16T02:30:48.4727620Z [36;1m    if [ "$installStatus" -ne 0 ]; then[0m
+2026-11-16T02:30:48.4728030Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS exited $installStatus."[0m
+2026-11-16T02:30:48.4728510Z [36;1m    fi[0m
+2026-11-16T02:30:48.4728740Z [36;1m    if [ -n "$missing" ]; then[0m
+2026-11-16T02:30:48.4729700Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS reported success but left these missing:$missing"[0m
+2026-11-16T02:30:48.4730260Z [36;1m    fi[0m
+2026-11-16T02:30:48.4730440Z [36;1m[0m
+2026-11-16T02:30:48.4730710Z [36;1m    if [ "$attempt" -eq "$RETRY_INSTALL_ATTEMPTS" ]; then[0m
+2026-11-16T02:30:48.4731050Z [36;1m        break[0m
+2026-11-16T02:30:48.4731240Z [36;1m    fi[0m
+2026-11-16T02:30:48.4731400Z [36;1m[0m
+2026-11-16T02:30:48.4731600Z [36;1m    delay=$((RETRY_INSTALL_DELAY * attempt))[0m
+2026-11-16T02:30:48.4731900Z [36;1m    echo "Waiting ${delay}s before retrying."[0m
+2026-11-16T02:30:48.4732160Z [36;1m    sleep "$delay"[0m
+2026-11-16T02:30:48.4732370Z [36;1m    attempt=$((attempt + 1))[0m
+2026-11-16T02:30:48.4732580Z [36;1mdone[0m
+2026-11-16T02:30:48.4732730Z [36;1m[0m
+2026-11-16T02:30:48.4732890Z [36;1mif [ -n "$missing" ]; then[0m
+2026-11-16T02:30:48.4733390Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts; still missing:$missing"[0m
+2026-11-16T02:30:48.4733860Z [36;1melse[0m
+2026-11-16T02:30:48.4734240Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts (last exit $installStatus)."[0m
+2026-11-16T02:30:48.4734650Z [36;1mfi[0m
+2026-11-16T02:30:48.4735550Z [36;1mexit 1[0m
+2026-11-16T02:30:48.5226400Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:30:48.5227160Z env:
+2026-11-16T02:30:48.5227600Z   BUN_VERSION: 1.3.14
+2026-11-16T02:30:48.5228130Z   NODE_VERSION: 24.15.0
+2026-11-16T02:30:48.5228650Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:30:48.5229200Z   RELEASE_PLATFORM: ios
+2026-11-16T02:30:48.5229720Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:30:48.5230260Z   MISE_LOG_LEVEL: info
+2026-11-16T02:30:48.5233710Z   GITHUB_TOKEN: ***
+2026-11-16T02:30:48.5234130Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:30:48.5234470Z   MISE_YES: 1
+2026-11-16T02:30:48.5234750Z   RETRY_INSTALL_RUN: brew install imagemagick ffmpeg tree rsync
+2026-11-16T02:30:48.5235110Z   RETRY_INSTALL_VERIFY: magick|convert ffmpeg ffprobe
+2026-11-16T02:30:48.5235380Z   RETRY_INSTALL_ATTEMPTS: 3
+2026-11-16T02:30:48.5235580Z   RETRY_INSTALL_DELAY: 15
+2026-11-16T02:30:48.5235820Z ##[endgroup]
+2026-11-16T02:30:55.1071740Z [32m==>[0m [1mDownloading bottle manifests[0m
+2026-11-16T02:30:55.1172460Z ✔︎ Bottle Manifest imagemagick (7.1.2-35)
+2026-11-16T02:30:55.1271560Z ✔︎ Bottle Manifest ffmpeg (9.0.2_1)
+2026-11-16T02:30:55.1373930Z ✔︎ Bottle Manifest tree (2.3.2)
+2026-11-16T02:30:55.1479520Z ✔︎ Bottle Manifest rsync (3.5.1)
+2026-11-16T02:30:55.3317780Z [34m==>[0m [1mWould install 4 formulae:[0m
+2026-11-16T02:30:55.3318630Z imagemagick  7.1.2-35
+2026-11-16T02:30:55.3319080Z ffmpeg       9.0.2_1
+2026-11-16T02:30:55.3319570Z tree         2.3.2
+2026-11-16T02:30:55.3320060Z rsync        3.5.1
+2026-11-16T02:30:55.3339980Z [34m==>[0m [1mWould install 7 dependencies for imagemagick:[0m
+2026-11-16T02:30:55.3341160Z libvmaf   3.2.1
+2026-11-16T02:30:55.3342550Z aom       3.15.3
+2026-11-16T02:30:55.3343480Z libde265  1.1.3
+2026-11-16T02:30:55.3344320Z x265      4.3
+2026-11-16T02:30:55.3344980Z libheif   1.23.7
+2026-11-16T02:30:55.3345730Z m4        1.4.21
+2026-11-16T02:30:55.3349840Z libtool   2.6.2
+2026-11-16T02:30:55.3878090Z [34m==>[0m [1mWould install 11 dependencies for ffmpeg:[0m
+2026-11-16T02:30:55.3878670Z dav1d        1.5.4
+2026-11-16T02:30:55.3879120Z mpg123       1.33.7
+2026-11-16T02:30:55.3879470Z lame         4.0
+2026-11-16T02:30:55.3879850Z libvmaf      3.2.1
+2026-11-16T02:30:55.3880650Z libvpx       1.17.0
+2026-11-16T02:30:55.3881020Z opus         1.6.1
+2026-11-16T02:30:55.3881530Z sdl3         3.4.18
+2026-11-16T02:30:55.3881900Z sdl2-compat  2.32.74
+2026-11-16T02:30:55.3882270Z svt-av1      4.2.0
+2026-11-16T02:30:55.3882610Z x264         r3222
+2026-11-16T02:30:55.3882950Z x265         4.3
+2026-11-16T02:30:55.4470320Z [34m==>[0m [1mWould install 2 dependencies for rsync:[0m
+2026-11-16T02:30:55.4472670Z popt    1.19
+2026-11-16T02:30:55.4475320Z xxhash  0.8.4
+2026-11-16T02:30:56.3493910Z [32m==>[0m [1mFetching downloads for: [32mimagemagick[39m, [32mffmpeg[39m, [32mtree[39m and [32mrsync[39m[0m
+2026-11-16T02:30:57.5022560Z ✔︎ Bottle Manifest libvmaf (3.2.1)
+2026-11-16T02:31:00.3756330Z ✔︎ Bottle Manifest aom (3.15.3)
+2026-11-16T02:31:00.3861650Z ✔︎ Bottle Manifest libde265 (1.1.3)
+2026-11-16T02:31:01.9930530Z ✔︎ Bottle rsync (3.5.1)
+2026-11-16T02:31:02.0747620Z ✔︎ Bottle tree (2.3.2)
+2026-11-16T02:31:02.0851790Z ✔︎ Bottle Manifest x265 (4.3)
+2026-11-16T02:31:02.6520540Z ✔︎ Bottle libvmaf (3.2.1)
+2026-11-16T02:31:02.6624310Z ✔︎ Bottle Manifest libheif (1.23.7)
+2026-11-16T02:31:02.6726850Z ✔︎ Bottle Manifest m4 (1.4.21)
+2026-11-16T02:31:03.0827770Z ✔︎ Bottle imagemagick (7.1.2-35)
+2026-11-16T02:31:04.9656570Z ✔︎ Bottle aom (3.15.3)
+2026-11-16T02:31:04.9756800Z ✔︎ Bottle Manifest libtool (2.6.2)
+2026-11-16T02:31:04.9861020Z ✔︎ Bottle Manifest dav1d (1.5.4)
+2026-11-16T02:31:05.5717760Z ✔︎ Bottle ffmpeg (9.0.2_1)
+2026-11-16T02:31:06.3982720Z ✔︎ Bottle libde265 (1.1.3)
+2026-11-16T02:31:06.4085250Z ✔︎ Bottle Manifest mpg123 (1.33.7)
+2026-11-16T02:31:06.4185980Z ✔︎ Bottle Manifest lame (4.0)
+2026-11-16T02:31:06.5903780Z ✔︎ Bottle x265 (4.3)
+2026-11-16T02:31:06.9725070Z ✔︎ Bottle libheif (1.23.7)
+2026-11-16T02:31:06.9829410Z ✔︎ Bottle Manifest libvpx (1.17.0)
+2026-11-16T02:31:06.9933750Z ✔︎ Bottle Manifest opus (1.6.1)
+2026-11-16T02:31:07.3206850Z ✔︎ Bottle m4 (1.4.21)
+2026-11-16T02:31:09.6434100Z ✔︎ Bottle libtool (2.6.2)
+2026-11-16T02:31:09.6537650Z ✔︎ Bottle Manifest sdl3 (3.4.18)
+2026-11-16T02:31:10.3171950Z ✔︎ Bottle dav1d (1.5.4)
+2026-11-16T02:31:11.0115460Z ✔︎ Bottle mpg123 (1.33.7)
+2026-11-16T02:31:11.0217100Z ✔︎ Bottle Manifest sdl2-compat (2.32.74)
+2026-11-16T02:31:11.0322520Z ✔︎ Bottle Manifest svt-av1 (4.2.0)
+2026-11-16T02:31:11.3103070Z ✔︎ Bottle lame (4.0)
+2026-11-16T02:31:11.3207250Z ✔︎ Bottle Manifest x264 (r3222)
+2026-11-16T02:31:11.8309340Z ✔︎ Bottle libvpx (1.17.0)
+2026-11-16T02:31:11.8411300Z ✔︎ Bottle Manifest popt (1.19)
+2026-11-16T02:31:12.1981620Z ✔︎ Bottle opus (1.6.1)
+2026-11-16T02:31:12.2084720Z ✔︎ Bottle Manifest xxhash (0.8.4)
+2026-11-16T02:31:14.0370150Z ✔︎ Bottle sdl3 (3.4.18)
+2026-11-16T02:31:14.5866140Z ✔︎ Bottle sdl2-compat (2.32.74)
+2026-11-16T02:31:15.0815730Z ✔︎ Bottle svt-av1 (4.2.0)
+2026-11-16T02:31:15.1341920Z ✔︎ Bottle x264 (r3222)
+2026-11-16T02:31:15.5188200Z ✔︎ Bottle popt (1.19)
+2026-11-16T02:31:15.6805450Z ✔︎ Bottle xxhash (0.8.4)
+2026-11-16T02:31:15.8059020Z [32m==>[0m [1mInstalling dependencies for imagemagick:[0m [32mlibvmaf[39m, [32maom[39m, [32mlibde265[39m, [32mx265[39m, [32mlibheif[39m, [32mm4[39m and [32mlibtool[39m[0m
+2026-11-16T02:31:15.8062710Z [32m==>[0m [1mInstalling imagemagick dependency: [32mlibvmaf[39m (3.2.1)[0m
+2026-11-16T02:31:15.8285330Z [34m==>[0m [1mPouring libvmaf--3.2.1.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:19.3907430Z 🍺  /opt/homebrew/Cellar/libvmaf/3.2.1: 243 files, 8.2MB
+2026-11-16T02:31:19.4010240Z [32m==>[0m [1mInstalling imagemagick dependency: [32maom[39m (3.15.3)[0m
+2026-11-16T02:31:19.4393620Z [34m==>[0m [1mPouring aom--3.15.3.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:22.0787060Z 🍺  /opt/homebrew/Cellar/aom/3.15.3: 30 files, 11.3MB
+2026-11-16T02:31:22.0896740Z [32m==>[0m [1mInstalling imagemagick dependency: [32mlibde265[39m (1.1.3)[0m
+2026-11-16T02:31:22.1002990Z [34m==>[0m [1mPouring libde265--1.1.3.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:24.3697400Z 🍺  /opt/homebrew/Cellar/libde265/1.1.3: 18 files, 435.2KB
+2026-11-16T02:31:24.3702140Z [32m==>[0m [1mInstalling imagemagick dependency: [32mx265[39m (4.3)[0m
+2026-11-16T02:31:24.3783340Z [34m==>[0m [1mPouring x265--4.3.arm64_tahoe.bottle.1.tar.gz[0m
+2026-11-16T02:31:27.2237960Z 🍺  /opt/homebrew/Cellar/x265/4.3: 12 files, 17.3MB
+2026-11-16T02:31:27.2242370Z [32m==>[0m [1mInstalling imagemagick dependency: [32mlibheif[39m (1.23.7)[0m
+2026-11-16T02:31:27.4984970Z [34m==>[0m [1mPouring libheif--1.23.7.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:30.4188540Z 🍺  /opt/homebrew/Cellar/libheif/1.23.7: 53 files, 9MB
+2026-11-16T02:31:30.4287670Z [32m==>[0m [1mInstalling imagemagick dependency: [32mm4[39m (1.4.21)[0m
+2026-11-16T02:31:30.4392070Z [34m==>[0m [1mPouring m4--1.4.21.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:31.9758670Z 🍺  /opt/homebrew/Cellar/m4/1.4.21: 14 files, 815.7KB
+2026-11-16T02:31:31.9890630Z [32m==>[0m [1mInstalling imagemagick dependency: [32mlibtool[39m (2.6.2)[0m
+2026-11-16T02:31:32.0029070Z [34m==>[0m [1mPouring libtool--2.6.2.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:35.4281430Z 🍺  /opt/homebrew/Cellar/libtool/2.6.2: 78 files, 4.2MB
+2026-11-16T02:31:35.4385840Z [32m==>[0m [1mInstalling [32mimagemagick[39m[0m
+2026-11-16T02:31:35.4488800Z [34m==>[0m [1mPouring imagemagick--7.1.2-35.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:43.1922870Z 🍺  /opt/homebrew/Cellar/imagemagick/7.1.2-35: 681 files, 28.7MB
+2026-11-16T02:31:43.3278920Z [32m==>[0m [1mInstalling dependencies for ffmpeg:[0m [32mdav1d[39m, [32mmpg123[39m, [32mlame[39m, [32mlibvpx[39m, [32mopus[39m, [32msdl3[39m, [32msdl2-compat[39m, [32msvt-av1[39m and [32mx264[39m[0m
+2026-11-16T02:31:43.3423920Z [32m==>[0m [1mInstalling ffmpeg dependency: [32mdav1d[39m (1.5.4)[0m
+2026-11-16T02:31:43.3560770Z [34m==>[0m [1mPouring dav1d--1.5.4.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:46.3082620Z 🍺  /opt/homebrew/Cellar/dav1d/1.5.4: 16 files, 959.6KB
+2026-11-16T02:31:46.3089180Z [32m==>[0m [1mInstalling ffmpeg dependency: [32mmpg123[39m (1.33.7)[0m
+2026-11-16T02:31:46.3255730Z [34m==>[0m [1mPouring mpg123--1.33.7.arm64_tahoe.bottle.1.tar.gz[0m
+2026-11-16T02:31:48.8092320Z 🍺  /opt/homebrew/Cellar/mpg123/1.33.7: 34 files, 1.9MB
+2026-11-16T02:31:48.8096580Z [32m==>[0m [1mInstalling ffmpeg dependency: [32mlame[39m (4.0)[0m
+2026-11-16T02:31:48.8347880Z [34m==>[0m [1mPouring lame--4.0.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:51.2953100Z 🍺  /opt/homebrew/Cellar/lame/4.0: 29 files, 1.9MB
+2026-11-16T02:31:51.2955860Z [32m==>[0m [1mInstalling ffmpeg dependency: [32mlibvpx[39m (1.17.0)[0m
+2026-11-16T02:31:51.3017250Z [34m==>[0m [1mPouring libvpx--1.17.0.arm64_tahoe.bottle.1.tar.gz[0m
+2026-11-16T02:31:53.6388470Z 🍺  /opt/homebrew/Cellar/libvpx/1.17.0: 22 files, 4.4MB
+2026-11-16T02:31:53.6396100Z [32m==>[0m [1mInstalling ffmpeg dependency: [32mopus[39m (1.6.1)[0m
+2026-11-16T02:31:53.6484500Z [34m==>[0m [1mPouring opus--1.6.1.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:55.9718690Z 🍺  /opt/homebrew/Cellar/opus/1.6.1: 16 files, 1.1MB
+2026-11-16T02:31:55.9720880Z [32m==>[0m [1mInstalling ffmpeg dependency: [32msdl3[39m (3.4.18)[0m
+2026-11-16T02:31:55.9786000Z [34m==>[0m [1mPouring sdl3--3.4.18.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:31:58.3509960Z 🍺  /opt/homebrew/Cellar/sdl3/3.4.18: 103 files, 6.3MB
+2026-11-16T02:31:58.3521950Z [32m==>[0m [1mInstalling ffmpeg dependency: [32msdl2-compat[39m (2.32.74)[0m
+2026-11-16T02:31:58.3864050Z [34m==>[0m [1mPouring sdl2-compat--2.32.74.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:32:01.0167030Z 🍺  /opt/homebrew/Cellar/sdl2-compat/2.32.74: 117 files, 3.3MB
+2026-11-16T02:32:01.0176210Z [32m==>[0m [1mInstalling ffmpeg dependency: [32msvt-av1[39m (4.2.0)[0m
+2026-11-16T02:32:01.0241600Z [34m==>[0m [1mPouring svt-av1--4.2.0.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:32:03.7236560Z 🍺  /opt/homebrew/Cellar/svt-av1/4.2.0: 23 files, 3.3MB
+2026-11-16T02:32:03.7296300Z [32m==>[0m [1mInstalling ffmpeg dependency: [32mx264[39m (r3222)[0m
+2026-11-16T02:32:03.7298670Z [34m==>[0m [1mPouring x264--r3222.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:32:06.2370800Z 🍺  /opt/homebrew/Cellar/x264/r3222: 12 files, 4.4MB
+2026-11-16T02:32:06.2374620Z [32m==>[0m [1mInstalling [32mffmpeg[39m[0m
+2026-11-16T02:32:06.2378710Z [34m==>[0m [1mPouring ffmpeg--9.0.2_1.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:32:09.6934750Z 🍺  /opt/homebrew/Cellar/ffmpeg/9.0.2_1: 290 files, 53.9MB
+2026-11-16T02:32:09.7018910Z [34m==>[0m [1mPouring tree--2.3.2.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:32:10.9897330Z 🍺  /opt/homebrew/Cellar/tree/2.3.2: 9 files, 195.2KB
+2026-11-16T02:32:11.1036580Z [32m==>[0m [1mInstalling dependencies for rsync:[0m [32mpopt[39m and [32mxxhash[39m[0m
+2026-11-16T02:32:11.1049940Z [32m==>[0m [1mInstalling rsync dependency: [32mpopt[39m (1.19)[0m
+2026-11-16T02:32:11.1116570Z [34m==>[0m [1mPouring popt--1.19.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:32:13.5653200Z 🍺  /opt/homebrew/Cellar/popt/1.19: 11 files, 179.4KB
+2026-11-16T02:32:13.5657650Z [32m==>[0m [1mInstalling rsync dependency: [32mxxhash[39m (0.8.4)[0m
+2026-11-16T02:32:13.5716940Z [34m==>[0m [1mPouring xxhash--0.8.4.arm64_tahoe.bottle.tar.gz[0m
+2026-11-16T02:32:15.7498230Z 🍺  /opt/homebrew/Cellar/xxhash/0.8.4: 28 files, 585.3KB
+2026-11-16T02:32:15.7602500Z [32m==>[0m [1mInstalling [32mrsync[39m[0m
+2026-11-16T02:32:15.7693640Z [34m==>[0m [1mPouring rsync--3.5.1.arm64_tahoe.bottle.1.tar.gz[0m
+2026-11-16T02:32:18.0229000Z 🍺  /opt/homebrew/Cellar/rsync/3.5.1: 14 files, 1.3MB
+2026-11-16T02:32:18.0242640Z [32m==>[0m [1mCaveats[0m
+2026-11-16T02:32:18.0244740Z [34m==>[0m [1mimagemagick[0m
+2026-11-16T02:32:18.0246210Z imagemagick-full includes additional tools and libraries that are not included in the regular imagemagick formula.
+2026-11-16T02:32:18.0247730Z [34m==>[0m [1mffmpeg[0m
+2026-11-16T02:32:18.0249040Z ffmpeg-full includes additional tools and libraries that are not included in the regular ffmpeg formula.
+2026-11-16T02:32:18.0636150Z ##[end-action id=__self_4.__run;outcome=success;conclusion=success;duration_ms=89598]
+2026-11-16T02:32:18.0873660Z ##[group]Run bun run --filter=ziggy setup:ios
+2026-11-16T02:32:18.0882550Z [36;1mbun run --filter=ziggy setup:ios[0m
+2026-11-16T02:32:18.1431920Z shell: /bin/bash -e {0}
+2026-11-16T02:32:18.1432770Z env:
+2026-11-16T02:32:18.1433470Z   BUN_VERSION: 1.3.14
+2026-11-16T02:32:18.1434370Z   NODE_VERSION: 24.15.0
+2026-11-16T02:32:18.1434990Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:32:18.1435420Z   RELEASE_PLATFORM: ios
+2026-11-16T02:32:18.1435750Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:32:18.1436130Z   MISE_LOG_LEVEL: info
+2026-11-16T02:32:18.1438970Z   GITHUB_TOKEN: ***
+2026-11-16T02:32:18.1439610Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:32:18.1440070Z   MISE_YES: 1
+2026-11-16T02:32:18.1440460Z ##[endgroup]
+2026-11-16T02:32:48.6374720Z ziggy setup:ios: Xcode 26.6 and simctl are present.
+2026-11-16T02:32:48.6390500Z ziggy setup:ios: Exited with code 0
+2026-11-16T02:32:48.6773260Z ##[group]Run actions/cache/restore@v4
+2026-11-16T02:32:48.6773880Z with:
+2026-11-16T02:32:48.6775100Z   path: out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
+.zig-cache
+third-party/aws/zig-out
+third-party/zlib-ng/zig-out
+third-party/imagemagick/zig-out
+third-party/ffmpeg/zig-out
+
+2026-11-16T02:32:48.6776390Z   key: photosphere-app-ios-e962c39654f2cb988618efa77873ed2b856cfdd9-43790635983
+2026-11-16T02:32:48.6777180Z   fail-on-cache-miss: true
+2026-11-16T02:32:48.6777630Z   enableCrossOsArchive: false
+2026-11-16T02:32:48.6778170Z   lookup-only: false
+2026-11-16T02:32:48.6778510Z env:
+2026-11-16T02:32:48.6779070Z   BUN_VERSION: 1.3.14
+2026-11-16T02:32:48.6789980Z   NODE_VERSION: 24.15.0
+2026-11-16T02:32:48.6790290Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:32:48.6790660Z   RELEASE_PLATFORM: ios
+2026-11-16T02:32:48.6791630Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:32:48.6792840Z   MISE_LOG_LEVEL: info
+2026-11-16T02:32:48.6796120Z   GITHUB_TOKEN: ***
+2026-11-16T02:32:48.6796800Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:32:48.6798760Z   MISE_YES: 1
+2026-11-16T02:32:48.6799270Z ##[endgroup]
+2026-11-16T02:32:49.4231420Z (node:8470) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:32:49.4235470Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:32:49.5598720Z Cache hit for: photosphere-app-ios-e962c39654f2cb988618efa77873ed2b856cfdd9-43790635983
+2026-11-16T02:32:49.5787350Z (node:8470) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:32:50.5397910Z Received 85994654 of 85994654 (100.0%), 90.3 MBs/sec
+2026-11-16T02:32:50.5499430Z Cache Size: ~82 MB (85994654 B)
+2026-11-16T02:32:50.5604670Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/14812ea9-8d21-4c6a-bb9c-692cfbe1c64d/cache.tzst -P -C /Users/runner/work/photosphere/photosphere --delay-directory-restore --use-compress-program unzstd
+2026-11-16T02:32:52.0323430Z Cache restored successfully
+2026-11-16T02:32:52.0798100Z Cache restored from key: photosphere-app-ios-e962c39654f2cb988618efa77873ed2b856cfdd9-43790635983
+2026-11-16T02:32:52.1045750Z ##[group]Run set +e
+2026-11-16T02:32:52.1046450Z [36;1mset +e[0m
+2026-11-16T02:32:52.1046900Z [36;1mecho "=== $(date -u +%FT%TZ) side A: scenario 68 as committed"[0m
+2026-11-16T02:32:52.1047640Z [36;1mPHOTOSPHERE_SMOKE_SCENARIO=68 bun run test:ziggy:ios[0m
+2026-11-16T02:32:52.1048150Z [36;1mecho "=== side A exit code: $?"[0m
+2026-11-16T02:32:52.1048610Z [36;1mgit apply root-cause/experiments/ios-side-b.patch || exit 1[0m
+2026-11-16T02:32:52.1049070Z [36;1mgit diff[0m
+2026-11-16T02:32:52.1049560Z [36;1mecho "=== $(date -u +%FT%TZ) side B: scenario 68 with the simulator theme reader"[0m
+2026-11-16T02:32:52.1050340Z [36;1mPHOTOSPHERE_SMOKE_SCENARIO=68 bun run test:ziggy:ios[0m
+2026-11-16T02:32:52.1050730Z [36;1mecho "=== side B exit code: $?"[0m
+2026-11-16T02:32:52.3371920Z shell: /bin/bash -e {0}
+2026-11-16T02:32:52.3372280Z env:
+2026-11-16T02:32:52.3372570Z   BUN_VERSION: 1.3.14
+2026-11-16T02:32:52.3373280Z   NODE_VERSION: 24.15.0
+2026-11-16T02:32:52.3374360Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:32:52.3374690Z   RELEASE_PLATFORM: ios
+2026-11-16T02:32:52.3375030Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:32:52.3375270Z   MISE_LOG_LEVEL: info
+2026-11-16T02:32:52.3381270Z   GITHUB_TOKEN: ***
+2026-11-16T02:32:52.3417470Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:32:52.3418110Z   MISE_YES: 1
+2026-11-16T02:32:52.3418570Z   PHOTOSPHERE_SMOKE_BUILD: /Users/runner/work/photosphere/photosphere/out/app
+2026-11-16T02:32:52.3419010Z ##[endgroup]
+2026-11-16T02:32:52.4508230Z === 2026-11-16T02:32:52Z side A: scenario 68 as committed
+2026-11-16T02:32:52.5232150Z $ bash ./apps/photosphere-smoke-tests/run.sh ios
+2026-11-16T02:32:54.7744480Z Building Photosphere for ios...
+2026-11-16T02:32:54.8368610Z Building the psi CLI...
+2026-11-16T02:38:05.6937320Z Running 1 scenario(s), up to 1 at once.
+2026-11-16T02:43:59.4049490Z --- 68-system-theme
+2026-11-16T02:43:59.4220300Z Monitoring boot status for iPhone 17 Pro (2CC7A2C1-E1A7-4633-911A-DB60BDEB97F0).
+2026-11-16T02:43:59.4390460Z Booting device...
+2026-11-16T02:43:59.4608430Z [2026-11-16 02:38:11 +0000] Status=0, isTerminal=NO, Elapsed=00:00.
+2026-11-16T02:43:59.4757710Z 	Booting
+2026-11-16T02:43:59.4867770Z 
+2026-11-16T02:43:59.4989610Z [2026-11-16 02:38:20 +0000] Status=1, isTerminal=NO, Elapsed=00:08.
+2026-11-16T02:43:59.5046690Z 	Waiting on BackBoard
+2026-11-16T02:43:59.5243940Z 
+2026-11-16T02:43:59.5443850Z [2026-11-16 02:38:27 +0000] Status=2, isTerminal=NO, Elapsed=00:16.
+2026-11-16T02:43:59.5545890Z 	Waiting on Data Migration
+2026-11-16T02:43:59.5648730Z 		Reason:(null)
+2026-11-16T02:43:59.5653280Z 		Migration Elapsed:00:05 seconds
+2026-11-16T02:43:59.5755170Z 
+2026-11-16T02:43:59.5981880Z [2026-11-16 02:38:31 +0000] Status=2, isTerminal=NO, Elapsed=00:19.
+2026-11-16T02:43:59.6088380Z 	Waiting on Data Migration
+2026-11-16T02:43:59.6196670Z 		Reason:Gathering plugins
+2026-11-16T02:43:59.6301790Z 		Migration Elapsed:00:06 seconds
+2026-11-16T02:43:59.6436910Z 
+2026-11-16T02:43:59.6645420Z [2026-11-16 02:38:32 +0000] Status=2, isTerminal=NO, Elapsed=00:20.
+2026-11-16T02:43:59.6779780Z 	Waiting on Data Migration
+2026-11-16T02:43:59.6914960Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:43:59.7061430Z 		Migration Elapsed:00:08 seconds
+2026-11-16T02:43:59.7223350Z 
+2026-11-16T02:43:59.7334700Z [2026-11-16 02:38:32 +0000] Status=2, isTerminal=NO, Elapsed=00:20.
+2026-11-16T02:43:59.7449690Z 	Waiting on Data Migration
+2026-11-16T02:43:59.7576770Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:43:59.7949580Z 		Migration Elapsed:00:09 seconds
+2026-11-16T02:43:59.8056920Z 
+2026-11-16T02:43:59.8194440Z [2026-11-16 02:38:32 +0000] Status=2, isTerminal=NO, Elapsed=00:21.
+2026-11-16T02:43:59.8397470Z 	Waiting on Data Migration
+2026-11-16T02:43:59.8587870Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:43:59.8720340Z 		Migration Elapsed:00:10 seconds
+2026-11-16T02:43:59.8836120Z 
+2026-11-16T02:43:59.8948720Z [2026-11-16 02:38:34 +0000] Status=2, isTerminal=NO, Elapsed=00:22.
+2026-11-16T02:43:59.9067630Z 	Waiting on Data Migration
+2026-11-16T02:43:59.9626010Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:43:59.9890380Z 		Migration Elapsed:00:11 seconds
+2026-11-16T02:44:00.0374400Z 
+2026-11-16T02:44:00.0544320Z [2026-11-16 02:38:35 +0000] Status=2, isTerminal=NO, Elapsed=00:23.
+2026-11-16T02:44:00.0777110Z 	Waiting on Data Migration
+2026-11-16T02:44:00.1133400Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.1301900Z 		Migration Elapsed:00:12 seconds
+2026-11-16T02:44:00.1387500Z 
+2026-11-16T02:44:00.1499230Z [2026-11-16 02:38:36 +0000] Status=2, isTerminal=NO, Elapsed=00:24.
+2026-11-16T02:44:00.1884670Z 	Waiting on Data Migration
+2026-11-16T02:44:00.2173440Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.2176690Z 		Migration Elapsed:00:13 seconds
+2026-11-16T02:44:00.2800560Z 
+2026-11-16T02:44:00.2934920Z [2026-11-16 02:38:37 +0000] Status=2, isTerminal=NO, Elapsed=00:25.
+2026-11-16T02:44:00.3064760Z 	Waiting on Data Migration
+2026-11-16T02:44:00.3174020Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.3356580Z 		Migration Elapsed:00:14 seconds
+2026-11-16T02:44:00.3883240Z 
+2026-11-16T02:44:00.4018160Z [2026-11-16 02:38:38 +0000] Status=2, isTerminal=NO, Elapsed=00:26.
+2026-11-16T02:44:00.4136320Z 	Waiting on Data Migration
+2026-11-16T02:44:00.4554500Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.4757660Z 		Migration Elapsed:00:15 seconds
+2026-11-16T02:44:00.5304000Z 
+2026-11-16T02:44:00.5428490Z [2026-11-16 02:38:38 +0000] Status=2, isTerminal=NO, Elapsed=00:27.
+2026-11-16T02:44:00.5531640Z 	Waiting on Data Migration
+2026-11-16T02:44:00.5645530Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.5801930Z 		Migration Elapsed:00:16 seconds
+2026-11-16T02:44:00.6045150Z 
+2026-11-16T02:44:00.6212050Z [2026-11-16 02:38:42 +0000] Status=2, isTerminal=NO, Elapsed=00:30.
+2026-11-16T02:44:00.6324360Z 	Waiting on Data Migration
+2026-11-16T02:44:00.6496530Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.6928460Z 		Migration Elapsed:00:17 seconds
+2026-11-16T02:44:00.7011750Z 
+2026-11-16T02:44:00.7204830Z [2026-11-16 02:38:43 +0000] Status=2, isTerminal=NO, Elapsed=00:31.
+2026-11-16T02:44:00.7263740Z 	Waiting on Data Migration
+2026-11-16T02:44:00.7500090Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.7641570Z 		Migration Elapsed:00:19 seconds
+2026-11-16T02:44:00.7782510Z 
+2026-11-16T02:44:00.7894230Z [2026-11-16 02:38:43 +0000] Status=2, isTerminal=NO, Elapsed=00:32.
+2026-11-16T02:44:00.8094010Z 	Waiting on Data Migration
+2026-11-16T02:44:00.8379930Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.8491870Z 		Migration Elapsed:00:20 seconds
+2026-11-16T02:44:00.8619060Z 
+2026-11-16T02:44:00.8728380Z [2026-11-16 02:38:44 +0000] Status=2, isTerminal=NO, Elapsed=00:32.
+2026-11-16T02:44:00.8838540Z 	Waiting on Data Migration
+2026-11-16T02:44:00.9131040Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:00.9266030Z 		Migration Elapsed:00:21 seconds
+2026-11-16T02:44:00.9397430Z 
+2026-11-16T02:44:00.9500910Z [2026-11-16 02:38:45 +0000] Status=2, isTerminal=NO, Elapsed=00:33.
+2026-11-16T02:44:00.9666040Z 	Waiting on Data Migration
+2026-11-16T02:44:00.9944100Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.0048780Z 		Migration Elapsed:00:22 seconds
+2026-11-16T02:44:01.0183930Z 
+2026-11-16T02:44:01.0287420Z [2026-11-16 02:38:46 +0000] Status=2, isTerminal=NO, Elapsed=00:34.
+2026-11-16T02:44:01.0414410Z 	Waiting on Data Migration
+2026-11-16T02:44:01.0586310Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.0739710Z 		Migration Elapsed:00:23 seconds
+2026-11-16T02:44:01.0879970Z 
+2026-11-16T02:44:01.0990030Z [2026-11-16 02:38:47 +0000] Status=2, isTerminal=NO, Elapsed=00:36.
+2026-11-16T02:44:01.1108310Z 	Waiting on Data Migration
+2026-11-16T02:44:01.1518970Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.1695350Z 		Migration Elapsed:00:24 seconds
+2026-11-16T02:44:01.1802570Z 
+2026-11-16T02:44:01.1936970Z [2026-11-16 02:38:48 +0000] Status=2, isTerminal=NO, Elapsed=00:36.
+2026-11-16T02:44:01.2041830Z 	Waiting on Data Migration
+2026-11-16T02:44:01.2148500Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.2479230Z 		Migration Elapsed:00:25 seconds
+2026-11-16T02:44:01.2575000Z 
+2026-11-16T02:44:01.2679770Z [2026-11-16 02:38:49 +0000] Status=2, isTerminal=NO, Elapsed=00:37.
+2026-11-16T02:44:01.2800270Z 	Waiting on Data Migration
+2026-11-16T02:44:01.2967430Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.3209800Z 		Migration Elapsed:00:26 seconds
+2026-11-16T02:44:01.3314870Z 
+2026-11-16T02:44:01.3514690Z [2026-11-16 02:38:50 +0000] Status=2, isTerminal=NO, Elapsed=00:38.
+2026-11-16T02:44:01.3625490Z 	Waiting on Data Migration
+2026-11-16T02:44:01.3869010Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.4102640Z 		Migration Elapsed:00:27 seconds
+2026-11-16T02:44:01.4214510Z 
+2026-11-16T02:44:01.4347510Z [2026-11-16 02:38:51 +0000] Status=2, isTerminal=NO, Elapsed=00:39.
+2026-11-16T02:44:01.4706260Z 	Waiting on Data Migration
+2026-11-16T02:44:01.4858020Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.4966750Z 		Migration Elapsed:00:28 seconds
+2026-11-16T02:44:01.5245460Z 
+2026-11-16T02:44:01.5479870Z [2026-11-16 02:38:52 +0000] Status=2, isTerminal=NO, Elapsed=00:40.
+2026-11-16T02:44:01.5598780Z 	Waiting on Data Migration
+2026-11-16T02:44:01.5718980Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.5835520Z 		Migration Elapsed:00:29 seconds
+2026-11-16T02:44:01.5950980Z 
+2026-11-16T02:44:01.6144130Z [2026-11-16 02:38:54 +0000] Status=2, isTerminal=NO, Elapsed=00:42.
+2026-11-16T02:44:01.6358060Z 	Waiting on Data Migration
+2026-11-16T02:44:01.6462580Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.6585420Z 		Migration Elapsed:00:30 seconds
+2026-11-16T02:44:01.6890030Z 
+2026-11-16T02:44:01.7010810Z [2026-11-16 02:38:54 +0000] Status=2, isTerminal=NO, Elapsed=00:43.
+2026-11-16T02:44:01.7136210Z 	Waiting on Data Migration
+2026-11-16T02:44:01.7246370Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.7393800Z 		Migration Elapsed:00:31 seconds
+2026-11-16T02:44:01.7611780Z 
+2026-11-16T02:44:01.7762360Z [2026-11-16 02:38:54 +0000] Status=2, isTerminal=NO, Elapsed=00:43.
+2026-11-16T02:44:01.7883040Z 	Waiting on Data Migration
+2026-11-16T02:44:01.8455500Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:01.8665390Z 		Migration Elapsed:00:32 seconds
+2026-11-16T02:44:01.9244620Z 
+2026-11-16T02:44:02.0001310Z [2026-11-16 02:38:56 +0000] Status=2, isTerminal=NO, Elapsed=00:44.
+2026-11-16T02:44:02.0055660Z 	Waiting on Data Migration
+2026-11-16T02:44:02.0696440Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.1508780Z 		Migration Elapsed:00:33 seconds
+2026-11-16T02:44:02.1724200Z 
+2026-11-16T02:44:02.2332650Z [2026-11-16 02:38:57 +0000] Status=2, isTerminal=NO, Elapsed=00:45.
+2026-11-16T02:44:02.2504360Z error: script "test:ziggy:ios" exited with code 1
+2026-11-16T02:44:02.2505260Z 	Waiting on Data Migration
+2026-11-16T02:44:02.2874650Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.3010640Z 		Migration Elapsed:00:34 seconds
+2026-11-16T02:44:02.3552120Z 
+2026-11-16T02:44:02.3690610Z [2026-11-16 02:38:57 +0000] Status=2, isTerminal=NO, Elapsed=00:46.
+2026-11-16T02:44:02.3824270Z 	Waiting on Data Migration
+2026-11-16T02:44:02.4017970Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.4495310Z 		Migration Elapsed:00:35 seconds
+2026-11-16T02:44:02.4628460Z 
+2026-11-16T02:44:02.5111060Z [2026-11-16 02:38:59 +0000] Status=2, isTerminal=NO, Elapsed=00:47.
+2026-11-16T02:44:02.5216570Z 	Waiting on Data Migration
+2026-11-16T02:44:02.5342690Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.5455030Z 		Migration Elapsed:00:36 seconds
+2026-11-16T02:44:02.5944390Z 
+2026-11-16T02:44:02.6114260Z [2026-11-16 02:39:00 +0000] Status=2, isTerminal=NO, Elapsed=00:48.
+2026-11-16T02:44:02.6218790Z 	Waiting on Data Migration
+2026-11-16T02:44:02.6584540Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.6599610Z 		Migration Elapsed:00:37 seconds
+2026-11-16T02:44:02.6694010Z 
+2026-11-16T02:44:02.6881840Z [2026-11-16 02:39:00 +0000] Status=2, isTerminal=NO, Elapsed=00:49.
+2026-11-16T02:44:02.7289060Z 	Waiting on Data Migration
+2026-11-16T02:44:02.7399620Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.7512150Z 		Migration Elapsed:00:38 seconds
+2026-11-16T02:44:02.7623290Z 
+2026-11-16T02:44:02.7896930Z [2026-11-16 02:39:01 +0000] Status=2, isTerminal=NO, Elapsed=00:50.
+2026-11-16T02:44:02.8014580Z 	Waiting on Data Migration
+2026-11-16T02:44:02.8126560Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.8258100Z 		Migration Elapsed:00:39 seconds
+2026-11-16T02:44:02.8488240Z 
+2026-11-16T02:44:02.8557580Z [2026-11-16 02:39:02 +0000] Status=2, isTerminal=NO, Elapsed=00:51.
+2026-11-16T02:44:02.8608490Z 	Waiting on Data Migration
+2026-11-16T02:44:02.8729840Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.9129680Z 		Migration Elapsed:00:40 seconds
+2026-11-16T02:44:02.9249310Z 
+2026-11-16T02:44:02.9374900Z [2026-11-16 02:39:03 +0000] Status=2, isTerminal=NO, Elapsed=00:52.
+2026-11-16T02:44:02.9496830Z 	Waiting on Data Migration
+2026-11-16T02:44:02.9706640Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:02.9825580Z 		Migration Elapsed:00:41 seconds
+2026-11-16T02:44:02.9934510Z 
+2026-11-16T02:44:03.0073590Z [2026-11-16 02:39:04 +0000] Status=2, isTerminal=NO, Elapsed=00:53.
+2026-11-16T02:44:03.0177570Z 	Waiting on Data Migration
+2026-11-16T02:44:03.0736760Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.0842730Z 		Migration Elapsed:00:42 seconds
+2026-11-16T02:44:03.1277710Z 
+2026-11-16T02:44:03.1383160Z [2026-11-16 02:39:05 +0000] Status=2, isTerminal=NO, Elapsed=00:54.
+2026-11-16T02:44:03.1511410Z 	Waiting on Data Migration
+2026-11-16T02:44:03.1925730Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.2349200Z 		Migration Elapsed:00:43 seconds
+2026-11-16T02:44:03.2490180Z 
+2026-11-16T02:44:03.2610290Z [2026-11-16 02:39:06 +0000] Status=2, isTerminal=NO, Elapsed=00:55.
+2026-11-16T02:44:03.2892940Z 	Waiting on Data Migration
+2026-11-16T02:44:03.2998980Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.3106280Z 		Migration Elapsed:00:44 seconds
+2026-11-16T02:44:03.3226720Z 
+2026-11-16T02:44:03.3423990Z [2026-11-16 02:39:07 +0000] Status=2, isTerminal=NO, Elapsed=00:56.
+2026-11-16T02:44:03.3675980Z 	Waiting on Data Migration
+2026-11-16T02:44:03.4328190Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.4332850Z 		Migration Elapsed:00:45 seconds
+2026-11-16T02:44:03.4395800Z 
+2026-11-16T02:44:03.4661990Z [2026-11-16 02:39:08 +0000] Status=2, isTerminal=NO, Elapsed=00:57.
+2026-11-16T02:44:03.4920680Z 	Waiting on Data Migration
+2026-11-16T02:44:03.5087840Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.5293550Z 		Migration Elapsed:00:46 seconds
+2026-11-16T02:44:03.5404860Z 
+2026-11-16T02:44:03.5512880Z [2026-11-16 02:39:09 +0000] Status=2, isTerminal=NO, Elapsed=00:58.
+2026-11-16T02:44:03.5642730Z 	Waiting on Data Migration
+2026-11-16T02:44:03.5790090Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.6043020Z 		Migration Elapsed:00:47 seconds
+2026-11-16T02:44:03.6254580Z 
+2026-11-16T02:44:03.6358080Z [2026-11-16 02:39:10 +0000] Status=2, isTerminal=NO, Elapsed=00:59.
+2026-11-16T02:44:03.7952710Z 	Waiting on Data Migration
+2026-11-16T02:44:03.8162230Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.8263810Z 		Migration Elapsed:00:48 seconds
+2026-11-16T02:44:03.8378400Z 
+2026-11-16T02:44:03.8482550Z [2026-11-16 02:39:11 +0000] Status=2, isTerminal=NO, Elapsed=01:00.
+2026-11-16T02:44:03.8611860Z 	Waiting on Data Migration
+2026-11-16T02:44:03.8881220Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.8988710Z 		Migration Elapsed:00:49 seconds
+2026-11-16T02:44:03.9098100Z 
+2026-11-16T02:44:03.9357310Z [2026-11-16 02:39:12 +0000] Status=2, isTerminal=NO, Elapsed=01:01.
+2026-11-16T02:44:03.9402700Z 	Waiting on Data Migration
+2026-11-16T02:44:03.9537660Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:03.9667750Z 		Migration Elapsed:00:50 seconds
+2026-11-16T02:44:03.9768920Z 
+2026-11-16T02:44:04.0058710Z [2026-11-16 02:39:13 +0000] Status=2, isTerminal=NO, Elapsed=01:02.
+2026-11-16T02:44:04.0133620Z 	Waiting on Data Migration
+2026-11-16T02:44:04.0251170Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.0664080Z 		Migration Elapsed:00:51 seconds
+2026-11-16T02:44:04.0769790Z 
+2026-11-16T02:44:04.0882300Z [2026-11-16 02:39:14 +0000] Status=2, isTerminal=NO, Elapsed=01:03.
+2026-11-16T02:44:04.0991830Z 	Waiting on Data Migration
+2026-11-16T02:44:04.1131790Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.1365270Z 		Migration Elapsed:00:52 seconds
+2026-11-16T02:44:04.1483030Z 
+2026-11-16T02:44:04.1592110Z [2026-11-16 02:39:15 +0000] Status=2, isTerminal=NO, Elapsed=01:04.
+2026-11-16T02:44:04.2080200Z 	Waiting on Data Migration
+2026-11-16T02:44:04.2184890Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.2295690Z 		Migration Elapsed:00:53 seconds
+2026-11-16T02:44:04.2438060Z 
+2026-11-16T02:44:04.2667990Z [2026-11-16 02:39:16 +0000] Status=2, isTerminal=NO, Elapsed=01:05.
+2026-11-16T02:44:04.2773740Z 	Waiting on Data Migration
+2026-11-16T02:44:04.2896590Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.3059410Z 		Migration Elapsed:00:54 seconds
+2026-11-16T02:44:04.3242400Z 
+2026-11-16T02:44:04.3370040Z [2026-11-16 02:39:17 +0000] Status=2, isTerminal=NO, Elapsed=01:06.
+2026-11-16T02:44:04.3479580Z 	Waiting on Data Migration
+2026-11-16T02:44:04.3604470Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.3849320Z 		Migration Elapsed:00:55 seconds
+2026-11-16T02:44:04.3954050Z 
+2026-11-16T02:44:04.4067050Z [2026-11-16 02:39:18 +0000] Status=2, isTerminal=NO, Elapsed=01:07.
+2026-11-16T02:44:04.4178720Z 	Waiting on Data Migration
+2026-11-16T02:44:04.4294280Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.4457400Z 		Migration Elapsed:00:56 seconds
+2026-11-16T02:44:04.4572560Z 
+2026-11-16T02:44:04.4756320Z [2026-11-16 02:39:19 +0000] Status=2, isTerminal=NO, Elapsed=01:08.
+2026-11-16T02:44:04.5019980Z 	Waiting on Data Migration
+2026-11-16T02:44:04.5240560Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.5471590Z 		Migration Elapsed:00:57 seconds
+2026-11-16T02:44:04.5722910Z 
+2026-11-16T02:44:04.5922060Z [2026-11-16 02:39:20 +0000] Status=2, isTerminal=NO, Elapsed=01:09.
+2026-11-16T02:44:04.6045240Z 	Waiting on Data Migration
+2026-11-16T02:44:04.6191820Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.6417380Z 		Migration Elapsed:00:58 seconds
+2026-11-16T02:44:04.6604710Z 
+2026-11-16T02:44:04.6711560Z [2026-11-16 02:39:21 +0000] Status=2, isTerminal=NO, Elapsed=01:10.
+2026-11-16T02:44:04.6830610Z 	Waiting on Data Migration
+2026-11-16T02:44:04.7594140Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.7743310Z 		Migration Elapsed:00:59 seconds
+2026-11-16T02:44:04.8136840Z 
+2026-11-16T02:44:04.8252770Z [2026-11-16 02:39:23 +0000] Status=2, isTerminal=NO, Elapsed=01:11.
+2026-11-16T02:44:04.8361210Z 	Waiting on Data Migration
+2026-11-16T02:44:04.8477620Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.8589930Z 		Migration Elapsed:01:00 seconds
+2026-11-16T02:44:04.8803600Z 
+2026-11-16T02:44:04.8958240Z [2026-11-16 02:39:24 +0000] Status=2, isTerminal=NO, Elapsed=01:12.
+2026-11-16T02:44:04.9061010Z 	Waiting on Data Migration
+2026-11-16T02:44:04.9213060Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:04.9537000Z 		Migration Elapsed:01:01 seconds
+2026-11-16T02:44:04.9678460Z 
+2026-11-16T02:44:04.9787980Z [2026-11-16 02:39:24 +0000] Status=2, isTerminal=NO, Elapsed=01:13.
+2026-11-16T02:44:05.0087400Z 	Waiting on Data Migration
+2026-11-16T02:44:05.0216620Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.0344210Z 		Migration Elapsed:01:02 seconds
+2026-11-16T02:44:05.0679000Z 
+2026-11-16T02:44:05.0821430Z [2026-11-16 02:39:26 +0000] Status=2, isTerminal=NO, Elapsed=01:14.
+2026-11-16T02:44:05.0943080Z 	Waiting on Data Migration
+2026-11-16T02:44:05.1303950Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.1419120Z 		Migration Elapsed:01:03 seconds
+2026-11-16T02:44:05.1526060Z 
+2026-11-16T02:44:05.1738100Z [2026-11-16 02:39:26 +0000] Status=2, isTerminal=NO, Elapsed=01:15.
+2026-11-16T02:44:05.1933090Z 	Waiting on Data Migration
+2026-11-16T02:44:05.2054510Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.2163750Z 		Migration Elapsed:01:04 seconds
+2026-11-16T02:44:05.2638250Z 
+2026-11-16T02:44:05.2741100Z [2026-11-16 02:39:27 +0000] Status=2, isTerminal=NO, Elapsed=01:16.
+2026-11-16T02:44:05.2867920Z 	Waiting on Data Migration
+2026-11-16T02:44:05.3040010Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.3264860Z 		Migration Elapsed:01:05 seconds
+2026-11-16T02:44:05.3378080Z 
+2026-11-16T02:44:05.3492500Z [2026-11-16 02:39:29 +0000] Status=2, isTerminal=NO, Elapsed=01:17.
+2026-11-16T02:44:05.3597290Z 	Waiting on Data Migration
+2026-11-16T02:44:05.3948770Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.4075860Z 		Migration Elapsed:01:06 seconds
+2026-11-16T02:44:05.4182700Z 
+2026-11-16T02:44:05.4289230Z [2026-11-16 02:39:29 +0000] Status=2, isTerminal=NO, Elapsed=01:18.
+2026-11-16T02:44:05.4436570Z 	Waiting on Data Migration
+2026-11-16T02:44:05.4559530Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.4673780Z 		Migration Elapsed:01:07 seconds
+2026-11-16T02:44:05.4784100Z 
+2026-11-16T02:44:05.4908410Z [2026-11-16 02:39:31 +0000] Status=2, isTerminal=NO, Elapsed=01:19.
+2026-11-16T02:44:05.5109820Z 	Waiting on Data Migration
+2026-11-16T02:44:05.5216520Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.5322210Z 		Migration Elapsed:01:08 seconds
+2026-11-16T02:44:05.5425290Z 
+2026-11-16T02:44:05.5593420Z [2026-11-16 02:39:31 +0000] Status=2, isTerminal=NO, Elapsed=01:20.
+2026-11-16T02:44:05.5885420Z 	Waiting on Data Migration
+2026-11-16T02:44:05.6013160Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.6129950Z 		Migration Elapsed:01:09 seconds
+2026-11-16T02:44:05.6235040Z 
+2026-11-16T02:44:05.6354600Z [2026-11-16 02:39:32 +0000] Status=2, isTerminal=NO, Elapsed=01:21.
+2026-11-16T02:44:05.6502590Z 	Waiting on Data Migration
+2026-11-16T02:44:05.6625220Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.6735550Z 		Migration Elapsed:01:10 seconds
+2026-11-16T02:44:05.6872310Z 
+2026-11-16T02:44:05.7021850Z [2026-11-16 02:39:33 +0000] Status=2, isTerminal=NO, Elapsed=01:22.
+2026-11-16T02:44:05.7225690Z 	Waiting on Data Migration
+2026-11-16T02:44:05.7337880Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.7479790Z 		Migration Elapsed:01:11 seconds
+2026-11-16T02:44:05.7622150Z 
+2026-11-16T02:44:05.7752820Z [2026-11-16 02:39:34 +0000] Status=2, isTerminal=NO, Elapsed=01:23.
+2026-11-16T02:44:05.7874850Z 	Waiting on Data Migration
+2026-11-16T02:44:05.7983870Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.8113070Z 		Migration Elapsed:01:12 seconds
+2026-11-16T02:44:05.8432430Z 
+2026-11-16T02:44:05.8589660Z [2026-11-16 02:39:35 +0000] Status=2, isTerminal=NO, Elapsed=01:24.
+2026-11-16T02:44:05.8715820Z 	Waiting on Data Migration
+2026-11-16T02:44:05.8871020Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.9050830Z 		Migration Elapsed:01:13 seconds
+2026-11-16T02:44:05.9200930Z 
+2026-11-16T02:44:05.9305810Z [2026-11-16 02:39:36 +0000] Status=2, isTerminal=NO, Elapsed=01:25.
+2026-11-16T02:44:05.9426980Z 	Waiting on Data Migration
+2026-11-16T02:44:05.9722800Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:05.9843200Z 		Migration Elapsed:01:14 seconds
+2026-11-16T02:44:05.9937120Z 
+2026-11-16T02:44:06.0087010Z [2026-11-16 02:39:37 +0000] Status=2, isTerminal=NO, Elapsed=01:26.
+2026-11-16T02:44:06.0407520Z 	Waiting on Data Migration
+2026-11-16T02:44:06.0526660Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.0654350Z 		Migration Elapsed:01:15 seconds
+2026-11-16T02:44:06.0827140Z 
+2026-11-16T02:44:06.1139760Z [2026-11-16 02:39:38 +0000] Status=2, isTerminal=NO, Elapsed=01:27.
+2026-11-16T02:44:06.1387840Z 	Waiting on Data Migration
+2026-11-16T02:44:06.1743730Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.1845870Z 		Migration Elapsed:01:16 seconds
+2026-11-16T02:44:06.1949490Z 
+2026-11-16T02:44:06.2055150Z [2026-11-16 02:39:39 +0000] Status=2, isTerminal=NO, Elapsed=01:28.
+2026-11-16T02:44:06.2198840Z 	Waiting on Data Migration
+2026-11-16T02:44:06.2329510Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.2436220Z 		Migration Elapsed:01:17 seconds
+2026-11-16T02:44:06.2537310Z 
+2026-11-16T02:44:06.2666980Z [2026-11-16 02:39:40 +0000] Status=2, isTerminal=NO, Elapsed=01:29.
+2026-11-16T02:44:06.2789330Z 	Waiting on Data Migration
+2026-11-16T02:44:06.3042160Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.3160390Z 		Migration Elapsed:01:18 seconds
+2026-11-16T02:44:06.3280030Z 
+2026-11-16T02:44:06.3413140Z [2026-11-16 02:39:41 +0000] Status=2, isTerminal=NO, Elapsed=01:30.
+2026-11-16T02:44:06.3646430Z 	Waiting on Data Migration
+2026-11-16T02:44:06.3775080Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.3877480Z 		Migration Elapsed:01:19 seconds
+2026-11-16T02:44:06.4058040Z 
+2026-11-16T02:44:06.4211120Z [2026-11-16 02:39:42 +0000] Status=2, isTerminal=NO, Elapsed=01:31.
+2026-11-16T02:44:06.4329620Z 	Waiting on Data Migration
+2026-11-16T02:44:06.4437460Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.4576660Z 		Migration Elapsed:01:20 seconds
+2026-11-16T02:44:06.4808250Z 
+2026-11-16T02:44:06.4910310Z [2026-11-16 02:39:43 +0000] Status=2, isTerminal=NO, Elapsed=01:32.
+2026-11-16T02:44:06.5029680Z 	Waiting on Data Migration
+2026-11-16T02:44:06.5405670Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.5511480Z 		Migration Elapsed:01:21 seconds
+2026-11-16T02:44:06.5627980Z 
+2026-11-16T02:44:06.5776280Z [2026-11-16 02:39:44 +0000] Status=2, isTerminal=NO, Elapsed=01:33.
+2026-11-16T02:44:06.6006930Z 	Waiting on Data Migration
+2026-11-16T02:44:06.6143600Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.6309560Z 		Migration Elapsed:01:22 seconds
+2026-11-16T02:44:06.6508440Z 
+2026-11-16T02:44:06.6822740Z [2026-11-16 02:39:45 +0000] Status=2, isTerminal=NO, Elapsed=01:34.
+2026-11-16T02:44:06.6926320Z 	Waiting on Data Migration
+2026-11-16T02:44:06.7045340Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.7643550Z 		Migration Elapsed:01:23 seconds
+2026-11-16T02:44:06.8136890Z 
+2026-11-16T02:44:06.8262040Z [2026-11-16 02:39:46 +0000] Status=2, isTerminal=NO, Elapsed=01:35.
+2026-11-16T02:44:06.8395650Z 	Waiting on Data Migration
+2026-11-16T02:44:06.8601340Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.8705110Z 		Migration Elapsed:01:24 seconds
+2026-11-16T02:44:06.8812010Z 
+2026-11-16T02:44:06.8943510Z [2026-11-16 02:39:47 +0000] Status=2, isTerminal=NO, Elapsed=01:36.
+2026-11-16T02:44:06.9140850Z 	Waiting on Data Migration
+2026-11-16T02:44:06.9259800Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:06.9371450Z 		Migration Elapsed:01:25 seconds
+2026-11-16T02:44:06.9493950Z 
+2026-11-16T02:44:06.9850740Z [2026-11-16 02:39:48 +0000] Status=2, isTerminal=NO, Elapsed=01:37.
+2026-11-16T02:44:06.9975270Z 	Waiting on Data Migration
+2026-11-16T02:44:06.9984200Z 		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+2026-11-16T02:44:07.0103720Z 		Migration Elapsed:01:26 seconds
+2026-11-16T02:44:07.0367400Z 
+2026-11-16T02:44:07.0481060Z [2026-11-16 02:39:56 +0000] Status=2, isTerminal=NO, Elapsed=01:44.
+2026-11-16T02:44:07.0608390Z 	Waiting on Data Migration
+2026-11-16T02:44:07.0720140Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.1013940Z 		Migration Elapsed:01:27 seconds
+2026-11-16T02:44:07.1125280Z 
+2026-11-16T02:44:07.1232850Z [2026-11-16 02:39:57 +0000] Status=2, isTerminal=NO, Elapsed=01:46.
+2026-11-16T02:44:07.1345230Z 	Waiting on Data Migration
+2026-11-16T02:44:07.1581770Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.1714720Z 		Migration Elapsed:01:33 seconds
+2026-11-16T02:44:07.1822640Z 
+2026-11-16T02:44:07.1989180Z [2026-11-16 02:39:58 +0000] Status=2, isTerminal=NO, Elapsed=01:47.
+2026-11-16T02:44:07.2174780Z 	Waiting on Data Migration
+2026-11-16T02:44:07.2280190Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.2385380Z 		Migration Elapsed:01:35 seconds
+2026-11-16T02:44:07.2487040Z 
+2026-11-16T02:44:07.2591280Z [2026-11-16 02:39:59 +0000] Status=2, isTerminal=NO, Elapsed=01:48.
+2026-11-16T02:44:07.2824000Z 	Waiting on Data Migration
+2026-11-16T02:44:07.2928010Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.3009690Z $ bash ./apps/photosphere-smoke-tests/run.sh ios
+2026-11-16T02:44:07.3031320Z 		Migration Elapsed:01:36 seconds
+2026-11-16T02:44:07.3143410Z 
+2026-11-16T02:44:07.3372150Z [2026-11-16 02:40:00 +0000] Status=2, isTerminal=NO, Elapsed=01:48.
+2026-11-16T02:44:07.3504470Z 	Waiting on Data Migration
+2026-11-16T02:44:07.3671060Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.4025370Z 		Migration Elapsed:01:37 seconds
+2026-11-16T02:44:07.4134270Z 
+2026-11-16T02:44:07.4262380Z [2026-11-16 02:40:00 +0000] Status=2, isTerminal=NO, Elapsed=01:49.
+2026-11-16T02:44:07.4353130Z 	Waiting on Data Migration
+2026-11-16T02:44:07.4650710Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.4792010Z 		Migration Elapsed:01:37 seconds
+2026-11-16T02:44:07.4914400Z 
+2026-11-16T02:44:07.5237310Z [2026-11-16 02:40:01 +0000] Status=2, isTerminal=NO, Elapsed=01:49.
+2026-11-16T02:44:07.5346190Z 	Waiting on Data Migration
+2026-11-16T02:44:07.5457520Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.5681560Z 		Migration Elapsed:01:38 seconds
+2026-11-16T02:44:07.5848350Z 
+2026-11-16T02:44:07.5951410Z [2026-11-16 02:40:01 +0000] Status=2, isTerminal=NO, Elapsed=01:50.
+2026-11-16T02:44:07.6078750Z 	Waiting on Data Migration
+2026-11-16T02:44:07.6221760Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.6356010Z 		Migration Elapsed:01:39 seconds
+2026-11-16T02:44:07.6515400Z 
+2026-11-16T02:44:07.6626130Z [2026-11-16 02:40:02 +0000] Status=2, isTerminal=NO, Elapsed=01:51.
+2026-11-16T02:44:07.6790150Z 	Waiting on Data Migration
+2026-11-16T02:44:07.6933650Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.7264760Z 		Migration Elapsed:01:40 seconds
+2026-11-16T02:44:07.7382460Z 
+2026-11-16T02:44:07.7485770Z [2026-11-16 02:40:04 +0000] Status=2, isTerminal=NO, Elapsed=01:52.
+2026-11-16T02:44:07.7921940Z 	Waiting on Data Migration
+2026-11-16T02:44:07.8069050Z 		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+2026-11-16T02:44:07.8179820Z 		Migration Elapsed:01:41 seconds
+2026-11-16T02:44:07.8512040Z 
+2026-11-16T02:44:07.8767350Z [2026-11-16 02:40:08 +0000] Status=2, isTerminal=NO, Elapsed=01:56.
+2026-11-16T02:44:07.8930490Z 	Waiting on Data Migration
+2026-11-16T02:44:07.9207760Z 		Reason:Running plugin com.apple.addressbook.migrator (AddressBookLegacy.migrator)
+2026-11-16T02:44:07.9329390Z 		Migration Elapsed:01:42 seconds
+2026-11-16T02:44:07.9472440Z 
+2026-11-16T02:44:07.9644000Z [2026-11-16 02:40:10 +0000] Status=2, isTerminal=NO, Elapsed=01:58.
+2026-11-16T02:44:07.9827740Z 	Waiting on Data Migration
+2026-11-16T02:44:07.9947960Z 		Reason:Running plugin com.apple.MobileSafari.migrator (MobileSafari.migrator)
+2026-11-16T02:44:08.0076670Z 		Migration Elapsed:01:46 seconds
+2026-11-16T02:44:08.0196450Z 
+2026-11-16T02:44:08.0381330Z [2026-11-16 02:40:11 +0000] Status=2, isTerminal=NO, Elapsed=01:59.
+2026-11-16T02:44:08.0645900Z 	Waiting on Data Migration
+2026-11-16T02:44:08.0772160Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.0880880Z 		Migration Elapsed:01:48 seconds
+2026-11-16T02:44:08.1193480Z 
+2026-11-16T02:44:08.1376170Z [2026-11-16 02:40:11 +0000] Status=2, isTerminal=NO, Elapsed=02:00.
+2026-11-16T02:44:08.1534010Z 	Waiting on Data Migration
+2026-11-16T02:44:08.1659430Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.1935040Z 		Migration Elapsed:01:48 seconds
+2026-11-16T02:44:08.2050090Z 
+2026-11-16T02:44:08.2162070Z [2026-11-16 02:40:13 +0000] Status=2, isTerminal=NO, Elapsed=02:02.
+2026-11-16T02:44:08.2504410Z 	Waiting on Data Migration
+2026-11-16T02:44:08.2608370Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.2716910Z 		Migration Elapsed:01:49 seconds
+2026-11-16T02:44:08.3067690Z 
+2026-11-16T02:44:08.3172430Z [2026-11-16 02:40:13 +0000] Status=2, isTerminal=NO, Elapsed=02:02.
+2026-11-16T02:44:08.3318450Z 	Waiting on Data Migration
+2026-11-16T02:44:08.3429170Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.3876630Z 		Migration Elapsed:01:51 seconds
+2026-11-16T02:44:08.3979880Z 
+2026-11-16T02:44:08.4082440Z [2026-11-16 02:40:16 +0000] Status=2, isTerminal=NO, Elapsed=02:05.
+2026-11-16T02:44:08.4193770Z 	Waiting on Data Migration
+2026-11-16T02:44:08.4308780Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.4499290Z 		Migration Elapsed:01:51 seconds
+2026-11-16T02:44:08.4611000Z 
+2026-11-16T02:44:08.4732080Z [2026-11-16 02:40:20 +0000] Status=2, isTerminal=NO, Elapsed=02:08.
+2026-11-16T02:44:08.4732590Z 	Waiting on Data Migration
+2026-11-16T02:44:08.5155320Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.5266380Z 		Migration Elapsed:01:54 seconds
+2026-11-16T02:44:08.5403590Z 
+2026-11-16T02:44:08.5568600Z [2026-11-16 02:40:21 +0000] Status=2, isTerminal=NO, Elapsed=02:09.
+2026-11-16T02:44:08.5749730Z 	Waiting on Data Migration
+2026-11-16T02:44:08.5878570Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.5983190Z 		Migration Elapsed:01:57 seconds
+2026-11-16T02:44:08.6268260Z 
+2026-11-16T02:44:08.6384790Z [2026-11-16 02:40:23 +0000] Status=2, isTerminal=NO, Elapsed=02:11.
+2026-11-16T02:44:08.6491920Z 	Waiting on Data Migration
+2026-11-16T02:44:08.6632630Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.6926400Z 		Migration Elapsed:01:58 seconds
+2026-11-16T02:44:08.7047620Z 
+2026-11-16T02:44:08.7150980Z [2026-11-16 02:40:26 +0000] Status=2, isTerminal=NO, Elapsed=02:15.
+2026-11-16T02:44:08.7282680Z 	Waiting on Data Migration
+2026-11-16T02:44:08.7609010Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.7715770Z 		Migration Elapsed:02:01 seconds
+2026-11-16T02:44:08.7838070Z 
+2026-11-16T02:44:08.7967260Z [2026-11-16 02:40:27 +0000] Status=2, isTerminal=NO, Elapsed=02:15.
+2026-11-16T02:44:08.8338970Z 	Waiting on Data Migration
+2026-11-16T02:44:08.8457710Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.8654530Z 		Migration Elapsed:02:04 seconds
+2026-11-16T02:44:08.8756870Z 
+2026-11-16T02:44:08.9019150Z [2026-11-16 02:40:28 +0000] Status=2, isTerminal=NO, Elapsed=02:17.
+2026-11-16T02:44:08.9132850Z 	Waiting on Data Migration
+2026-11-16T02:44:08.9269660Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:08.9510260Z 		Migration Elapsed:02:05 seconds
+2026-11-16T02:44:08.9620270Z 
+2026-11-16T02:44:08.9782800Z [2026-11-16 02:40:29 +0000] Status=2, isTerminal=NO, Elapsed=02:17.
+2026-11-16T02:44:08.9985570Z 	Waiting on Data Migration
+2026-11-16T02:44:09.0197330Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.0301640Z 		Migration Elapsed:02:06 seconds
+2026-11-16T02:44:09.0437880Z 
+2026-11-16T02:44:09.0783470Z [2026-11-16 02:40:29 +0000] Status=2, isTerminal=NO, Elapsed=02:18.
+2026-11-16T02:44:09.0885390Z 	Waiting on Data Migration
+2026-11-16T02:44:09.0991450Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.1102110Z 		Migration Elapsed:02:07 seconds
+2026-11-16T02:44:09.1212060Z 
+2026-11-16T02:44:09.1391540Z [2026-11-16 02:40:31 +0000] Status=2, isTerminal=NO, Elapsed=02:19.
+2026-11-16T02:44:09.1562460Z 	Waiting on Data Migration
+2026-11-16T02:44:09.1827640Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.2087450Z 		Migration Elapsed:02:08 seconds
+2026-11-16T02:44:09.2198770Z 
+2026-11-16T02:44:09.2313820Z [2026-11-16 02:40:31 +0000] Status=2, isTerminal=NO, Elapsed=02:20.
+2026-11-16T02:44:09.2767360Z 	Waiting on Data Migration
+2026-11-16T02:44:09.2901560Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.3055650Z 		Migration Elapsed:02:09 seconds
+2026-11-16T02:44:09.3278540Z 
+2026-11-16T02:44:09.3551020Z [2026-11-16 02:40:32 +0000] Status=2, isTerminal=NO, Elapsed=02:21.
+2026-11-16T02:44:09.3685660Z 	Waiting on Data Migration
+2026-11-16T02:44:09.3765240Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.3870470Z 		Migration Elapsed:02:10 seconds
+2026-11-16T02:44:09.4035140Z 
+2026-11-16T02:44:09.4297990Z [2026-11-16 02:40:34 +0000] Status=2, isTerminal=NO, Elapsed=02:22.
+2026-11-16T02:44:09.4420410Z 	Waiting on Data Migration
+2026-11-16T02:44:09.4622740Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.4783880Z 		Migration Elapsed:02:11 seconds
+2026-11-16T02:44:09.4954320Z 
+2026-11-16T02:44:09.5059380Z [2026-11-16 02:40:34 +0000] Status=2, isTerminal=NO, Elapsed=02:23.
+2026-11-16T02:44:09.5171810Z 	Waiting on Data Migration
+2026-11-16T02:44:09.5372590Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.5644430Z 		Migration Elapsed:02:12 seconds
+2026-11-16T02:44:09.5751950Z 
+2026-11-16T02:44:09.5756050Z [2026-11-16 02:40:36 +0000] Status=2, isTerminal=NO, Elapsed=02:24.
+2026-11-16T02:44:09.5861810Z 	Waiting on Data Migration
+2026-11-16T02:44:09.5966450Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.6441020Z 		Migration Elapsed:02:13 seconds
+2026-11-16T02:44:09.6548060Z 
+2026-11-16T02:44:09.6697230Z [2026-11-16 02:40:36 +0000] Status=2, isTerminal=NO, Elapsed=02:25.
+2026-11-16T02:44:09.6873930Z 	Waiting on Data Migration
+2026-11-16T02:44:09.7161410Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.7179660Z 		Migration Elapsed:02:14 seconds
+2026-11-16T02:44:09.7282470Z 
+2026-11-16T02:44:09.7392530Z [2026-11-16 02:40:37 +0000] Status=2, isTerminal=NO, Elapsed=02:26.
+2026-11-16T02:44:09.7515810Z 	Waiting on Data Migration
+2026-11-16T02:44:09.7947900Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.8060040Z 		Migration Elapsed:02:15 seconds
+2026-11-16T02:44:09.8163330Z 
+2026-11-16T02:44:09.8279040Z [2026-11-16 02:40:38 +0000] Status=2, isTerminal=NO, Elapsed=02:27.
+2026-11-16T02:44:09.8578750Z 	Waiting on Data Migration
+2026-11-16T02:44:09.8681110Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:09.8813030Z 		Migration Elapsed:02:16 seconds
+2026-11-16T02:44:09.9215370Z 
+2026-11-16T02:44:09.9325320Z [2026-11-16 02:40:39 +0000] Status=2, isTerminal=NO, Elapsed=02:28.
+2026-11-16T02:44:09.9429910Z 	Waiting on Data Migration
+2026-11-16T02:44:09.9733680Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.0024130Z 		Migration Elapsed:02:17 seconds
+2026-11-16T02:44:10.0204670Z 
+2026-11-16T02:44:10.0328820Z [2026-11-16 02:40:40 +0000] Status=2, isTerminal=NO, Elapsed=02:29.
+2026-11-16T02:44:10.0761120Z 	Waiting on Data Migration
+2026-11-16T02:44:10.0871540Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.1006630Z 		Migration Elapsed:02:18 seconds
+2026-11-16T02:44:10.1152400Z 
+2026-11-16T02:44:10.1353090Z [2026-11-16 02:40:41 +0000] Status=2, isTerminal=NO, Elapsed=02:30.
+2026-11-16T02:44:10.1402310Z 	Waiting on Data Migration
+2026-11-16T02:44:10.1540490Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.1660730Z 		Migration Elapsed:02:19 seconds
+2026-11-16T02:44:10.1825020Z 
+2026-11-16T02:44:10.2133970Z [2026-11-16 02:40:42 +0000] Status=2, isTerminal=NO, Elapsed=02:31.
+2026-11-16T02:44:10.2240810Z 	Waiting on Data Migration
+2026-11-16T02:44:10.3790060Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.3920360Z 		Migration Elapsed:02:20 seconds
+2026-11-16T02:44:10.4096090Z 
+2026-11-16T02:44:10.4492070Z [2026-11-16 02:40:43 +0000] Status=2, isTerminal=NO, Elapsed=02:32.
+2026-11-16T02:44:10.4686060Z 	Waiting on Data Migration
+2026-11-16T02:44:10.4843260Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.5201480Z 		Migration Elapsed:02:21 seconds
+2026-11-16T02:44:10.5336180Z 
+2026-11-16T02:44:10.5442850Z [2026-11-16 02:40:44 +0000] Status=2, isTerminal=NO, Elapsed=02:33.
+2026-11-16T02:44:10.5791760Z 	Waiting on Data Migration
+2026-11-16T02:44:10.5908740Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.6022630Z 		Migration Elapsed:02:22 seconds
+2026-11-16T02:44:10.6157530Z 
+2026-11-16T02:44:10.6477110Z [2026-11-16 02:40:46 +0000] Status=2, isTerminal=NO, Elapsed=02:34.
+2026-11-16T02:44:10.6596640Z 	Waiting on Data Migration
+2026-11-16T02:44:10.6698740Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.6809450Z 		Migration Elapsed:02:23 seconds
+2026-11-16T02:44:10.6998070Z 
+2026-11-16T02:44:10.7263530Z [2026-11-16 02:40:46 +0000] Status=2, isTerminal=NO, Elapsed=02:35.
+2026-11-16T02:44:10.7386520Z 	Waiting on Data Migration
+2026-11-16T02:44:10.7492970Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.7628010Z 		Migration Elapsed:02:24 seconds
+2026-11-16T02:44:10.7882970Z 
+2026-11-16T02:44:10.7986660Z [2026-11-16 02:40:48 +0000] Status=2, isTerminal=NO, Elapsed=02:37.
+2026-11-16T02:44:10.8192570Z 	Waiting on Data Migration
+2026-11-16T02:44:10.8338400Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.8582240Z 		Migration Elapsed:02:25 seconds
+2026-11-16T02:44:10.8705340Z 
+2026-11-16T02:44:10.8821370Z [2026-11-16 02:40:49 +0000] Status=2, isTerminal=NO, Elapsed=02:37.
+2026-11-16T02:44:10.8930410Z 	Waiting on Data Migration
+2026-11-16T02:44:10.9393770Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:10.9397200Z 		Migration Elapsed:02:26 seconds
+2026-11-16T02:44:10.9525160Z 
+2026-11-16T02:44:10.9634600Z [2026-11-16 02:40:50 +0000] Status=2, isTerminal=NO, Elapsed=02:38.
+2026-11-16T02:44:10.9740550Z 	Waiting on Data Migration
+2026-11-16T02:44:11.0082950Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.0294480Z 		Migration Elapsed:02:27 seconds
+2026-11-16T02:44:11.0425610Z 
+2026-11-16T02:44:11.0601790Z [2026-11-16 02:40:50 +0000] Status=2, isTerminal=NO, Elapsed=02:39.
+2026-11-16T02:44:11.0821050Z 	Waiting on Data Migration
+2026-11-16T02:44:11.0925490Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.1086960Z 		Migration Elapsed:02:28 seconds
+2026-11-16T02:44:11.1284420Z 
+2026-11-16T02:44:11.1508830Z [2026-11-16 02:40:51 +0000] Status=2, isTerminal=NO, Elapsed=02:40.
+2026-11-16T02:44:11.1621820Z 	Waiting on Data Migration
+2026-11-16T02:44:11.1730720Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.1960510Z 		Migration Elapsed:02:29 seconds
+2026-11-16T02:44:11.2222730Z 
+2026-11-16T02:44:11.2362430Z [2026-11-16 02:40:52 +0000] Status=2, isTerminal=NO, Elapsed=02:41.
+2026-11-16T02:44:11.2472210Z 	Waiting on Data Migration
+2026-11-16T02:44:11.2807560Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.2912080Z 		Migration Elapsed:02:30 seconds
+2026-11-16T02:44:11.3014140Z 
+2026-11-16T02:44:11.3159770Z [2026-11-16 02:40:53 +0000] Status=2, isTerminal=NO, Elapsed=02:42.
+2026-11-16T02:44:11.3438810Z 	Waiting on Data Migration
+2026-11-16T02:44:11.3546860Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.3661270Z 		Migration Elapsed:02:31 seconds
+2026-11-16T02:44:11.3801920Z 
+2026-11-16T02:44:11.4083560Z [2026-11-16 02:40:54 +0000] Status=2, isTerminal=NO, Elapsed=02:43.
+2026-11-16T02:44:11.4217470Z 	Waiting on Data Migration
+2026-11-16T02:44:11.4360180Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.4631100Z 		Migration Elapsed:02:32 seconds
+2026-11-16T02:44:11.4739410Z 
+2026-11-16T02:44:11.4858670Z [2026-11-16 02:40:55 +0000] Status=2, isTerminal=NO, Elapsed=02:44.
+2026-11-16T02:44:11.4962280Z 	Waiting on Data Migration
+2026-11-16T02:44:11.5278940Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.5494940Z 		Migration Elapsed:02:33 seconds
+2026-11-16T02:44:11.5647100Z 
+2026-11-16T02:44:11.5910840Z [2026-11-16 02:40:56 +0000] Status=2, isTerminal=NO, Elapsed=02:45.
+2026-11-16T02:44:11.6032410Z 	Waiting on Data Migration
+2026-11-16T02:44:11.6136190Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.6559880Z 		Migration Elapsed:02:34 seconds
+2026-11-16T02:44:11.6667870Z 
+2026-11-16T02:44:11.6787560Z [2026-11-16 02:40:57 +0000] Status=2, isTerminal=NO, Elapsed=02:46.
+2026-11-16T02:44:11.7213520Z 	Waiting on Data Migration
+2026-11-16T02:44:11.7320300Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.7453840Z 		Migration Elapsed:02:35 seconds
+2026-11-16T02:44:11.7667300Z 
+2026-11-16T02:44:11.7844250Z [2026-11-16 02:40:58 +0000] Status=2, isTerminal=NO, Elapsed=02:47.
+2026-11-16T02:44:11.8586190Z 	Waiting on Data Migration
+2026-11-16T02:44:11.8862280Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.8990380Z 		Migration Elapsed:02:36 seconds
+2026-11-16T02:44:11.9098790Z 
+2026-11-16T02:44:11.9341120Z [2026-11-16 02:40:59 +0000] Status=2, isTerminal=NO, Elapsed=02:48.
+2026-11-16T02:44:11.9603220Z 	Waiting on Data Migration
+2026-11-16T02:44:11.9740310Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:11.9855300Z 		Migration Elapsed:02:37 seconds
+2026-11-16T02:44:12.0452370Z 
+2026-11-16T02:44:12.1466690Z [2026-11-16 02:41:00 +0000] Status=2, isTerminal=NO, Elapsed=02:49.
+2026-11-16T02:44:12.1708130Z 	Waiting on Data Migration
+2026-11-16T02:44:12.2429410Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:12.2641080Z 		Migration Elapsed:02:38 seconds
+2026-11-16T02:44:12.2777650Z 
+2026-11-16T02:44:12.3075710Z [2026-11-16 02:41:01 +0000] Status=2, isTerminal=NO, Elapsed=02:50.
+2026-11-16T02:44:12.3216340Z 	Waiting on Data Migration
+2026-11-16T02:44:12.3378110Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:12.3915130Z 		Migration Elapsed:02:39 seconds
+2026-11-16T02:44:12.4201080Z 
+2026-11-16T02:44:12.4383090Z [2026-11-16 02:41:02 +0000] Status=2, isTerminal=NO, Elapsed=02:51.
+2026-11-16T02:44:12.4487610Z 	Waiting on Data Migration
+2026-11-16T02:44:12.4616890Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:12.4751350Z 		Migration Elapsed:02:40 seconds
+2026-11-16T02:44:12.5038260Z 
+2026-11-16T02:44:12.5149330Z [2026-11-16 02:41:03 +0000] Status=2, isTerminal=NO, Elapsed=02:52.
+2026-11-16T02:44:12.5741830Z 	Waiting on Data Migration
+2026-11-16T02:44:12.5995550Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:12.6476980Z 		Migration Elapsed:02:41 seconds
+2026-11-16T02:44:12.7415840Z 
+2026-11-16T02:44:12.7618000Z [2026-11-16 02:41:04 +0000] Status=2, isTerminal=NO, Elapsed=02:53.
+2026-11-16T02:44:12.7627750Z 	Waiting on Data Migration
+2026-11-16T02:44:12.8192920Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:12.8881810Z 		Migration Elapsed:02:42 seconds
+2026-11-16T02:44:12.8997240Z 
+2026-11-16T02:44:12.9533210Z [2026-11-16 02:41:09 +0000] Status=2, isTerminal=NO, Elapsed=02:57.
+2026-11-16T02:44:12.9694630Z 	Waiting on Data Migration
+2026-11-16T02:44:12.9828240Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:12.9980200Z 		Migration Elapsed:02:43 seconds
+2026-11-16T02:44:13.0197310Z 
+2026-11-16T02:44:13.0303380Z [2026-11-16 02:41:13 +0000] Status=2, isTerminal=NO, Elapsed=03:01.
+2026-11-16T02:44:13.0403520Z 	Waiting on Data Migration
+2026-11-16T02:44:13.0667230Z 		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+2026-11-16T02:44:13.0923910Z 		Migration Elapsed:02:46 seconds
+2026-11-16T02:44:13.1065530Z 
+2026-11-16T02:44:13.1568450Z [2026-11-16 02:41:17 +0000] Status=2, isTerminal=NO, Elapsed=03:05.
+2026-11-16T02:44:13.1615730Z 	Waiting on Data Migration
+2026-11-16T02:44:13.1750550Z 		Reason:Running plugin com.apple.managedconfiguration.mdm.migrator (MCMDM.migrator)
+2026-11-16T02:44:13.1884670Z 		Migration Elapsed:02:50 seconds
+2026-11-16T02:44:13.2128960Z 
+2026-11-16T02:44:13.2233560Z [2026-11-16 02:41:18 +0000] Status=2, isTerminal=NO, Elapsed=03:07.
+2026-11-16T02:44:13.2340180Z 	Waiting on Data Migration
+2026-11-16T02:44:13.2448130Z 		Reason:Running plugin com.apple.CloudTabsMigrator.migrator (CloudTabsMigrator.migrator)
+2026-11-16T02:44:13.2862530Z 		Migration Elapsed:02:55 seconds
+2026-11-16T02:44:13.3010570Z 
+2026-11-16T02:44:13.3114010Z [2026-11-16 02:41:20 +0000] Status=2, isTerminal=NO, Elapsed=03:09.
+2026-11-16T02:44:13.3217860Z 	Waiting on Data Migration
+2026-11-16T02:44:13.3612650Z 		Reason:Running plugin com.apple.facetime.migrator (FaceTimeMigrator.migrator)
+2026-11-16T02:44:13.3716290Z 		Migration Elapsed:02:56 seconds
+2026-11-16T02:44:13.3875470Z 
+2026-11-16T02:44:13.4198670Z [2026-11-16 02:41:24 +0000] Status=2, isTerminal=NO, Elapsed=03:12.
+2026-11-16T02:44:13.4302780Z 	Waiting on Data Migration
+2026-11-16T02:44:13.4405170Z 		Reason:Running plugin com.apple.tone.migrator (Tones.migrator)
+2026-11-16T02:44:13.4516860Z 		Migration Elapsed:02:58 seconds
+2026-11-16T02:44:13.4648850Z 
+2026-11-16T02:44:13.4840660Z [2026-11-16 02:41:26 +0000] Status=4, isTerminal=NO, Elapsed=03:14.
+2026-11-16T02:44:13.4947080Z 	Waiting on System App
+2026-11-16T02:44:13.5066530Z 
+2026-11-16T02:44:13.5422360Z [2026-11-16 02:41:26 +0000] Status=4, isTerminal=NO, Elapsed=03:15.
+2026-11-16T02:44:13.5532510Z 	Waiting on System App
+2026-11-16T02:44:13.5634740Z 
+2026-11-16T02:44:13.5737190Z [2026-11-16 02:41:28 +0000] Status=4, isTerminal=NO, Elapsed=03:16.
+2026-11-16T02:44:13.5866780Z 	Waiting on System App
+2026-11-16T02:44:13.6032190Z 
+2026-11-16T02:44:13.6177430Z [2026-11-16 02:41:28 +0000] Status=4, isTerminal=NO, Elapsed=03:17.
+2026-11-16T02:44:13.6329830Z 	Waiting on System App
+2026-11-16T02:44:13.6649970Z 
+2026-11-16T02:44:13.6896750Z [2026-11-16 02:41:29 +0000] Status=4, isTerminal=NO, Elapsed=03:17.
+2026-11-16T02:44:13.7504440Z 	Waiting on System App
+2026-11-16T02:44:13.7607610Z 
+2026-11-16T02:44:13.8255220Z [2026-11-16 02:41:30 +0000] Status=4, isTerminal=NO, Elapsed=03:18.
+2026-11-16T02:44:13.8385880Z 	Waiting on System App
+2026-11-16T02:44:13.8496380Z 
+2026-11-16T02:44:13.9036700Z [2026-11-16 02:41:31 +0000] Status=4, isTerminal=NO, Elapsed=03:19.
+2026-11-16T02:44:13.9159160Z 	Waiting on System App
+2026-11-16T02:44:13.9159550Z 
+2026-11-16T02:44:13.9725230Z [2026-11-16 02:41:32 +0000] Status=4, isTerminal=NO, Elapsed=03:20.
+2026-11-16T02:44:13.9837050Z 	Waiting on System App
+2026-11-16T02:44:13.9982130Z 
+2026-11-16T02:44:14.0452640Z [2026-11-16 02:41:33 +0000] Status=4, isTerminal=NO, Elapsed=03:21.
+2026-11-16T02:44:14.0567480Z 	Waiting on System App
+2026-11-16T02:44:14.0671900Z 
+2026-11-16T02:44:14.0775950Z [2026-11-16 02:41:35 +0000] Status=4, isTerminal=NO, Elapsed=03:23.
+2026-11-16T02:44:14.0956260Z 	Waiting on System App
+2026-11-16T02:44:14.1219770Z 
+2026-11-16T02:44:14.1384280Z [2026-11-16 02:41:42 +0000] Status=4294967295, isTerminal=YES, Elapsed=03:30.
+2026-11-16T02:44:14.2096820Z 	Finished
+2026-11-16T02:44:14.2278710Z 
+2026-11-16T02:44:14.2947510Z [0;34m[INFO][0m App started (PID 22979, control port 50075)
+2026-11-16T02:44:14.2949650Z [0;34m[INFO][0m Waiting for app to be ready on port 50075...
+2026-11-16T02:44:14.3087950Z [0;34m[INFO][0m App is ready
+2026-11-16T02:44:14.3810060Z /Users/runner/work/photosphere/photosphere/apps/photosphere-smoke-tests/68-system-theme/test.sh: line 11: photosphere_platform_system_theme: command not found
+2026-11-16T02:44:14.3996290Z /Users/runner/work/photosphere/photosphere/apps/photosphere-smoke-tests/68-system-theme/test.sh: line 11: fail: command not found
+2026-11-16T02:44:14.4589200Z [0;31m[FAIL][0m Timed out waiting for the document's data-joy-color-scheme to be '' (last value: light)
+2026-11-16T02:44:14.4759200Z FAILED: 68-system-theme (exit 1). Its files are in /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T//photosphere-tests/photosphere-app-68-system-theme-62WN8j
+2026-11-16T02:44:14.5399140Z Passed 0, skipped 0, failed 1.
+2026-11-16T02:44:14.6025850Z Failed: 68-system-theme
+2026-11-16T02:44:14.6222280Z === side A exit code: 1
+2026-11-16T02:44:14.6997430Z diff --git a/apps/photosphere-smoke-tests/lib/ios.sh b/apps/photosphere-smoke-tests/lib/ios.sh
+2026-11-16T02:44:14.7185380Z index 36902c4..bd7de46 100644
+2026-11-16T02:44:14.7379390Z --- a/apps/photosphere-smoke-tests/lib/ios.sh
+2026-11-16T02:44:14.7744630Z +++ b/apps/photosphere-smoke-tests/lib/ios.sh
+2026-11-16T02:44:14.7876110Z @@ -896,3 +896,10 @@ photosphere_platform_screenshot() {
+2026-11-16T02:44:14.8013910Z  ios_cancel_next_download() {
+2026-11-16T02:44:14.8446280Z      send_command "$1" stage-export '{"exportOutcome":"cancelled"}'
+2026-11-16T02:44:14.8661220Z  }
+2026-11-16T02:44:14.8662120Z +
+2026-11-16T02:44:14.8767540Z +#
+2026-11-16T02:44:14.9097350Z +# The simulator's appearance: "light" or "dark". Usage: photosphere_platform_system_theme <test_dir>
+2026-11-16T02:44:14.9221930Z +#
+2026-11-16T02:44:14.9696520Z +photosphere_platform_system_theme() {
+2026-11-16T02:44:14.9823740Z +    xcrun simctl ui "$(cat "$1/$IOS_UDID_FILE_NAME")" appearance
+2026-11-16T02:44:14.9928210Z +}
+2026-11-16T02:44:15.0037470Z === 2026-11-16T02:44:07Z side B: scenario 68 with the simulator theme reader
+2026-11-16T02:44:17.9945330Z Building Photosphere for ios...
+2026-11-16T02:44:18.2025030Z Building the psi CLI...
+2026-11-16T02:44:57.9630410Z Running 1 scenario(s), up to 1 at once.
+2026-11-16T02:45:46.7731690Z --- 68-system-theme
+2026-11-16T02:45:46.8479500Z Taking over the lock on the simulator 2CC7A2C1-E1A7-4633-911A-DB60BDEB97F0 from scenario process 18356, which has gone.
+2026-11-16T02:45:46.8608350Z [0;34m[INFO][0m App started (PID 26323, control port 51570)
+2026-11-16T02:45:46.8611470Z [0;34m[INFO][0m Waiting for app to be ready on port 51570...
+2026-11-16T02:45:46.8737800Z [0;34m[INFO][0m App is ready
+2026-11-16T02:45:46.8841230Z [0;32m[PASS][0m No errors in app.log
+2026-11-16T02:45:46.8945780Z PASSED: 68-system-theme
+2026-11-16T02:45:47.3039100Z Passed 1, skipped 0, failed 0.
+2026-11-16T02:45:47.4542050Z === side B exit code: 0
+2026-11-16T02:45:47.5569440Z ##[group]Run mkdir -p "$RUNNER_TEMP/app-smoke-logs/crash-reports"
+2026-11-16T02:45:47.5576050Z [36;1mmkdir -p "$RUNNER_TEMP/app-smoke-logs/crash-reports"[0m
+2026-11-16T02:45:47.5577550Z [36;1mif [ -d "${TMPDIR%/}/photosphere-tests" ]; then[0m
+2026-11-16T02:45:47.5579050Z [36;1m    cp -R "${TMPDIR%/}/photosphere-tests" "$RUNNER_TEMP/app-smoke-logs/"[0m
+2026-11-16T02:45:47.5580880Z [36;1mfi[0m
+2026-11-16T02:45:47.5581890Z [36;1mif [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then[0m
+2026-11-16T02:45:47.5583820Z [36;1m    cp -R "$HOME/Library/Logs/DiagnosticReports/." "$RUNNER_TEMP/app-smoke-logs/crash-reports/"[0m
+2026-11-16T02:45:47.5588810Z [36;1mfi[0m
+2026-11-16T02:45:47.5590210Z [36;1mls -R "$RUNNER_TEMP/app-smoke-logs/crash-reports"[0m
+2026-11-16T02:45:48.6377600Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:45:48.6378680Z env:
+2026-11-16T02:45:48.6379170Z   BUN_VERSION: 1.3.14
+2026-11-16T02:45:48.6379680Z   NODE_VERSION: 24.15.0
+2026-11-16T02:45:48.6380360Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:45:48.6380980Z   RELEASE_PLATFORM: ios
+2026-11-16T02:45:48.6381330Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:45:48.6381560Z   MISE_LOG_LEVEL: info
+2026-11-16T02:45:48.6387520Z   GITHUB_TOKEN: ***
+2026-11-16T02:45:48.6389070Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:45:48.6394560Z   MISE_YES: 1
+2026-11-16T02:45:48.6395290Z ##[endgroup]
+2026-11-16T02:45:49.2174740Z ##[group]Run actions/upload-artifact@v4
+2026-11-16T02:45:49.2184990Z with:
+2026-11-16T02:45:49.2186190Z   name: app-smoke-logs-ios
+2026-11-16T02:45:49.2187440Z   path: /Users/runner/work/_temp/app-smoke-logs
+2026-11-16T02:45:49.2198200Z   retention-days: 5
+2026-11-16T02:45:49.2198610Z   if-no-files-found: warn
+2026-11-16T02:45:49.2199000Z   compression-level: 6
+2026-11-16T02:45:49.2199270Z   overwrite: false
+2026-11-16T02:45:49.2199640Z   include-hidden-files: false
+2026-11-16T02:45:49.2200030Z env:
+2026-11-16T02:45:49.2200280Z   BUN_VERSION: 1.3.14
+2026-11-16T02:45:49.2200670Z   NODE_VERSION: 24.15.0
+2026-11-16T02:45:49.2200980Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:45:49.2201380Z   RELEASE_PLATFORM: ios
+2026-11-16T02:45:49.2201690Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:45:49.2202040Z   MISE_LOG_LEVEL: info
+2026-11-16T02:45:49.2204520Z   GITHUB_TOKEN: ***
+2026-11-16T02:45:49.2204920Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:45:49.2205370Z   MISE_YES: 1
+2026-11-16T02:45:49.2205650Z ##[endgroup]
+2026-11-16T02:45:50.7107440Z (node:27365) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:45:50.7119920Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:45:50.8403150Z With the provided path, there will be 48 files uploaded
+2026-11-16T02:45:50.8411110Z Artifact name is valid!
+2026-11-16T02:45:50.8414000Z Root directory input is valid!
+2026-11-16T02:45:51.2933160Z Beginning upload of artifact content to blob storage
+2026-11-16T02:45:52.3991140Z (node:27365) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:45:52.6916160Z Uploaded bytes 8388608
+2026-11-16T02:45:53.9030500Z Uploaded bytes 16777216
+2026-11-16T02:45:55.5624170Z Uploaded bytes 25165824
+2026-11-16T02:45:57.0451660Z Uploaded bytes 33554432
+2026-11-16T02:45:58.4265300Z Uploaded bytes 40459208
+2026-11-16T02:45:58.4520570Z Finished uploading artifact content to blob storage!
+2026-11-16T02:45:58.4644550Z SHA256 digest of uploaded artifact zip is 54edb3362c4feb312c4f69bb5c47477cb0bee574b63e3d1971edea112062c8aa
+2026-11-16T02:45:58.4748210Z Finalizing artifact upload
+2026-11-16T02:45:58.8328890Z Artifact app-smoke-logs-ios.zip successfully finalized. Artifact ID 14193293520
+2026-11-16T02:45:58.8434240Z Artifact app-smoke-logs-ios has been successfully uploaded! Final size is 40459208 bytes. Artifact ID is 14193293520
+2026-11-16T02:45:58.8540400Z Artifact download URL: https://github.com/ashleydavis/photosphere/actions/runs/43790635983/artifacts/14193293520
+2026-11-16T02:46:01.3283820Z Post job cleanup.
+2026-11-16T02:46:01.8236290Z Cache hit occurred on the primary key macOS-ARM64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f, not saving cache.
+2026-11-16T02:46:01.8237870Z (node:27810) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:46:01.8239000Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:46:01.8505790Z Post job cleanup.
+2026-11-16T02:46:01.8521280Z ##[start-action display=Restore the packages Zig fetches;id=__95702589-598a-4318-9ca3-29d5df0d5043.cache]
+2026-11-16T02:46:02.0923620Z Post job cleanup.
+2026-11-16T02:46:02.4340610Z (node:27814) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:46:02.4342020Z Cache hit occurred on the primary key macOS-ARM64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b, not saving cache.
+2026-11-16T02:46:02.4387630Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:46:02.4400690Z ##[end-action id=__95702589-598a-4318-9ca3-29d5df0d5043.cache;outcome=success;conclusion=success;duration_ms=587]
+2026-11-16T02:46:02.4613140Z Post job cleanup.
+2026-11-16T02:46:02.8226560Z (node:27815) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:46:02.8247230Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:46:02.8547110Z Post job cleanup.
+2026-11-16T02:46:03.3241260Z Post job cleanup.
+2026-11-16T02:46:03.5756200Z [command]/opt/homebrew/bin/git version
+2026-11-16T02:46:03.6281080Z git version 2.56.0
+2026-11-16T02:46:03.6345200Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/a409a652-5614-4ca1-b068-a080cc56f8c3/.gitconfig'
+2026-11-16T02:46:03.6368310Z Temporarily overriding HOME='/Users/runner/work/_temp/a409a652-5614-4ca1-b068-a080cc56f8c3' before making global git config changes
+2026-11-16T02:46:03.6370450Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-16T02:46:03.6375170Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/photosphere/photosphere
+2026-11-16T02:46:03.6656200Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T02:46:03.6862770Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-16T02:46:04.0317650Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T02:46:04.0466750Z http.https://github.com/.extraheader
+2026-11-16T02:46:04.0491020Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-16T02:46:04.0720510Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-16T02:46:04.4076040Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T02:46:04.4387260Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-16T02:46:04.7227540Z Cleaning up orphan processes
+2026-11-16T02:48:43.4184790Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache/restore@v4, actions/cache@v4, actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4, jdx/mise-action@v2. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
