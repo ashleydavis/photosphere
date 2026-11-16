@@ -41,19 +41,21 @@ case "$PLATFORM" in
         send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
         wait_for_log "$TMP_DIR" "Database entry added"
 
-        send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
-        wait_for_log "$TMP_DIR" "Databases page loaded"
-
-        # Confirming the Add Database dialog registers the entry and then opens that database, which re-renders the card list. That
-        # open runs after "Database entry added" is logged, so wait for it to settle before opening the menu: otherwise it lands
-        # mid-test and tears the menu down before the action can be clicked. Polled from the navbar marker (rendered only while a
-        # database is open) rather than a log line, because the open can complete either side of the page-loaded event and a log wait
-        # would miss an early one. The navbar marker is not enough on its own: the open emits a second "Databases page loaded" render
-        # after "Database opened", which lands after the marker appears and tears the menu down, so wait for that render too. When
-        # this races, the share dialog never opens and the failure surfaces as the misleading "Failed to read pairing code from
-        # sender".
-        wait_for_value "$APP_PORT" database-photo-count "photos"
+        # Confirming the Add Database dialog registers the entry, re-reads the list and then opens that database. The list's re-render
+        # logs "Databases page loaded" either side of "Database opened": Release iOS run 43827893187 logged "Database opened" first,
+        # and this test, which waited for "Databases page loaded" first, moved wait_for_log's cursor past it and timed out waiting for
+        # "Database opened". The open only starts after "Database entry added", so "Database opened" is always still ahead of the
+        # cursor here.
         wait_for_log "$TMP_DIR" "Database opened"
+        send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
+
+        # The open re-renders the card list, so it has to settle before the menu is opened: otherwise it lands mid-test and tears the
+        # menu down before the action can be clicked. When this races, the share dialog never opens and the failure surfaces as the
+        # misleading "Failed to read pairing code from sender". The screen says the database is open (the navbar marker is rendered
+        # only while one is) and the new entry is in the list, whichever order they came in. The open's own re-render reads the list
+        # after "Database opened", so its "Databases page loaded" is always after the cursor.
+        wait_for_value "$APP_PORT" database-photo-count "photos"
+        wait_for_value "$APP_PORT" "database-row-name-My Test DB" "My Test DB"
         wait_for_log "$TMP_DIR" "Databases page loaded"
 
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
