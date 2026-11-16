@@ -1,0 +1,2054 @@
+﻿2026-11-16T02:02:18.5300940Z Current runner version: '2.338.2'
+2026-11-16T02:02:18.5351390Z ##[group]Runner Image Provisioner
+2026-11-16T02:02:18.5352000Z Hosted Compute Agent
+2026-11-16T02:02:18.5352470Z Version: 20261028.624
+2026-11-16T02:02:18.5352880Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-16T02:02:18.5353350Z Build Date: 2026-10-28T21:51:42Z
+2026-11-16T02:02:18.5353800Z Worker ID: {482fc2ee-ca9e-46d6-b968-a62f2165f1e8}
+2026-11-16T02:02:18.5354260Z Region: westus
+2026-11-16T02:02:18.5354620Z Cloud: MacCloud
+2026-11-16T02:02:18.5354970Z ##[endgroup]
+2026-11-16T02:02:18.5355920Z ##[group]Operating System
+2026-11-16T02:02:18.5356330Z macOS
+2026-11-16T02:02:18.5356660Z 26.7.2
+2026-11-16T02:02:18.5357000Z 25G332
+2026-11-16T02:02:18.5357340Z ##[endgroup]
+2026-11-16T02:02:18.5357700Z ##[group]Runner Image
+2026-11-16T02:02:18.5358080Z Image: macos-26-arm64
+2026-11-16T02:02:18.5358470Z Version: 20261102.0473.1
+2026-11-16T02:02:18.5359340Z Included Software: https://github.com/actions/runner-images/blob/macos-26-arm64/20261102.0473/images/macos/macos-26-arm64-Readme.md
+2026-11-16T02:02:18.5360370Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-26-arm64%2F20261102.0473
+2026-11-16T02:02:18.5361030Z ##[endgroup]
+2026-11-16T02:02:18.5361840Z ##[group]GITHUB_TOKEN Permissions
+2026-11-16T02:02:18.5363110Z Contents: read
+2026-11-16T02:02:18.5363460Z Metadata: read
+2026-11-16T02:02:18.5363810Z Packages: read
+2026-11-16T02:02:18.5364160Z ##[endgroup]
+2026-11-16T02:02:18.5365940Z Secret source: Actions
+2026-11-16T02:02:18.5366490Z Cache mode: write
+2026-11-16T02:02:18.5366940Z Prepare workflow directory
+2026-11-16T02:02:18.5663160Z Prepare all required actions
+2026-11-16T02:02:18.5718020Z Getting action download info
+2026-11-16T02:02:18.9584200Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-16T02:02:19.2732820Z Download action repository 'oven-sh/setup-bun@v2' (SHA:0c5077e51419868618aeaa5fe8019c62421857d6)
+2026-11-16T02:02:19.7318300Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-16T02:02:19.8582070Z Download action repository 'jdx/mise-action@v2' (SHA:c37c93293d6b742fc901e1406b8f764f6fb19dac)
+2026-11-16T02:02:20.2658330Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-11-16T02:02:20.5088840Z Complete job name: app-build
+2026-11-16T02:02:20.6049270Z ##[group]Run actions/checkout@v4
+2026-11-16T02:02:20.6049920Z with:
+2026-11-16T02:02:20.6050260Z   fetch-depth: 0
+2026-11-16T02:02:20.6050630Z   repository: ashleydavis/photosphere
+2026-11-16T02:02:20.6054370Z   token: ***
+2026-11-16T02:02:20.6054780Z   ssh-strict: true
+2026-11-16T02:02:20.6055120Z   ssh-user: git
+2026-11-16T02:02:20.6055480Z   persist-credentials: true
+2026-11-16T02:02:20.6055870Z   clean: true
+2026-11-16T02:02:20.6056240Z   sparse-checkout-cone-mode: true
+2026-11-16T02:02:20.6056650Z   fetch-tags: false
+2026-11-16T02:02:20.6057000Z   show-progress: true
+2026-11-16T02:02:20.6057360Z   lfs: false
+2026-11-16T02:02:20.6057760Z   submodules: false
+2026-11-16T02:02:20.6058140Z   set-safe-directory: true
+2026-11-16T02:02:20.6058550Z   allow-unsafe-pr-checkout: false
+2026-11-16T02:02:20.6059120Z env:
+2026-11-16T02:02:20.6059440Z   BUN_VERSION: 1.3.14
+2026-11-16T02:02:20.6059800Z   NODE_VERSION: 24.15.0
+2026-11-16T02:02:20.6060170Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:02:20.6060600Z   RELEASE_PLATFORM: ios
+2026-11-16T02:02:20.6060970Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:02:20.6061350Z ##[endgroup]
+2026-11-16T02:02:21.2034270Z Syncing repository: ashleydavis/photosphere
+2026-11-16T02:02:21.2036200Z ##[group]Getting Git version info
+2026-11-16T02:02:21.2036810Z Working directory is '/Users/runner/work/photosphere/photosphere'
+2026-11-16T02:02:21.2038030Z [command]/opt/homebrew/bin/git version
+2026-11-16T02:02:21.2613330Z git version 2.56.0
+2026-11-16T02:02:21.2641340Z ##[endgroup]
+2026-11-16T02:02:21.2650200Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/3af1370c-e368-45e6-a979-be9ed7b91c54/.gitconfig'
+2026-11-16T02:02:21.2662530Z Temporarily overriding HOME='/Users/runner/work/_temp/3af1370c-e368-45e6-a979-be9ed7b91c54' before making global git config changes
+2026-11-16T02:02:21.2664190Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-16T02:02:21.2667270Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/photosphere/photosphere
+2026-11-16T02:02:21.2864970Z Deleting the contents of '/Users/runner/work/photosphere/photosphere'
+2026-11-16T02:02:21.2867480Z ##[group]Initializing the repository
+2026-11-16T02:02:21.2870670Z [command]/opt/homebrew/bin/git init /Users/runner/work/photosphere/photosphere
+2026-11-16T02:02:21.3118320Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-16T02:02:21.3120510Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-16T02:02:21.3122490Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-16T02:02:21.3124320Z hint: call:
+2026-11-16T02:02:21.3125270Z hint:
+2026-11-16T02:02:21.3126650Z hint: 	git config --global init.defaultBranch <name>
+2026-11-16T02:02:21.3127990Z hint:
+2026-11-16T02:02:21.3128590Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-16T02:02:21.3129390Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-16T02:02:21.3130030Z hint:
+2026-11-16T02:02:21.3131240Z hint: 	git branch -m <name>
+2026-11-16T02:02:21.3131800Z hint:
+2026-11-16T02:02:21.3132490Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-16T02:02:21.3176010Z Initialized empty Git repository in /Users/runner/work/photosphere/photosphere/.git/
+2026-11-16T02:02:21.3179690Z [command]/opt/homebrew/bin/git remote add origin https://github.com/ashleydavis/photosphere
+2026-11-16T02:02:21.3316520Z ##[endgroup]
+2026-11-16T02:02:21.3318360Z ##[group]Disabling automatic garbage collection
+2026-11-16T02:02:21.3320070Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-11-16T02:02:21.3407200Z ##[endgroup]
+2026-11-16T02:02:21.3408820Z ##[group]Setting up auth
+2026-11-16T02:02:21.3411780Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T02:02:21.3499330Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-16T02:02:21.4959010Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T02:02:21.5033640Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-16T02:02:21.6161570Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T02:02:21.6222430Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-16T02:02:21.7365500Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-16T02:02:21.7445170Z ##[endgroup]
+2026-11-16T02:02:21.7447220Z ##[group]Fetching the repository
+2026-11-16T02:02:21.7452190Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-11-16T02:02:25.6719810Z From https://github.com/ashleydavis/photosphere
+2026-11-16T02:02:25.6724490Z  * [new branch]          backup-before-mobile        -> origin/backup-before-mobile
+2026-11-16T02:02:25.6725920Z  * [new branch]          backup-before-zig           -> origin/backup-before-zig
+2026-11-16T02:02:25.6727230Z  * [new branch]          backup-zig-before-merge     -> origin/backup-zig-before-merge
+2026-11-16T02:02:25.6729400Z  * [new branch]          demo                        -> origin/demo
+2026-11-16T02:02:25.6730400Z  * [new branch]          fast-ci-workflows           -> origin/fast-ci-workflows
+2026-11-16T02:02:25.6731320Z  * [new branch]          main                        -> origin/main
+2026-11-16T02:02:25.6733320Z  * [new branch]          mobile                      -> origin/mobile
+2026-11-16T02:02:25.6736920Z  * [new branch]          root-cause-windows-linux-smoke -> origin/root-cause-windows-linux-smoke
+2026-11-16T02:02:25.6783770Z  * [new branch]          test-workflows              -> origin/test-workflows
+2026-11-16T02:02:25.6785620Z  * [new branch]          zig-2                       -> origin/zig-2
+2026-11-16T02:02:25.6787180Z  * [new branch]          zig-before-removing-typescript -> origin/zig-before-removing-typescript
+2026-11-16T02:02:25.6788760Z  * [new branch]          ziggy                       -> origin/ziggy
+2026-11-16T02:02:25.6790210Z  * [new tag]             Before-removing-the-backend -> Before-removing-the-backend
+2026-11-16T02:02:25.6792390Z  * [new tag]             android-nightly             -> android-nightly
+2026-11-16T02:02:25.6793900Z  * [new tag]             before-bun                  -> before-bun
+2026-11-16T02:02:25.6795460Z  * [new tag]             before-deleting-deprecated  -> before-deleting-deprecated
+2026-11-16T02:02:25.6815610Z  * [new tag]             ios-nightly                 -> ios-nightly
+2026-11-16T02:02:25.6868720Z  * [new tag]             linux-nightly               -> linux-nightly
+2026-11-16T02:02:25.6972200Z  * [new tag]             macos-arm64-nightly         -> macos-arm64-nightly
+2026-11-16T02:02:25.6989620Z  * [new tag]             macos-x64-nightly           -> macos-x64-nightly
+2026-11-16T02:02:25.6994950Z  * [new tag]             nightly                     -> nightly
+2026-11-16T02:02:25.6997100Z  * [new tag]             v0.0.1                      -> v0.0.1
+2026-11-16T02:02:25.7000860Z  * [new tag]             v0.0.2                      -> v0.0.2
+2026-11-16T02:02:25.7016380Z  * [new tag]             v0.0.3                      -> v0.0.3
+2026-11-16T02:02:25.7032780Z  * [new tag]             v0.0.4                      -> v0.0.4
+2026-11-16T02:02:25.7039860Z  * [new tag]             v0.0.5                      -> v0.0.5
+2026-11-16T02:02:25.7099520Z  * [new tag]             v0.0.6                      -> v0.0.6
+2026-11-16T02:02:25.7194210Z  * [new tag]             v0.0.7                      -> v0.0.7
+2026-11-16T02:02:25.7224180Z  * [new tag]             v0.0.8                      -> v0.0.8
+2026-11-16T02:02:25.7280130Z  * [new tag]             windows-nightly             -> windows-nightly
+2026-11-16T02:02:25.7304800Z  * [new tag]             zig-android-nightly         -> zig-android-nightly
+2026-11-16T02:02:25.7307610Z  * [new tag]             zig-ios-nightly             -> zig-ios-nightly
+2026-11-16T02:02:25.7329950Z  * [new tag]             zig-linux-nightly           -> zig-linux-nightly
+2026-11-16T02:02:25.7348940Z  * [new tag]             zig-macos-arm64-nightly     -> zig-macos-arm64-nightly
+2026-11-16T02:02:25.7362440Z  * [new tag]             zig-macos-x64-nightly       -> zig-macos-x64-nightly
+2026-11-16T02:02:25.7370920Z  * [new tag]             zig-nightly                 -> zig-nightly
+2026-11-16T02:02:25.7374680Z  * [new tag]             zig-windows-nightly         -> zig-windows-nightly
+2026-11-16T02:02:25.7398630Z [command]/opt/homebrew/bin/git branch --list --remote origin/root-cause-windows-linux-smoke
+2026-11-16T02:02:25.7400170Z   origin/root-cause-windows-linux-smoke
+2026-11-16T02:02:25.7402740Z [command]/opt/homebrew/bin/git rev-parse refs/remotes/origin/root-cause-windows-linux-smoke
+2026-11-16T02:02:25.7404320Z 0a24975e05a4d681b7803f62ac169d7544d4c005
+2026-11-16T02:02:25.7406800Z ##[endgroup]
+2026-11-16T02:02:25.7408000Z ##[group]Determining the checkout info
+2026-11-16T02:02:25.7409370Z ##[endgroup]
+2026-11-16T02:02:25.7410150Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-11-16T02:02:25.7412470Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-16T02:02:25.7415570Z ##[group]Checking out the ref
+2026-11-16T02:02:25.7417510Z [command]/opt/homebrew/bin/git checkout --progress --force -B root-cause-windows-linux-smoke refs/remotes/origin/root-cause-windows-linux-smoke
+2026-11-16T02:02:26.8397710Z Updating files:  47% (4837/10166)
+2026-11-16T02:02:26.8598900Z Updating files:  48% (4880/10166)
+2026-11-16T02:02:26.8880810Z Updating files:  49% (4982/10166)
+2026-11-16T02:02:26.9047980Z Updating files:  50% (5083/10166)
+2026-11-16T02:02:26.9251000Z Updating files:  51% (5185/10166)
+2026-11-16T02:02:26.9491240Z Updating files:  52% (5287/10166)
+2026-11-16T02:02:26.9665500Z Updating files:  53% (5388/10166)
+2026-11-16T02:02:26.9822780Z Updating files:  54% (5490/10166)
+2026-11-16T02:02:27.0059590Z Updating files:  55% (5592/10166)
+2026-11-16T02:02:27.0251630Z Updating files:  56% (5693/10166)
+2026-11-16T02:02:27.0669530Z Updating files:  57% (5795/10166)
+2026-11-16T02:02:27.0912330Z Updating files:  58% (5897/10166)
+2026-11-16T02:02:27.1146050Z Updating files:  59% (5998/10166)
+2026-11-16T02:02:27.1374990Z Updating files:  60% (6100/10166)
+2026-11-16T02:02:27.1542430Z Updating files:  61% (6202/10166)
+2026-11-16T02:02:27.1747330Z Updating files:  62% (6303/10166)
+2026-11-16T02:02:27.1981270Z Updating files:  63% (6405/10166)
+2026-11-16T02:02:27.2133370Z Updating files:  64% (6507/10166)
+2026-11-16T02:02:27.2303060Z Updating files:  65% (6608/10166)
+2026-11-16T02:02:27.2452400Z Updating files:  66% (6710/10166)
+2026-11-16T02:02:27.2592720Z Updating files:  67% (6812/10166)
+2026-11-16T02:02:27.2846680Z Updating files:  68% (6913/10166)
+2026-11-16T02:02:27.2992830Z Updating files:  69% (7015/10166)
+2026-11-16T02:02:27.3221140Z Updating files:  70% (7117/10166)
+2026-11-16T02:02:27.3413440Z Updating files:  71% (7218/10166)
+2026-11-16T02:02:27.3531610Z Updating files:  72% (7320/10166)
+2026-11-16T02:02:27.3688090Z Updating files:  73% (7422/10166)
+2026-11-16T02:02:27.3914740Z Updating files:  74% (7523/10166)
+2026-11-16T02:02:27.4047380Z Updating files:  75% (7625/10166)
+2026-11-16T02:02:27.4174810Z Updating files:  76% (7727/10166)
+2026-11-16T02:02:27.4352240Z Updating files:  77% (7828/10166)
+2026-11-16T02:02:27.4515030Z Updating files:  78% (7930/10166)
+2026-11-16T02:02:27.4651540Z Updating files:  79% (8032/10166)
+2026-11-16T02:02:27.4815830Z Updating files:  80% (8133/10166)
+2026-11-16T02:02:27.4968840Z Updating files:  81% (8235/10166)
+2026-11-16T02:02:27.5108640Z Updating files:  82% (8337/10166)
+2026-11-16T02:02:27.5217060Z Updating files:  83% (8438/10166)
+2026-11-16T02:02:27.5353890Z Updating files:  84% (8540/10166)
+2026-11-16T02:02:27.5689330Z Updating files:  85% (8642/10166)
+2026-11-16T02:02:27.5907360Z Updating files:  86% (8743/10166)
+2026-11-16T02:02:27.6119810Z Updating files:  87% (8845/10166)
+2026-11-16T02:02:27.6349650Z Updating files:  88% (8947/10166)
+2026-11-16T02:02:27.6530580Z Updating files:  89% (9048/10166)
+2026-11-16T02:02:27.6691660Z Updating files:  90% (9150/10166)
+2026-11-16T02:02:27.6998460Z Updating files:  91% (9252/10166)
+2026-11-16T02:02:27.7277480Z Updating files:  92% (9353/10166)
+2026-11-16T02:02:27.7463340Z Updating files:  93% (9455/10166)
+2026-11-16T02:02:27.7598520Z Updating files:  94% (9557/10166)
+2026-11-16T02:02:27.7707640Z Updating files:  94% (9621/10166)
+2026-11-16T02:02:27.7905990Z Updating files:  95% (9658/10166)
+2026-11-16T02:02:27.8045800Z Updating files:  96% (9760/10166)
+2026-11-16T02:02:27.8219560Z Updating files:  97% (9862/10166)
+2026-11-16T02:02:27.8424620Z Updating files:  98% (9963/10166)
+2026-11-16T02:02:27.8678380Z Updating files:  99% (10065/10166)
+2026-11-16T02:02:27.8680050Z Updating files: 100% (10166/10166)
+2026-11-16T02:02:27.8680930Z Updating files: 100% (10166/10166), done.
+2026-11-16T02:02:27.8876610Z Switched to a new branch 'root-cause-windows-linux-smoke'
+2026-11-16T02:02:27.8881900Z branch 'root-cause-windows-linux-smoke' set up to track 'origin/root-cause-windows-linux-smoke'.
+2026-11-16T02:02:27.8947280Z ##[endgroup]
+2026-11-16T02:02:27.9081490Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-11-16T02:02:27.9209220Z 0a24975e05a4d681b7803f62ac169d7544d4c005
+2026-11-16T02:02:27.9755730Z ##[group]Run oven-sh/setup-bun@v2
+2026-11-16T02:02:27.9756560Z with:
+2026-11-16T02:02:27.9757030Z   bun-version: 1.3.14
+2026-11-16T02:02:27.9757560Z   no-cache: false
+2026-11-16T02:02:27.9763750Z   token: ***
+2026-11-16T02:02:27.9764260Z env:
+2026-11-16T02:02:27.9765210Z   BUN_VERSION: 1.3.14
+2026-11-16T02:02:27.9765700Z   NODE_VERSION: 24.15.0
+2026-11-16T02:02:27.9766230Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:02:27.9767160Z   RELEASE_PLATFORM: ios
+2026-11-16T02:02:27.9768100Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:02:27.9768390Z ##[endgroup]
+2026-11-16T02:02:28.4939400Z Downloading a new version of Bun: https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-darwin-aarch64.zip
+2026-11-16T02:02:29.1152330Z [command]/usr/bin/unzip -o -q /Users/runner/work/_temp/96eff295-9261-4a14-8377-0ef7868ad7b4.zip
+2026-11-16T02:02:29.7440880Z [command]/Users/runner/.bun/bin/bun --revision
+2026-11-16T02:02:29.7747680Z 1.3.14+0d9b296af
+2026-11-16T02:02:29.7871440Z ##[group]Run actions/setup-node@v4
+2026-11-16T02:02:29.7871660Z with:
+2026-11-16T02:02:29.7871830Z   node-version: 24.15.0
+2026-11-16T02:02:29.7872040Z   always-auth: false
+2026-11-16T02:02:29.7872270Z   check-latest: false
+2026-11-16T02:02:29.7878040Z   token: ***
+2026-11-16T02:02:29.7878530Z env:
+2026-11-16T02:02:29.7879010Z   BUN_VERSION: 1.3.14
+2026-11-16T02:02:29.7879480Z   NODE_VERSION: 24.15.0
+2026-11-16T02:02:29.7879970Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:02:29.7880570Z   RELEASE_PLATFORM: ios
+2026-11-16T02:02:29.7881070Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:02:29.7881620Z ##[endgroup]
+2026-11-16T02:02:29.9982420Z (node:1922) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:02:30.0066910Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:02:30.0068010Z Attempting to download 24.15.0...
+2026-11-16T02:02:30.8600690Z Acquiring 24.15.0 - arm64 from https://github.com/actions/node-versions/releases/download/24.15.0-24511264946/node-24.15.0-darwin-arm64.tar.gz
+2026-11-16T02:02:32.6856260Z Extracting ...
+2026-11-16T02:02:32.7087010Z [command]/usr/bin/tar xz --strip 1 -C /Users/runner/work/_temp/9e07d266-18a9-499b-96e7-70bef7673646 -f /Users/runner/work/_temp/49a744ca-3af7-46c9-b45c-125dba6e7254
+2026-11-16T02:02:33.9757780Z Adding to the cache ...
+2026-11-16T02:02:36.8188280Z ##[group]Environment details
+2026-11-16T02:02:37.2395300Z node: v24.15.0
+2026-11-16T02:02:37.2395870Z npm: 11.12.1
+2026-11-16T02:02:37.2396440Z yarn: 1.22.22
+2026-11-16T02:02:37.2397520Z ##[endgroup]
+2026-11-16T02:02:37.2675800Z ##[group]Run jdx/mise-action@v2
+2026-11-16T02:02:37.2676030Z with:
+2026-11-16T02:02:37.2676210Z   install_args: zig jq
+2026-11-16T02:02:37.2676430Z   install: true
+2026-11-16T02:02:37.2676620Z   cache: true
+2026-11-16T02:02:37.2676760Z   cache_save: true
+2026-11-16T02:02:37.2677030Z   cache_key_prefix: mise-v0
+2026-11-16T02:02:37.2677300Z   experimental: false
+2026-11-16T02:02:37.2677510Z   log_level: info
+2026-11-16T02:02:37.2677710Z   reshim: false
+2026-11-16T02:02:37.2679930Z   github_token: ***
+2026-11-16T02:02:37.2680110Z   fetch_from_github: true
+2026-11-16T02:02:37.2680280Z env:
+2026-11-16T02:02:37.2680430Z   BUN_VERSION: 1.3.14
+2026-11-16T02:02:37.2680600Z   NODE_VERSION: 24.15.0
+2026-11-16T02:02:37.2680800Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:02:37.2681000Z   RELEASE_PLATFORM: ios
+2026-11-16T02:02:37.2681250Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:02:37.2681450Z ##[endgroup]
+2026-11-16T02:02:37.4680890Z ##[group]Restoring mise cache
+2026-11-16T02:02:39.4990150Z mise cache not found for mise-v0-macos-arm64-e95f48bf5c96f5dbb6d323dc2c37f3ec267d4773c2a6a4871ecf48d4297b50f1-3bf4a0d67d88dc5aa5be7ff0ac03c5258bf51c307989c5c5477fdc7134d93fb1
+2026-11-16T02:02:39.4996280Z ##[group]Setup mise
+2026-11-16T02:02:39.4996980Z [command]/opt/homebrew/bin/zstd --version
+2026-11-16T02:02:39.4999340Z *** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***
+2026-11-16T02:02:39.5002690Z [command]/usr/bin/curl -fsSL https://mise.jdx.dev/VERSION
+2026-11-16T02:02:39.6300840Z 2026.11.8
+2026-11-16T02:02:39.6337550Z [command]/bin/sh -c curl -fsSL https://github.com/jdx/mise/releases/download/v2026.11.8/mise-v2026.11.8-macos-arm64.tar.zst | tar --zstd -xf - -C /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T && mv /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/mise/bin/mise /Users/runner/.local/share/mise/bin/mise
+2026-11-16T02:02:40.7904800Z ##[group]Setting env vars
+2026-11-16T02:02:40.7908740Z Setting MISE_LOG_LEVEL=info
+2026-11-16T02:02:40.7916830Z Setting GITHUB_TOKEN=***
+2026-11-16T02:02:40.7925590Z Setting MISE_TRUSTED_CONFIG_PATHS=/Users/runner/work/photosphere/photosphere
+2026-11-16T02:02:40.7928010Z Setting MISE_YES=1
+2026-11-16T02:02:40.7930340Z Adding /Users/runner/.local/share/mise/shims to PATH
+2026-11-16T02:02:40.7931050Z ##[group]Running mise --version
+2026-11-16T02:02:40.7948690Z [command]/Users/runner/.local/share/mise/bin/mise --version
+2026-11-16T02:02:40.8346760Z 2026.11.8 macos-arm64 (2026-11-13)
+2026-11-16T02:02:40.8379650Z ##[endgroup]
+2026-11-16T02:02:40.8381010Z ##[group]Running mise install zig jq
+2026-11-16T02:02:40.8405090Z [command]/Users/runner/.local/share/mise/bin/mise install zig jq
+2026-11-16T02:02:40.8735170Z [2mmise[0m [2mby @jdx[0m – installing 2 tools
+2026-11-16T02:02:41.9006690Z [2mmise[0m [38;5;10m✓[0m [34mjq[0m@1.7.1    1.0s  [2mjq-macos-arm64[0m
+2026-11-16T02:02:43.9290350Z [2mmise[0m [36m████████[0m[31m[0m[2m░░░░░░░░[0m 1/2 · 3.1s
+2026-11-16T02:02:43.9291730Z   [34mzig[0m@0.16.0  mirror 1/17 zig-aarch64-macos-0.16.0.tar.xz  3.1s  5.2/52.2 MB · 4.6 MB/s
+2026-11-16T02:02:46.9468500Z [2mmise[0m [36m████████████[0m[31m[0m[2m░░░░[0m 1/2 · 6.1s
+2026-11-16T02:02:46.9469500Z   [34mzig[0m@0.16.0  mirror 1/17 zig-aarch64-macos-0.16.0.tar.xz  6.1s  40.0/52.2 MB · 9.6 MB/s
+2026-11-16T02:02:49.9706040Z [2mmise[0m [36m██████████████[0m[31m[0m[2m░░[0m 1/2 · 9.1s
+2026-11-16T02:02:49.9823070Z   [34mzig[0m@0.16.0  extracting  9.1s
+2026-11-16T02:02:53.0014870Z [2mmise[0m [36m██████████████[0m[31m[0m[2m░░[0m 1/2 · 12.1s
+2026-11-16T02:02:53.0019630Z   [34mzig[0m@0.16.0  extracting  12.1s
+2026-11-16T02:02:56.0788430Z [2mmise[0m [36m██████████████[0m[31m[0m[2m░░[0m 1/2 · 15.2s
+2026-11-16T02:02:56.0789350Z   [34mzig[0m@0.16.0  extracting  15.2s
+2026-11-16T02:02:57.8385860Z [2mmise[0m [34mzig[0m@0.16.0 0.16.0
+2026-11-16T02:02:57.8745690Z [2mmise[0m [38;5;10m✓[0m [34mzig[0m@0.16.0  17.0s
+2026-11-16T02:02:57.8780660Z [2mmise[0m [36m████████████████[0m[31m[0m[2m[0m 2/2 · installed 2 tools in 17.0s
+2026-11-16T02:02:58.0533110Z ##[endgroup]
+2026-11-16T02:02:58.0534050Z ##[group]Saving mise cache
+2026-11-16T02:02:58.0549690Z ##[group]Running mise ls
+2026-11-16T02:02:58.0581440Z [command]/Users/runner/.local/share/mise/bin/mise ls
+2026-11-16T02:02:58.0748440Z [command]/opt/homebrew/bin/gtar --posix -cf cache.tzst --exclude cache.tzst -P -C /Users/runner/work/photosphere/photosphere --files-from manifest.txt --delay-directory-restore --use-compress-program zstdmt
+2026-11-16T02:02:58.1149660Z bun                              1.3.14 (missing)   ~/work/photosphere/photosphere/mise.toml  1.3.14
+2026-11-16T02:02:58.1151940Z github:ashleydavis/what-changed  0.0.6 (missing)    ~/work/photosphere/photosphere/mise.toml  0.0.6
+2026-11-16T02:02:58.1153950Z jq                               1.7.1              ~/work/photosphere/photosphere/mise.toml  1.7.1
+2026-11-16T02:02:58.1155350Z node                             24.15.0 (missing)  ~/work/photosphere/photosphere/mise.toml  24.15.0
+2026-11-16T02:02:58.1157750Z zig                              0.16.0             ~/work/photosphere/photosphere/mise.toml  0.16.0
+2026-11-16T02:02:58.1160380Z ##[endgroup]
+2026-11-16T02:03:05.7518210Z Sent 65732608 of 127671944 (51.5%), 62.6 MBs/sec
+2026-11-16T02:03:06.7510350Z Sent 127671944 of 127671944 (100.0%), 60.7 MBs/sec
+2026-11-16T02:03:07.0740350Z Cache saved from /Users/runner/.local/share/mise with key: mise-v0-macos-arm64-e95f48bf5c96f5dbb6d323dc2c37f3ec267d4773c2a6a4871ecf48d4297b50f1-3bf4a0d67d88dc5aa5be7ff0ac03c5258bf51c307989c5c5477fdc7134d93fb1
+2026-11-16T02:03:07.0840740Z ##[endgroup]
+2026-11-16T02:03:07.1301530Z Prepare all required actions
+2026-11-16T02:03:07.1302290Z Getting action download info
+2026-11-16T02:03:07.2420790Z ##[group]Run ./.github/actions/zig-packages
+2026-11-16T02:03:07.2421060Z env:
+2026-11-16T02:03:07.2421300Z   BUN_VERSION: 1.3.14
+2026-11-16T02:03:07.2421660Z   NODE_VERSION: 24.15.0
+2026-11-16T02:03:07.2421900Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:03:07.2422210Z   RELEASE_PLATFORM: ios
+2026-11-16T02:03:07.2422470Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:03:07.2422760Z   MISE_LOG_LEVEL: info
+2026-11-16T02:03:07.2425180Z   GITHUB_TOKEN: ***
+2026-11-16T02:03:07.2425660Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:03:07.2426000Z   MISE_YES: 1
+2026-11-16T02:03:07.2426280Z ##[endgroup]
+2026-11-16T02:03:07.2536320Z ##[start-action display=Restore the packages Zig fetches;id=__self.cache]
+2026-11-16T02:03:07.4399820Z ##[group]Run actions/cache@v4
+2026-11-16T02:03:07.4400050Z with:
+2026-11-16T02:03:07.4400270Z   path: ~/.cache/zig/p
+2026-11-16T02:03:07.4400670Z   key: macOS-ARM64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b
+2026-11-16T02:03:07.4401100Z   enableCrossOsArchive: false
+2026-11-16T02:03:07.4401320Z   fail-on-cache-miss: false
+2026-11-16T02:03:07.4401530Z   lookup-only: false
+2026-11-16T02:03:07.4401700Z   save-always: false
+2026-11-16T02:03:07.4401880Z env:
+2026-11-16T02:03:07.4402020Z   BUN_VERSION: 1.3.14
+2026-11-16T02:03:07.4402220Z   NODE_VERSION: 24.15.0
+2026-11-16T02:03:07.4402410Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:03:07.4402600Z   RELEASE_PLATFORM: ios
+2026-11-16T02:03:07.4402810Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:03:07.4403000Z   MISE_LOG_LEVEL: info
+2026-11-16T02:03:07.4407060Z   GITHUB_TOKEN: ***
+2026-11-16T02:03:07.4407810Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:03:07.4408170Z   MISE_YES: 1
+2026-11-16T02:03:07.4408380Z ##[endgroup]
+2026-11-16T02:03:07.5986070Z (node:2541) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:03:07.5988050Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:03:07.7517040Z Cache not found for input keys: macOS-ARM64-zig-packages-a66d99f7e32c3cbcf7fa44cb69a3b72fcf6d772838f0edc6282cd938c39f101b
+2026-11-16T02:03:07.7552180Z ##[end-action id=__self.cache;outcome=success;conclusion=success;duration_ms=501]
+2026-11-16T02:03:07.7556850Z ##[start-action display=Fetch every package the build.zig.zon files name;id=__self.__self]
+2026-11-16T02:03:07.7633190Z Prepare all required actions
+2026-11-16T02:03:07.7721860Z ##[group]Run ./.github/actions/retry-install
+2026-11-16T02:03:07.7722560Z with:
+2026-11-16T02:03:07.7724310Z   run: set -euo pipefail
+for manifest in $(git ls-files -- '*build.zig.zon'); do
+    directory="$(dirname "$manifest")"
+    echo "Fetching the packages of $directory"
+    (cd "$directory" && zig build --fetch=all)
+done
+
+2026-11-16T02:03:07.7726210Z   attempts: 3
+2026-11-16T02:03:07.7726710Z   delay-seconds: 15
+2026-11-16T02:03:07.7727190Z env:
+2026-11-16T02:03:07.7727970Z   BUN_VERSION: 1.3.14
+2026-11-16T02:03:07.7728620Z   NODE_VERSION: 24.15.0
+2026-11-16T02:03:07.7729260Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:03:07.7729850Z   RELEASE_PLATFORM: ios
+2026-11-16T02:03:07.7730350Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:03:07.7730900Z   MISE_LOG_LEVEL: info
+2026-11-16T02:03:07.7737030Z   GITHUB_TOKEN: ***
+2026-11-16T02:03:07.7737790Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:03:07.7738620Z   MISE_YES: 1
+2026-11-16T02:03:07.7739070Z ##[endgroup]
+2026-11-16T02:03:07.7751880Z ##[start-action display=Run set -uo pipefail;id=__self.__self.__run]
+2026-11-16T02:03:07.7876300Z ##[group]Run set -uo pipefail
+2026-11-16T02:03:07.7876830Z [36;1mset -uo pipefail[0m
+2026-11-16T02:03:07.7877090Z [36;1m[0m
+2026-11-16T02:03:07.7877300Z [36;1m#[0m
+2026-11-16T02:03:07.7880780Z [36;1m# Prints the verify entries that are not satisfied, each preceded by a space. Empty when they[0m
+2026-11-16T02:03:07.7882570Z [36;1m# all resolve. Word splitting on the input is intended: it is a space-separated list. An entry[0m
+2026-11-16T02:03:07.7884010Z [36;1m# holding "|"-separated alternatives is satisfied by any one of them.[0m
+2026-11-16T02:03:07.7884440Z [36;1m#[0m
+2026-11-16T02:03:07.7884600Z [36;1mmissing_tools() {[0m
+2026-11-16T02:03:07.7885130Z [36;1m    local missing=""[0m
+2026-11-16T02:03:07.7886180Z [36;1m    local entry[0m
+2026-11-16T02:03:07.7887030Z [36;1m    local alternative[0m
+2026-11-16T02:03:07.7887650Z [36;1m    local found[0m
+2026-11-16T02:03:07.7888320Z [36;1m    for entry in $RETRY_INSTALL_VERIFY; do[0m
+2026-11-16T02:03:07.7889080Z [36;1m        found=""[0m
+2026-11-16T02:03:07.7889890Z [36;1m        for alternative in ${entry//|/ }; do[0m
+2026-11-16T02:03:07.7890850Z [36;1m            if command -v "$alternative" >/dev/null 2>&1; then[0m
+2026-11-16T02:03:07.7891830Z [36;1m                found="yes"[0m
+2026-11-16T02:03:07.7892560Z [36;1m                break[0m
+2026-11-16T02:03:07.7893240Z [36;1m            fi[0m
+2026-11-16T02:03:07.7893770Z [36;1m        done[0m
+2026-11-16T02:03:07.7894250Z [36;1m        if [ -z "$found" ]; then[0m
+2026-11-16T02:03:07.7895030Z [36;1m            missing="$missing $entry"[0m
+2026-11-16T02:03:07.7895680Z [36;1m        fi[0m
+2026-11-16T02:03:07.7896170Z [36;1m    done[0m
+2026-11-16T02:03:07.7896660Z [36;1m    echo "$missing"[0m
+2026-11-16T02:03:07.7897180Z [36;1m}[0m
+2026-11-16T02:03:07.7897600Z [36;1m[0m
+2026-11-16T02:03:07.7898270Z [36;1minstallStatus=0[0m
+2026-11-16T02:03:07.7898870Z [36;1mmissing=""[0m
+2026-11-16T02:03:07.7899420Z [36;1mattempt=1[0m
+2026-11-16T02:03:07.7900820Z [36;1m[0m
+2026-11-16T02:03:07.7901500Z [36;1mwhile [ "$attempt" -le "$RETRY_INSTALL_ATTEMPTS" ]; do[0m
+2026-11-16T02:03:07.7902370Z [36;1m    installStatus=0[0m
+2026-11-16T02:03:07.7903050Z [36;1m    bash -c "$RETRY_INSTALL_RUN" || installStatus=$?[0m
+2026-11-16T02:03:07.7904700Z [36;1m    missing="$(missing_tools)"[0m
+2026-11-16T02:03:07.7905670Z [36;1m[0m
+2026-11-16T02:03:07.7905980Z [36;1m    if [ "$installStatus" -eq 0 ] && [ -z "$missing" ]; then[0m
+2026-11-16T02:03:07.7907430Z [36;1m        exit 0[0m
+2026-11-16T02:03:07.7908190Z [36;1m    fi[0m
+2026-11-16T02:03:07.7909220Z [36;1m[0m
+2026-11-16T02:03:07.7909750Z [36;1m    if [ "$installStatus" -ne 0 ]; then[0m
+2026-11-16T02:03:07.7910930Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS exited $installStatus."[0m
+2026-11-16T02:03:07.7914250Z [36;1m    fi[0m
+2026-11-16T02:03:07.7916140Z [36;1m    if [ -n "$missing" ]; then[0m
+2026-11-16T02:03:07.7918220Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS reported success but left these missing:$missing"[0m
+2026-11-16T02:03:07.7918910Z [36;1m    fi[0m
+2026-11-16T02:03:07.7919850Z [36;1m[0m
+2026-11-16T02:03:07.7920870Z [36;1m    if [ "$attempt" -eq "$RETRY_INSTALL_ATTEMPTS" ]; then[0m
+2026-11-16T02:03:07.7921970Z [36;1m        break[0m
+2026-11-16T02:03:07.7922700Z [36;1m    fi[0m
+2026-11-16T02:03:07.7923440Z [36;1m[0m
+2026-11-16T02:03:07.7924070Z [36;1m    delay=$((RETRY_INSTALL_DELAY * attempt))[0m
+2026-11-16T02:03:07.7925190Z [36;1m    echo "Waiting ${delay}s before retrying."[0m
+2026-11-16T02:03:07.7926040Z [36;1m    sleep "$delay"[0m
+2026-11-16T02:03:07.7926690Z [36;1m    attempt=$((attempt + 1))[0m
+2026-11-16T02:03:07.7927420Z [36;1mdone[0m
+2026-11-16T02:03:07.7927870Z [36;1m[0m
+2026-11-16T02:03:07.7928350Z [36;1mif [ -n "$missing" ]; then[0m
+2026-11-16T02:03:07.7929510Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts; still missing:$missing"[0m
+2026-11-16T02:03:07.7930870Z [36;1melse[0m
+2026-11-16T02:03:07.7933940Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts (last exit $installStatus)."[0m
+2026-11-16T02:03:07.7934510Z [36;1mfi[0m
+2026-11-16T02:03:07.7934760Z [36;1mexit 1[0m
+2026-11-16T02:03:07.8360540Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:03:07.8361260Z env:
+2026-11-16T02:03:07.8361660Z   BUN_VERSION: 1.3.14
+2026-11-16T02:03:07.8362120Z   NODE_VERSION: 24.15.0
+2026-11-16T02:03:07.8362590Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:03:07.8363100Z   RELEASE_PLATFORM: ios
+2026-11-16T02:03:07.8363570Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:03:07.8364070Z   MISE_LOG_LEVEL: info
+2026-11-16T02:03:07.8370020Z   GITHUB_TOKEN: ***
+2026-11-16T02:03:07.8370670Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:03:07.8371440Z   MISE_YES: 1
+2026-11-16T02:03:07.8373100Z   RETRY_INSTALL_RUN: set -euo pipefail
+for manifest in $(git ls-files -- '*build.zig.zon'); do
+    directory="$(dirname "$manifest")"
+    echo "Fetching the packages of $directory"
+    (cd "$directory" && zig build --fetch=all)
+done
+
+2026-11-16T02:03:07.8375200Z   RETRY_INSTALL_VERIFY: 
+2026-11-16T02:03:07.8375690Z   RETRY_INSTALL_ATTEMPTS: 3
+2026-11-16T02:03:07.8376170Z   RETRY_INSTALL_DELAY: 15
+2026-11-16T02:03:07.8376650Z ##[endgroup]
+2026-11-16T02:03:07.9372670Z Fetching the packages of .
+2026-11-16T02:03:09.8056550Z Fetching the packages of third-party/aws
+2026-11-16T02:03:34.5812300Z Fetching the packages of third-party/ffmpeg
+2026-11-16T02:03:36.3401410Z Fetching the packages of third-party/imagemagick
+2026-11-16T02:03:36.5727320Z Fetching the packages of third-party/zlib-ng
+2026-11-16T02:03:36.8042600Z ##[end-action id=__self.__self.__run;outcome=success;conclusion=success;duration_ms=29014]
+2026-11-16T02:03:36.8061230Z ##[end-action id=__self.__self;outcome=success;conclusion=success;duration_ms=29035]
+2026-11-16T02:03:37.2978160Z ##[group]Run actions/cache@v4
+2026-11-16T02:03:37.2978590Z with:
+2026-11-16T02:03:37.2979080Z   path: ~/.bun/install/cache
+2026-11-16T02:03:37.2979590Z   key: macOS-ARM64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f
+2026-11-16T02:03:37.2980040Z   restore-keys: macOS-ARM64-bun-
+
+2026-11-16T02:03:37.2980400Z   enableCrossOsArchive: false
+2026-11-16T02:03:37.2980720Z   fail-on-cache-miss: false
+2026-11-16T02:03:37.2980980Z   lookup-only: false
+2026-11-16T02:03:37.2981340Z   save-always: false
+2026-11-16T02:03:37.2981540Z env:
+2026-11-16T02:03:37.2981750Z   BUN_VERSION: 1.3.14
+2026-11-16T02:03:37.2982000Z   NODE_VERSION: 24.15.0
+2026-11-16T02:03:37.2982270Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:03:37.2982550Z   RELEASE_PLATFORM: ios
+2026-11-16T02:03:37.2982820Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:03:37.3020270Z   MISE_LOG_LEVEL: info
+2026-11-16T02:03:37.3022870Z   GITHUB_TOKEN: ***
+2026-11-16T02:03:37.3023200Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:03:37.3023500Z   MISE_YES: 1
+2026-11-16T02:03:37.3023640Z ##[endgroup]
+2026-11-16T02:03:37.4889560Z (node:2843) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:03:37.4891790Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:03:37.6762330Z Cache not found for input keys: macOS-ARM64-bun-dc27b73097069a655cb9e7d971f354d9465bcbbaa004efb4dc54a679aa21393f, macOS-ARM64-bun-
+2026-11-16T02:03:37.6881670Z Prepare all required actions
+2026-11-16T02:03:37.6938800Z ##[group]Run ./.github/actions/retry-install
+2026-11-16T02:03:37.6939050Z with:
+2026-11-16T02:03:37.6939310Z   run: bun install
+2026-11-16T02:03:37.6939550Z   attempts: 3
+2026-11-16T02:03:37.6939810Z   delay-seconds: 15
+2026-11-16T02:03:37.6940080Z env:
+2026-11-16T02:03:37.6940250Z   BUN_VERSION: 1.3.14
+2026-11-16T02:03:37.6940480Z   NODE_VERSION: 24.15.0
+2026-11-16T02:03:37.6940680Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:03:37.6940880Z   RELEASE_PLATFORM: ios
+2026-11-16T02:03:37.6941090Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:03:37.6941750Z   MISE_LOG_LEVEL: info
+2026-11-16T02:03:37.6944330Z   GITHUB_TOKEN: ***
+2026-11-16T02:03:37.6944630Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:03:37.6944940Z   MISE_YES: 1
+2026-11-16T02:03:37.6945130Z ##[endgroup]
+2026-11-16T02:03:37.6949720Z ##[start-action display=Run set -uo pipefail;id=__self_2.__run]
+2026-11-16T02:03:37.6970120Z ##[group]Run set -uo pipefail
+2026-11-16T02:03:37.6970410Z [36;1mset -uo pipefail[0m
+2026-11-16T02:03:37.6970630Z [36;1m[0m
+2026-11-16T02:03:37.6970790Z [36;1m#[0m
+2026-11-16T02:03:37.6971130Z [36;1m# Prints the verify entries that are not satisfied, each preceded by a space. Empty when they[0m
+2026-11-16T02:03:37.6971770Z [36;1m# all resolve. Word splitting on the input is intended: it is a space-separated list. An entry[0m
+2026-11-16T02:03:37.6972270Z [36;1m# holding "|"-separated alternatives is satisfied by any one of them.[0m
+2026-11-16T02:03:37.6972610Z [36;1m#[0m
+2026-11-16T02:03:37.6972790Z [36;1mmissing_tools() {[0m
+2026-11-16T02:03:37.6972990Z [36;1m    local missing=""[0m
+2026-11-16T02:03:37.6973210Z [36;1m    local entry[0m
+2026-11-16T02:03:37.6973420Z [36;1m    local alternative[0m
+2026-11-16T02:03:37.6973630Z [36;1m    local found[0m
+2026-11-16T02:03:37.6973870Z [36;1m    for entry in $RETRY_INSTALL_VERIFY; do[0m
+2026-11-16T02:03:37.6974130Z [36;1m        found=""[0m
+2026-11-16T02:03:37.6974440Z [36;1m        for alternative in ${entry//|/ }; do[0m
+2026-11-16T02:03:37.6974830Z [36;1m            if command -v "$alternative" >/dev/null 2>&1; then[0m
+2026-11-16T02:03:37.6975120Z [36;1m                found="yes"[0m
+2026-11-16T02:03:37.6975350Z [36;1m                break[0m
+2026-11-16T02:03:37.6975560Z [36;1m            fi[0m
+2026-11-16T02:03:37.6975730Z [36;1m        done[0m
+2026-11-16T02:03:37.6975930Z [36;1m        if [ -z "$found" ]; then[0m
+2026-11-16T02:03:37.6976180Z [36;1m            missing="$missing $entry"[0m
+2026-11-16T02:03:37.6976440Z [36;1m        fi[0m
+2026-11-16T02:03:37.6976620Z [36;1m    done[0m
+2026-11-16T02:03:37.6976820Z [36;1m    echo "$missing"[0m
+2026-11-16T02:03:37.6977020Z [36;1m}[0m
+2026-11-16T02:03:37.6977190Z [36;1m[0m
+2026-11-16T02:03:37.6977350Z [36;1minstallStatus=0[0m
+2026-11-16T02:03:37.6977550Z [36;1mmissing=""[0m
+2026-11-16T02:03:37.6977720Z [36;1mattempt=1[0m
+2026-11-16T02:03:37.6977910Z [36;1m[0m
+2026-11-16T02:03:37.6978150Z [36;1mwhile [ "$attempt" -le "$RETRY_INSTALL_ATTEMPTS" ]; do[0m
+2026-11-16T02:03:37.6978440Z [36;1m    installStatus=0[0m
+2026-11-16T02:03:37.6978710Z [36;1m    bash -c "$RETRY_INSTALL_RUN" || installStatus=$?[0m
+2026-11-16T02:03:37.6979050Z [36;1m    missing="$(missing_tools)"[0m
+2026-11-16T02:03:37.6979320Z [36;1m[0m
+2026-11-16T02:03:37.6979570Z [36;1m    if [ "$installStatus" -eq 0 ] && [ -z "$missing" ]; then[0m
+2026-11-16T02:03:37.6979850Z [36;1m        exit 0[0m
+2026-11-16T02:03:37.6980040Z [36;1m    fi[0m
+2026-11-16T02:03:37.6980220Z [36;1m[0m
+2026-11-16T02:03:37.6980400Z [36;1m    if [ "$installStatus" -ne 0 ]; then[0m
+2026-11-16T02:03:37.6980800Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS exited $installStatus."[0m
+2026-11-16T02:03:37.6981140Z [36;1m    fi[0m
+2026-11-16T02:03:37.6981330Z [36;1m    if [ -n "$missing" ]; then[0m
+2026-11-16T02:03:37.6982830Z [36;1m        echo "Attempt $attempt of $RETRY_INSTALL_ATTEMPTS reported success but left these missing:$missing"[0m
+2026-11-16T02:03:37.6983380Z [36;1m    fi[0m
+2026-11-16T02:03:37.6999220Z [36;1m[0m
+2026-11-16T02:03:37.6999470Z [36;1m    if [ "$attempt" -eq "$RETRY_INSTALL_ATTEMPTS" ]; then[0m
+2026-11-16T02:03:37.6999740Z [36;1m        break[0m
+2026-11-16T02:03:37.6999900Z [36;1m    fi[0m
+2026-11-16T02:03:37.7000190Z [36;1m[0m
+2026-11-16T02:03:37.7000420Z [36;1m    delay=$((RETRY_INSTALL_DELAY * attempt))[0m
+2026-11-16T02:03:37.7000770Z [36;1m    echo "Waiting ${delay}s before retrying."[0m
+2026-11-16T02:03:37.7001030Z [36;1m    sleep "$delay"[0m
+2026-11-16T02:03:37.7001770Z [36;1m    attempt=$((attempt + 1))[0m
+2026-11-16T02:03:37.7001990Z [36;1mdone[0m
+2026-11-16T02:03:37.7002160Z [36;1m[0m
+2026-11-16T02:03:37.7002320Z [36;1mif [ -n "$missing" ]; then[0m
+2026-11-16T02:03:37.7002700Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts; still missing:$missing"[0m
+2026-11-16T02:03:37.7003080Z [36;1melse[0m
+2026-11-16T02:03:37.7003440Z [36;1m    echo "::error::Install failed after $RETRY_INSTALL_ATTEMPTS attempts (last exit $installStatus)."[0m
+2026-11-16T02:03:37.7003920Z [36;1mfi[0m
+2026-11-16T02:03:37.7004100Z [36;1mexit 1[0m
+2026-11-16T02:03:37.7155130Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:03:37.7155450Z env:
+2026-11-16T02:03:37.7155710Z   BUN_VERSION: 1.3.14
+2026-11-16T02:03:37.7155950Z   NODE_VERSION: 24.15.0
+2026-11-16T02:03:37.7156180Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:03:37.7156380Z   RELEASE_PLATFORM: ios
+2026-11-16T02:03:37.7156630Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:03:37.7156900Z   MISE_LOG_LEVEL: info
+2026-11-16T02:03:37.7159460Z   GITHUB_TOKEN: ***
+2026-11-16T02:03:37.7159790Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:03:37.7160100Z   MISE_YES: 1
+2026-11-16T02:03:37.7160270Z   RETRY_INSTALL_RUN: bun install
+2026-11-16T02:03:37.7160460Z   RETRY_INSTALL_VERIFY: 
+2026-11-16T02:03:37.7160660Z   RETRY_INSTALL_ATTEMPTS: 3
+2026-11-16T02:03:37.7160840Z   RETRY_INSTALL_DELAY: 15
+2026-11-16T02:03:37.7161020Z ##[endgroup]
+2026-11-16T02:03:37.8225490Z bun install v1.3.14 (0d9b296a)
+2026-11-16T02:03:51.4701740Z 
+2026-11-16T02:03:51.4705660Z + @aws-sdk/client-s3@3.1016.0
+2026-11-16T02:03:51.4708260Z + ziggy-remote-control-server@github:ashleydavis/ziggy#9ff4aa5
+2026-11-16T02:03:51.4709370Z 
+2026-11-16T02:03:51.4710370Z 756 packages installed [13.68s]
+2026-11-16T02:03:51.4938230Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=13791]
+2026-11-16T02:03:51.5078420Z ##[group]Run bun run --filter=ziggy setup:ios
+2026-11-16T02:03:51.5079300Z [36;1mbun run --filter=ziggy setup:ios[0m
+2026-11-16T02:03:51.8188170Z shell: /bin/bash -e {0}
+2026-11-16T02:03:51.8188580Z env:
+2026-11-16T02:03:51.8188950Z   BUN_VERSION: 1.3.14
+2026-11-16T02:03:51.8189240Z   NODE_VERSION: 24.15.0
+2026-11-16T02:03:51.8189600Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:03:51.8189930Z   RELEASE_PLATFORM: ios
+2026-11-16T02:03:51.8190260Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:03:51.8190590Z   MISE_LOG_LEVEL: info
+2026-11-16T02:03:51.8193390Z   GITHUB_TOKEN: ***
+2026-11-16T02:03:51.8193910Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:03:51.8194270Z   MISE_YES: 1
+2026-11-16T02:03:51.8194540Z ##[endgroup]
+2026-11-16T02:04:55.0505900Z ziggy setup:ios: Xcode 26.6 and simctl are present.
+2026-11-16T02:04:55.0511930Z ziggy setup:ios: Exited with code 0
+2026-11-16T02:04:55.0709970Z Prepare all required actions
+2026-11-16T02:04:55.0710820Z Getting action download info
+2026-11-16T02:04:55.0796980Z ##[group]Run ./.github/actions/third-party-libraries
+2026-11-16T02:04:55.0797390Z with:
+2026-11-16T02:04:55.0797650Z   platform: macos-arm64
+2026-11-16T02:04:55.0797940Z   build-args: -Dtarget=aarch64-macos.11.0
+2026-11-16T02:04:55.0798160Z env:
+2026-11-16T02:04:55.0798290Z   BUN_VERSION: 1.3.14
+2026-11-16T02:04:55.0798610Z   NODE_VERSION: 24.15.0
+2026-11-16T02:04:55.0798880Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:04:55.0799220Z   RELEASE_PLATFORM: ios
+2026-11-16T02:04:55.0799390Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:04:55.0799690Z   MISE_LOG_LEVEL: info
+2026-11-16T02:04:55.0802100Z   GITHUB_TOKEN: ***
+2026-11-16T02:04:55.0802490Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:04:55.0802950Z   MISE_YES: 1
+2026-11-16T02:04:55.0803090Z ##[endgroup]
+2026-11-16T02:04:55.0809150Z ##[start-action display=The AWS SDK for C;id=__self_3.__self]
+2026-11-16T02:04:55.0930080Z Prepare all required actions
+2026-11-16T02:04:55.0930640Z Getting action download info
+2026-11-16T02:04:55.3753740Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-11-16T02:04:56.1000200Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-16T02:04:56.2424630Z ##[group]Run ./.github/actions/build-aws-sdk
+2026-11-16T02:04:56.2424980Z with:
+2026-11-16T02:04:56.2425190Z   platform: macos-arm64
+2026-11-16T02:04:56.2425400Z   build-args: -Dtarget=aarch64-macos.11.0
+2026-11-16T02:04:56.2425690Z env:
+2026-11-16T02:04:56.2426460Z   BUN_VERSION: 1.3.14
+2026-11-16T02:04:56.2426690Z   NODE_VERSION: 24.15.0
+2026-11-16T02:04:56.2426900Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:04:56.2427090Z   RELEASE_PLATFORM: ios
+2026-11-16T02:04:56.2427260Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:04:56.2427440Z   MISE_LOG_LEVEL: info
+2026-11-16T02:04:56.2429930Z   GITHUB_TOKEN: ***
+2026-11-16T02:04:56.2430250Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:04:56.2430640Z   MISE_YES: 1
+2026-11-16T02:04:56.2430800Z ##[endgroup]
+2026-11-16T02:04:56.2436070Z ##[start-action display=Find Zig;id=__self_3.__self.zig]
+2026-11-16T02:04:56.2453760Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:04:56.2454110Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:04:56.2454360Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:04:56.2454590Z [36;1melse[0m
+2026-11-16T02:04:56.2454750Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:04:56.2454960Z [36;1mfi[0m
+2026-11-16T02:04:56.2522810Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:04:56.2523380Z env:
+2026-11-16T02:04:56.2523660Z   BUN_VERSION: 1.3.14
+2026-11-16T02:04:56.2524410Z   NODE_VERSION: 24.15.0
+2026-11-16T02:04:56.2524810Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:04:56.2525080Z   RELEASE_PLATFORM: ios
+2026-11-16T02:04:56.2525280Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:04:56.2536170Z   MISE_LOG_LEVEL: info
+2026-11-16T02:04:56.2538570Z   GITHUB_TOKEN: ***
+2026-11-16T02:04:56.2539170Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:04:56.2539530Z   MISE_YES: 1
+2026-11-16T02:04:56.2539690Z ##[endgroup]
+2026-11-16T02:04:56.3075780Z ##[end-action id=__self_3.__self.zig;outcome=success;conclusion=success;duration_ms=63]
+2026-11-16T02:04:56.3078120Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_3.__self.__jdx_mise-action]
+2026-11-16T02:04:56.3083630Z ##[end-action id=__self_3.__self.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:04:58.5432930Z ##[start-action display=Look for the AWS SDK for C and aws-lc's artifact;id=__self_3.__self.artifact]
+2026-11-16T02:04:58.5469880Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh aws-sdk-macos-arm64 "$KEY"
+2026-11-16T02:04:58.5471040Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh aws-sdk-macos-arm64 "$KEY"[0m
+2026-11-16T02:04:58.5511490Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:04:58.5511830Z env:
+2026-11-16T02:04:58.5511980Z   BUN_VERSION: 1.3.14
+2026-11-16T02:04:58.5512170Z   NODE_VERSION: 24.15.0
+2026-11-16T02:04:58.5512380Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:04:58.5512580Z   RELEASE_PLATFORM: ios
+2026-11-16T02:04:58.5512770Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:04:58.5513000Z   MISE_LOG_LEVEL: info
+2026-11-16T02:04:58.5515190Z   GITHUB_TOKEN: ***
+2026-11-16T02:04:58.5515470Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:04:58.5515780Z   MISE_YES: 1
+2026-11-16T02:04:58.5517770Z   GH_TOKEN: ***
+2026-11-16T02:04:58.5518300Z   KEY: aws-sdk-macOS-ARM64-macos-arm64-baseline--Dtarget=aarch64-macos.11.0-d575377c1f20351595357dcff9aee9f6fa5ef5ad488361e81e4ee0846351cd5c
+2026-11-16T02:04:58.5518910Z ##[endgroup]
+2026-11-16T02:04:59.1493250Z Artifact aws-sdk-macos-arm64-90ef4fbe287f29c47d4803f3999d83034b3c103fa7e95de028a915c47c1d1c57: 43776094497
+2026-11-16T02:04:59.1505920Z ##[end-action id=__self_3.__self.artifact;outcome=success;conclusion=success;duration_ms=606]
+2026-11-16T02:04:59.1508330Z ##[start-action display=Download the AWS SDK for C and aws-lc;id=__self_3.__self.__actions_download-artifact]
+2026-11-16T02:04:59.1544930Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:04:59.1545210Z with:
+2026-11-16T02:04:59.1545580Z   name: aws-sdk-macos-arm64-90ef4fbe287f29c47d4803f3999d83034b3c103fa7e95de028a915c47c1d1c57
+2026-11-16T02:04:59.1545990Z   run-id: 43776094497
+2026-11-16T02:04:59.1548100Z   github-token: ***
+2026-11-16T02:04:59.1548280Z   path: third-party/aws/zig-out
+2026-11-16T02:04:59.1548490Z   merge-multiple: false
+2026-11-16T02:04:59.1548700Z   repository: ashleydavis/photosphere
+2026-11-16T02:04:59.1548920Z env:
+2026-11-16T02:04:59.1549060Z   BUN_VERSION: 1.3.14
+2026-11-16T02:04:59.1549220Z   NODE_VERSION: 24.15.0
+2026-11-16T02:04:59.1549410Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:04:59.1549620Z   RELEASE_PLATFORM: ios
+2026-11-16T02:04:59.1549810Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:04:59.1550050Z   MISE_LOG_LEVEL: info
+2026-11-16T02:04:59.1552080Z   GITHUB_TOKEN: ***
+2026-11-16T02:04:59.1552340Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:04:59.1552680Z   MISE_YES: 1
+2026-11-16T02:04:59.1552830Z ##[endgroup]
+2026-11-16T02:04:59.3126660Z Downloading single artifact
+2026-11-16T02:04:59.3275600Z (node:4651) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:04:59.3276800Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:04:59.3557810Z (node:4651) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:04:59.8768910Z Preparing to download the following artifacts:
+2026-11-16T02:04:59.8770140Z - aws-sdk-macos-arm64-90ef4fbe287f29c47d4803f3999d83034b3c103fa7e95de028a915c47c1d1c57 (ID: 14187072406, Size: 4646722, Expected Digest: sha256:85c52013d256aad0bac933ae3a3311133eeca1180015402b3364669e20c59c51)
+2026-11-16T02:04:59.8794620Z Downloading artifact '14187072406' from 'ashleydavis/photosphere'
+2026-11-16T02:05:00.3048830Z Redirecting to blob download url: https://productionresultssa16.blob.core.windows.net/actions-results/1328d2d4-c405-8deb-b96a-c0ba6823c763/workflow-job-run-92aa87c5-1ac4-5215-a59f-fd9f21b6f98b/artifacts/380de8ab039ab309c231d92a87b8b4ad5ef47621b2e532840301e2d75ae4d6a5.zip
+2026-11-16T02:05:00.3087540Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/aws/zig-out
+2026-11-16T02:05:00.5088800Z (node:4651) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:01.0425840Z SHA256 digest of downloaded artifact is 85c52013d256aad0bac933ae3a3311133eeca1180015402b3364669e20c59c51
+2026-11-16T02:05:01.0497610Z Artifact download completed successfully.
+2026-11-16T02:05:01.0553750Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:01.0657520Z Download artifact has finished successfully
+2026-11-16T02:05:01.0728940Z ##[end-action id=__self_3.__self.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=1920]
+2026-11-16T02:05:01.0733400Z ##[start-action display=Build the AWS SDK for C and aws-lc;id=__self_3.__self.__run]
+2026-11-16T02:05:01.0740860Z ##[end-action id=__self_3.__self.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:01.0743260Z ##[start-action display=Upload the AWS SDK for C and aws-lc;id=__self_3.__self.__actions_upload-artifact]
+2026-11-16T02:05:01.0749400Z ##[end-action id=__self_3.__self.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:01.0758640Z ##[end-action id=__self_3.__self;outcome=success;conclusion=success;duration_ms=5991]
+2026-11-16T02:05:01.0765940Z ##[start-action display=zlib-ng;id=__self_3.__self_2]
+2026-11-16T02:05:01.0831070Z Prepare all required actions
+2026-11-16T02:05:01.0831710Z Getting action download info
+2026-11-16T02:05:01.2168510Z ##[group]Run ./.github/actions/build-zlib-ng
+2026-11-16T02:05:01.2168760Z with:
+2026-11-16T02:05:01.2168930Z   platform: macos-arm64
+2026-11-16T02:05:01.2169160Z   build-args: -Dtarget=aarch64-macos.11.0
+2026-11-16T02:05:01.2169400Z env:
+2026-11-16T02:05:01.2169530Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:01.2169690Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:01.2169870Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:01.2170050Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:01.2170250Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:01.2170430Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:01.2172970Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:01.2173300Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:01.2173660Z   MISE_YES: 1
+2026-11-16T02:05:01.2173840Z ##[endgroup]
+2026-11-16T02:05:01.2179260Z ##[start-action display=Find Zig;id=__self_3.__self_2.zig]
+2026-11-16T02:05:01.2197140Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:01.2197440Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:01.2197690Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:01.2197910Z [36;1melse[0m
+2026-11-16T02:05:01.2198080Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:01.2198300Z [36;1mfi[0m
+2026-11-16T02:05:01.2303190Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:01.2304150Z env:
+2026-11-16T02:05:01.2304660Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:01.2305140Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:01.2305610Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:01.2306130Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:01.2306600Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:01.2307370Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:01.2309700Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:01.2309960Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:01.2310370Z   MISE_YES: 1
+2026-11-16T02:05:01.2310550Z ##[endgroup]
+2026-11-16T02:05:01.2864390Z ##[end-action id=__self_3.__self_2.zig;outcome=success;conclusion=success;duration_ms=68]
+2026-11-16T02:05:01.2866550Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_3.__self_2.__jdx_mise-action]
+2026-11-16T02:05:01.2870410Z ##[end-action id=__self_3.__self_2.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:01.4297910Z ##[start-action display=Look for zlib-ng's artifact;id=__self_3.__self_2.artifact]
+2026-11-16T02:05:01.4332810Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh zlib-ng-macos-arm64 "$KEY"
+2026-11-16T02:05:01.4333840Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh zlib-ng-macos-arm64 "$KEY"[0m
+2026-11-16T02:05:01.4369420Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:01.4369660Z env:
+2026-11-16T02:05:01.4369830Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:01.4369980Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:01.4370160Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:01.4370340Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:01.4370510Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:01.4370710Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:01.4372690Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:01.4372920Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:01.4373180Z   MISE_YES: 1
+2026-11-16T02:05:01.4375140Z   GH_TOKEN: ***
+2026-11-16T02:05:01.4375630Z   KEY: zlib-ng-macOS-ARM64-macos-arm64-baseline--Dtarget=aarch64-macos.11.0-cb6b552f6fb4baf28552a3652a915ada42cb33bdd5f5d619aeab0468b3aa1602
+2026-11-16T02:05:01.4376250Z ##[endgroup]
+2026-11-16T02:05:01.7529700Z Artifact zlib-ng-macos-arm64-bbbcf51e69481979d6eff276443dfbdeb9f1422d22b35a642997b85ab6d48569: 43776094497
+2026-11-16T02:05:01.7543630Z ##[end-action id=__self_3.__self_2.artifact;outcome=success;conclusion=success;duration_ms=324]
+2026-11-16T02:05:01.7546220Z ##[start-action display=Download zlib-ng;id=__self_3.__self_2.__actions_download-artifact]
+2026-11-16T02:05:01.7584150Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:01.7584380Z with:
+2026-11-16T02:05:01.7584750Z   name: zlib-ng-macos-arm64-bbbcf51e69481979d6eff276443dfbdeb9f1422d22b35a642997b85ab6d48569
+2026-11-16T02:05:01.7585210Z   run-id: 43776094497
+2026-11-16T02:05:01.7587660Z   github-token: ***
+2026-11-16T02:05:01.7587890Z   path: third-party/zlib-ng/zig-out
+2026-11-16T02:05:01.7588180Z   merge-multiple: false
+2026-11-16T02:05:01.7588400Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:01.7588600Z env:
+2026-11-16T02:05:01.7588770Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:01.7588980Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:01.7589210Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:01.7589420Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:01.7589610Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:01.7589800Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:01.7592190Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:01.7592490Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:01.7592840Z   MISE_YES: 1
+2026-11-16T02:05:01.7593060Z ##[endgroup]
+2026-11-16T02:05:01.9154570Z Downloading single artifact
+2026-11-16T02:05:01.9213170Z (node:4670) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:01.9213900Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:02.0072400Z (node:4670) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:02.3282540Z Preparing to download the following artifacts:
+2026-11-16T02:05:02.3285800Z - zlib-ng-macos-arm64-bbbcf51e69481979d6eff276443dfbdeb9f1422d22b35a642997b85ab6d48569 (ID: 14186842445, Size: 156762, Expected Digest: sha256:6579cf4ff2f669fe2e9e2a0e20c807db436afefe6a842b3bad0ecbaac3944d4f)
+2026-11-16T02:05:02.3306850Z Downloading artifact '14186842445' from 'ashleydavis/photosphere'
+2026-11-16T02:05:02.6060090Z Redirecting to blob download url: https://productionresultssa16.blob.core.windows.net/actions-results/1328d2d4-c405-8deb-b96a-c0ba6823c763/workflow-job-run-07a95408-9a9c-5a9f-bc98-4df08ea51538/artifacts/cdb2c7b00d3cb15d851447fdf1479e5915577c81b1bff2668657806c5559a621.zip
+2026-11-16T02:05:02.6063770Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/zlib-ng/zig-out
+2026-11-16T02:05:02.7435670Z (node:4670) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:02.8325340Z SHA256 digest of downloaded artifact is 6579cf4ff2f669fe2e9e2a0e20c807db436afefe6a842b3bad0ecbaac3944d4f
+2026-11-16T02:05:02.8326190Z Artifact download completed successfully.
+2026-11-16T02:05:02.8326780Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:02.8329120Z Download artifact has finished successfully
+2026-11-16T02:05:02.8399210Z ##[end-action id=__self_3.__self_2.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=1084]
+2026-11-16T02:05:02.8403780Z ##[start-action display=Build zlib-ng;id=__self_3.__self_2.__run]
+2026-11-16T02:05:02.8410460Z ##[end-action id=__self_3.__self_2.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:02.8412060Z ##[start-action display=Upload zlib-ng;id=__self_3.__self_2.__actions_upload-artifact]
+2026-11-16T02:05:02.8432650Z ##[end-action id=__self_3.__self_2.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:02.8439440Z ##[end-action id=__self_3.__self_2;outcome=success;conclusion=success;duration_ms=1766]
+2026-11-16T02:05:02.8442420Z ##[start-action display=ImageMagick;id=__self_3.__self_3]
+2026-11-16T02:05:02.8513380Z Prepare all required actions
+2026-11-16T02:05:02.8514240Z Getting action download info
+2026-11-16T02:05:02.9866180Z ##[group]Run ./.github/actions/build-imagemagick
+2026-11-16T02:05:02.9866480Z with:
+2026-11-16T02:05:02.9866650Z   platform: macos-arm64
+2026-11-16T02:05:02.9866890Z   build-args: -Dtarget=aarch64-macos.11.0
+2026-11-16T02:05:02.9867110Z env:
+2026-11-16T02:05:02.9867300Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:02.9867500Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:02.9867750Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:02.9868110Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:02.9868330Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:02.9868570Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:02.9893520Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:02.9893850Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:02.9894170Z   MISE_YES: 1
+2026-11-16T02:05:02.9894310Z ##[endgroup]
+2026-11-16T02:05:02.9899610Z ##[start-action display=Find Zig;id=__self_3.__self_3.zig]
+2026-11-16T02:05:02.9919430Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:02.9919790Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:02.9920110Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:02.9920350Z [36;1melse[0m
+2026-11-16T02:05:02.9920540Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:02.9920780Z [36;1mfi[0m
+2026-11-16T02:05:02.9977290Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:02.9977570Z env:
+2026-11-16T02:05:02.9977740Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:02.9977930Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:02.9978130Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:02.9978330Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:02.9978570Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:02.9978790Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:02.9981090Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:02.9981430Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:02.9981750Z   MISE_YES: 1
+2026-11-16T02:05:02.9981930Z ##[endgroup]
+2026-11-16T02:05:03.0421300Z ##[end-action id=__self_3.__self_3.zig;outcome=success;conclusion=success;duration_ms=52]
+2026-11-16T02:05:03.0425970Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_3.__self_3.__jdx_mise-action]
+2026-11-16T02:05:03.0430970Z ##[end-action id=__self_3.__self_3.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:03.9903410Z ##[start-action display=Look for ImageMagick and its delegates' artifact;id=__self_3.__self_3.artifact]
+2026-11-16T02:05:03.9926660Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh imagemagick-macos-arm64 "$KEY"
+2026-11-16T02:05:03.9927500Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh imagemagick-macos-arm64 "$KEY"[0m
+2026-11-16T02:05:03.9973460Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:03.9974060Z env:
+2026-11-16T02:05:03.9974260Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:03.9974490Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:03.9974720Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:03.9974930Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:03.9975170Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:03.9988000Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:03.9990460Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:03.9990760Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:03.9991060Z   MISE_YES: 1
+2026-11-16T02:05:03.9993240Z   GH_TOKEN: ***
+2026-11-16T02:05:03.9993790Z   KEY: imagemagick-macOS-ARM64-macos-arm64-baseline--Dtarget=aarch64-macos.11.0-d492bff2a0e80e897f1839fbfc2ae9cdbc4e9913a26d33ffd9def0544d3a2231
+2026-11-16T02:05:03.9994440Z ##[endgroup]
+2026-11-16T02:05:04.3312720Z Artifact imagemagick-macos-arm64-6707afa915de71789aa0da62a6485b91bb8763d3ab5098c90031e0976d1ec9e9: 43776094497
+2026-11-16T02:05:04.3324950Z ##[end-action id=__self_3.__self_3.artifact;outcome=success;conclusion=success;duration_ms=341]
+2026-11-16T02:05:04.3327460Z ##[start-action display=Download ImageMagick and its delegates;id=__self_3.__self_3.__actions_download-artifact]
+2026-11-16T02:05:04.3365260Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:04.3365540Z with:
+2026-11-16T02:05:04.3365960Z   name: imagemagick-macos-arm64-6707afa915de71789aa0da62a6485b91bb8763d3ab5098c90031e0976d1ec9e9
+2026-11-16T02:05:04.3366360Z   run-id: 43776094497
+2026-11-16T02:05:04.3368750Z   github-token: ***
+2026-11-16T02:05:04.3368970Z   path: third-party/imagemagick/zig-out
+2026-11-16T02:05:04.3369250Z   merge-multiple: false
+2026-11-16T02:05:04.3369480Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:04.3369740Z env:
+2026-11-16T02:05:04.3369960Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:04.3370160Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:04.3370380Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:04.3370610Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:04.3370810Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:04.3371030Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:04.3373290Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:04.3373660Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:04.3374000Z   MISE_YES: 1
+2026-11-16T02:05:04.3374190Z ##[endgroup]
+2026-11-16T02:05:04.5086610Z (node:4700) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:04.5087620Z Downloading single artifact
+2026-11-16T02:05:04.5091090Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:04.5227200Z (node:4700) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:04.8247760Z Preparing to download the following artifacts:
+2026-11-16T02:05:04.8349030Z - imagemagick-macos-arm64-6707afa915de71789aa0da62a6485b91bb8763d3ab5098c90031e0976d1ec9e9 (ID: 14186359104, Size: 3480539, Expected Digest: sha256:95a981390129bbdeb7fbf503b08d4b50272852926f94e01c6730f6a899c7977f)
+2026-11-16T02:05:04.8375620Z Downloading artifact '14186359104' from 'ashleydavis/photosphere'
+2026-11-16T02:05:05.0779690Z Redirecting to blob download url: https://productionresultssa16.blob.core.windows.net/actions-results/1328d2d4-c405-8deb-b96a-c0ba6823c763/workflow-job-run-047e36fd-7e6a-52e4-99de-41e554537477/artifacts/90d18d0d6c4811ade160441ac1d1cfae1de75e8e3e81f37918dcf31178d7d02b.zip
+2026-11-16T02:05:05.0781700Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/imagemagick/zig-out
+2026-11-16T02:05:05.2619050Z (node:4700) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:05.6741000Z SHA256 digest of downloaded artifact is 95a981390129bbdeb7fbf503b08d4b50272852926f94e01c6730f6a899c7977f
+2026-11-16T02:05:05.6743520Z Artifact download completed successfully.
+2026-11-16T02:05:05.6744420Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:05.6745920Z Download artifact has finished successfully
+2026-11-16T02:05:05.6804320Z ##[end-action id=__self_3.__self_3.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=1346]
+2026-11-16T02:05:05.6806850Z ##[start-action display=Make ImageMagick's generated files for the target;id=__self_3.__self_3.__run]
+2026-11-16T02:05:05.6812310Z ##[end-action id=__self_3.__self_3.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:05.6814150Z ##[start-action display=Build ImageMagick and its delegates;id=__self_3.__self_3.__run_2]
+2026-11-16T02:05:05.6819160Z ##[end-action id=__self_3.__self_3.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:05.6821100Z ##[start-action display=Upload ImageMagick and its delegates;id=__self_3.__self_3.__actions_upload-artifact]
+2026-11-16T02:05:05.6838910Z ##[end-action id=__self_3.__self_3.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:05.6844830Z ##[end-action id=__self_3.__self_3;outcome=success;conclusion=success;duration_ms=2838]
+2026-11-16T02:05:05.6847130Z ##[start-action display=FFmpeg;id=__self_3.__self_4]
+2026-11-16T02:05:05.6909610Z Prepare all required actions
+2026-11-16T02:05:05.6910030Z Getting action download info
+2026-11-16T02:05:05.8242180Z ##[group]Run ./.github/actions/build-ffmpeg
+2026-11-16T02:05:05.8242400Z with:
+2026-11-16T02:05:05.8242540Z   platform: macos-arm64
+2026-11-16T02:05:05.8242740Z   build-args: -Dtarget=aarch64-macos.11.0
+2026-11-16T02:05:05.8242990Z env:
+2026-11-16T02:05:05.8243150Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:05.8248460Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:05.8248670Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:05.8249020Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:05.8324580Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:05.8325140Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:05.8331320Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:05.8331990Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:05.8332770Z   MISE_YES: 1
+2026-11-16T02:05:05.8333160Z ##[endgroup]
+2026-11-16T02:05:05.8342710Z ##[start-action display=Find Zig;id=__self_3.__self_4.zig]
+2026-11-16T02:05:05.8364570Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:05.8364860Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:05.8365120Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:05.8365380Z [36;1melse[0m
+2026-11-16T02:05:05.8365600Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:05.8365830Z [36;1mfi[0m
+2026-11-16T02:05:05.8421810Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:05.8422160Z env:
+2026-11-16T02:05:05.8422410Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:05.8422620Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:05.8422840Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:05.8423040Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:05.8423220Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:05.8423410Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:05.8426430Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:05.8426750Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:05.8427090Z   MISE_YES: 1
+2026-11-16T02:05:05.8427230Z ##[endgroup]
+2026-11-16T02:05:05.8941810Z ##[end-action id=__self_3.__self_4.zig;outcome=success;conclusion=success;duration_ms=59]
+2026-11-16T02:05:05.8944460Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_3.__self_4.__jdx_mise-action]
+2026-11-16T02:05:05.8948330Z ##[end-action id=__self_3.__self_4.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:10.3635830Z ##[start-action display=Look for FFmpeg's artifact;id=__self_3.__self_4.artifact]
+2026-11-16T02:05:10.3665650Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh ffmpeg-macos-arm64 "$KEY"
+2026-11-16T02:05:10.3666760Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh ffmpeg-macos-arm64 "$KEY"[0m
+2026-11-16T02:05:10.3728040Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:10.3729080Z env:
+2026-11-16T02:05:10.3729500Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:10.3729980Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:10.3730460Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:10.3730970Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:10.3731440Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:10.3732040Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:10.3737920Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:10.3738730Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:10.3739510Z   MISE_YES: 1
+2026-11-16T02:05:10.3745020Z   GH_TOKEN: ***
+2026-11-16T02:05:10.3746260Z   KEY: ffmpeg-macOS-ARM64-macos-arm64-baseline--Dtarget=aarch64-macos.11.0-323ab52a237a6db68b89d9dcbd2873bf3acd179d27b59351f674fd4b20a6f866
+2026-11-16T02:05:10.3747630Z ##[endgroup]
+2026-11-16T02:05:10.7817600Z Artifact ffmpeg-macos-arm64-aae0b31678bf6ddb85261ee41bd8aa3402d2070ca698cd908451447340627b14: 43776094497
+2026-11-16T02:05:10.7929890Z ##[end-action id=__self_3.__self_4.artifact;outcome=success;conclusion=success;duration_ms=429]
+2026-11-16T02:05:10.7935580Z ##[start-action display=Download FFmpeg;id=__self_3.__self_4.__actions_download-artifact]
+2026-11-16T02:05:10.8009050Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:10.8009320Z with:
+2026-11-16T02:05:10.8009780Z   name: ffmpeg-macos-arm64-aae0b31678bf6ddb85261ee41bd8aa3402d2070ca698cd908451447340627b14
+2026-11-16T02:05:10.8010240Z   run-id: 43776094497
+2026-11-16T02:05:10.8012470Z   github-token: ***
+2026-11-16T02:05:10.8012760Z   path: third-party/ffmpeg/zig-out
+2026-11-16T02:05:10.8013170Z   merge-multiple: false
+2026-11-16T02:05:10.8013450Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:10.8013860Z env:
+2026-11-16T02:05:10.8014070Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:10.8014340Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:10.8014690Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:10.8014950Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:10.8015250Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:10.8015580Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:10.8017700Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:10.8018310Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:10.8018740Z   MISE_YES: 1
+2026-11-16T02:05:10.8018940Z ##[endgroup]
+2026-11-16T02:05:11.0134720Z Downloading single artifact
+2026-11-16T02:05:11.0189760Z (node:4933) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:11.0190700Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:11.0373170Z (node:4933) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:11.2869030Z Preparing to download the following artifacts:
+2026-11-16T02:05:11.2873490Z - ffmpeg-macos-arm64-aae0b31678bf6ddb85261ee41bd8aa3402d2070ca698cd908451447340627b14 (ID: 14186719092, Size: 4055123, Expected Digest: sha256:1ae86739864ca5d2a9e66888694efc53b0df57e0733f3b7464abcb17cbacf630)
+2026-11-16T02:05:11.2892590Z Downloading artifact '14186719092' from 'ashleydavis/photosphere'
+2026-11-16T02:05:11.6256710Z Redirecting to blob download url: https://productionresultssa16.blob.core.windows.net/actions-results/1328d2d4-c405-8deb-b96a-c0ba6823c763/workflow-job-run-006d84bf-0c48-5a57-980d-e5ac892d8355/artifacts/c255dcf506cb795ca08221e021a86df732687d63381487a8471f70b0d11ac2de.zip
+2026-11-16T02:05:11.6343810Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/ffmpeg/zig-out
+2026-11-16T02:05:11.8146430Z (node:4933) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:12.2917030Z SHA256 digest of downloaded artifact is 1ae86739864ca5d2a9e66888694efc53b0df57e0733f3b7464abcb17cbacf630
+2026-11-16T02:05:12.3004170Z Artifact download completed successfully.
+2026-11-16T02:05:12.3105570Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:12.3207260Z Download artifact has finished successfully
+2026-11-16T02:05:12.3269360Z ##[end-action id=__self_3.__self_4.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=1532]
+2026-11-16T02:05:12.3272710Z ##[start-action display=Make FFmpeg's generated files for the target;id=__self_3.__self_4.__run]
+2026-11-16T02:05:12.3278950Z ##[end-action id=__self_3.__self_4.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:12.3281830Z ##[start-action display=Build FFmpeg;id=__self_3.__self_4.__run_2]
+2026-11-16T02:05:12.3287180Z ##[end-action id=__self_3.__self_4.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:12.3289390Z ##[start-action display=Upload FFmpeg;id=__self_3.__self_4.__actions_upload-artifact]
+2026-11-16T02:05:12.3294060Z ##[end-action id=__self_3.__self_4.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:12.3301370Z ##[end-action id=__self_3.__self_4;outcome=success;conclusion=success;duration_ms=6642]
+2026-11-16T02:05:12.3349390Z Prepare all required actions
+2026-11-16T02:05:12.3349950Z Getting action download info
+2026-11-16T02:05:12.3422670Z ##[group]Run ./.github/actions/third-party-libraries
+2026-11-16T02:05:12.3423000Z with:
+2026-11-16T02:05:12.3423250Z   platform: ios
+2026-11-16T02:05:12.3423890Z   build-args: -Dtarget=aarch64-ios.14.0-simulator
+2026-11-16T02:05:12.3424270Z   config-name: aarch64-ios-simulator
+2026-11-16T02:05:12.3424930Z env:
+2026-11-16T02:05:12.3425120Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:12.3425440Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:12.3425660Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:12.3425960Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:12.3427450Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:12.3428410Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:12.3432030Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:12.3432460Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:12.3432840Z   MISE_YES: 1
+2026-11-16T02:05:12.3433030Z ##[endgroup]
+2026-11-16T02:05:12.3451290Z ##[start-action display=The AWS SDK for C;id=__self_4.__self]
+2026-11-16T02:05:12.3532140Z Prepare all required actions
+2026-11-16T02:05:12.3532590Z Getting action download info
+2026-11-16T02:05:12.4938590Z ##[group]Run ./.github/actions/build-aws-sdk
+2026-11-16T02:05:12.4938870Z with:
+2026-11-16T02:05:12.4939020Z   platform: ios
+2026-11-16T02:05:12.4939210Z   build-args: -Dtarget=aarch64-ios.14.0-simulator
+2026-11-16T02:05:12.4939440Z env:
+2026-11-16T02:05:12.4939570Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:12.4939740Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:12.4939910Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:12.4940090Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:12.4940280Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:12.4940500Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:12.4942670Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:12.4942940Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:12.4943240Z   MISE_YES: 1
+2026-11-16T02:05:12.4943380Z ##[endgroup]
+2026-11-16T02:05:12.4948210Z ##[start-action display=Find Zig;id=__self_4.__self.zig]
+2026-11-16T02:05:12.4971130Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:12.4971470Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:12.4971760Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:12.4972010Z [36;1melse[0m
+2026-11-16T02:05:12.4972230Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:12.4972520Z [36;1mfi[0m
+2026-11-16T02:05:12.5041310Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:12.5041630Z env:
+2026-11-16T02:05:12.5041830Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:12.5042000Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:12.5042620Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:12.5042830Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:12.5043030Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:12.5043260Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:12.5048740Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:12.5049080Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:12.5049410Z   MISE_YES: 1
+2026-11-16T02:05:12.5050230Z ##[endgroup]
+2026-11-16T02:05:12.5756610Z ##[end-action id=__self_4.__self.zig;outcome=success;conclusion=success;duration_ms=80]
+2026-11-16T02:05:12.5758990Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_4.__self.__jdx_mise-action]
+2026-11-16T02:05:12.5763060Z ##[end-action id=__self_4.__self.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:14.0637670Z ##[start-action display=Look for the AWS SDK for C and aws-lc's artifact;id=__self_4.__self.artifact]
+2026-11-16T02:05:14.0675420Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh aws-sdk-ios "$KEY"
+2026-11-16T02:05:14.0676350Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh aws-sdk-ios "$KEY"[0m
+2026-11-16T02:05:14.0734500Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:14.0735570Z env:
+2026-11-16T02:05:14.0735830Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:14.0736190Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:14.0736650Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:14.0753630Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:14.0753870Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:14.0754140Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:14.0756610Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:14.0756890Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:14.0757260Z   MISE_YES: 1
+2026-11-16T02:05:14.0759450Z   GH_TOKEN: ***
+2026-11-16T02:05:14.0759950Z   KEY: aws-sdk-macOS-ARM64-ios-baseline--Dtarget=aarch64-ios.14.0-simulator-d575377c1f20351595357dcff9aee9f6fa5ef5ad488361e81e4ee0846351cd5c
+2026-11-16T02:05:14.0760510Z ##[endgroup]
+2026-11-16T02:05:14.4646970Z Artifact aws-sdk-ios-a6809fdc9af12a226da9fb2f89e63f2a86a61c080059b7b17c3ebf45b2f964b7: 43776094526
+2026-11-16T02:05:14.4754280Z ##[end-action id=__self_4.__self.artifact;outcome=success;conclusion=success;duration_ms=411]
+2026-11-16T02:05:14.4757390Z ##[start-action display=Download the AWS SDK for C and aws-lc;id=__self_4.__self.__actions_download-artifact]
+2026-11-16T02:05:14.4798360Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:14.4798660Z with:
+2026-11-16T02:05:14.4799000Z   name: aws-sdk-ios-a6809fdc9af12a226da9fb2f89e63f2a86a61c080059b7b17c3ebf45b2f964b7
+2026-11-16T02:05:14.4799400Z   run-id: 43776094526
+2026-11-16T02:05:14.4801600Z   github-token: ***
+2026-11-16T02:05:14.4801790Z   path: third-party/aws/zig-out
+2026-11-16T02:05:14.4802010Z   merge-multiple: false
+2026-11-16T02:05:14.4802210Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:14.4802470Z env:
+2026-11-16T02:05:14.4802700Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:14.4802910Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:14.4803110Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:14.4803400Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:14.4803630Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:14.4803930Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:14.4806220Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:14.4806510Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:14.4806870Z   MISE_YES: 1
+2026-11-16T02:05:14.4807020Z ##[endgroup]
+2026-11-16T02:05:14.6766400Z Downloading single artifact
+2026-11-16T02:05:14.6867830Z (node:4959) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:14.6971550Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:14.7076440Z (node:4959) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:14.9493710Z Preparing to download the following artifacts:
+2026-11-16T02:05:14.9496700Z - aws-sdk-ios-a6809fdc9af12a226da9fb2f89e63f2a86a61c080059b7b17c3ebf45b2f964b7 (ID: 14186388239, Size: 4034090, Expected Digest: sha256:9bcc9061a546903279bf7b220d4ec5a86bc753f35911d2ff35b394971981eeec)
+2026-11-16T02:05:14.9523390Z Downloading artifact '14186388239' from 'ashleydavis/photosphere'
+2026-11-16T02:05:15.1976260Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/7c9847db-4808-825e-a4d4-64c2b6a1c6e4/workflow-job-run-df211769-b4dd-5268-8e4b-c243b81446f7/artifacts/35cbde8a9392928b5103b0ac36ab2bd27df626a521257230c86e650a3df10d7a.zip
+2026-11-16T02:05:15.2079230Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/aws/zig-out
+2026-11-16T02:05:15.4500710Z (node:4959) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:15.9975280Z SHA256 digest of downloaded artifact is 9bcc9061a546903279bf7b220d4ec5a86bc753f35911d2ff35b394971981eeec
+2026-11-16T02:05:15.9976670Z Artifact download completed successfully.
+2026-11-16T02:05:15.9977480Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:15.9981000Z Download artifact has finished successfully
+2026-11-16T02:05:16.0059100Z ##[end-action id=__self_4.__self.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=1529]
+2026-11-16T02:05:16.0061870Z ##[start-action display=Build the AWS SDK for C and aws-lc;id=__self_4.__self.__run]
+2026-11-16T02:05:16.0066460Z ##[end-action id=__self_4.__self.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:16.0069350Z ##[start-action display=Upload the AWS SDK for C and aws-lc;id=__self_4.__self.__actions_upload-artifact]
+2026-11-16T02:05:16.0073560Z ##[end-action id=__self_4.__self.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:16.0078620Z ##[end-action id=__self_4.__self;outcome=success;conclusion=success;duration_ms=3660]
+2026-11-16T02:05:16.0080650Z ##[start-action display=zlib-ng;id=__self_4.__self_2]
+2026-11-16T02:05:16.0145270Z Prepare all required actions
+2026-11-16T02:05:16.0145900Z Getting action download info
+2026-11-16T02:05:16.1300880Z ##[group]Run ./.github/actions/build-zlib-ng
+2026-11-16T02:05:16.1301100Z with:
+2026-11-16T02:05:16.1301240Z   platform: ios
+2026-11-16T02:05:16.1301430Z   build-args: -Dtarget=aarch64-ios.14.0-simulator
+2026-11-16T02:05:16.1301660Z env:
+2026-11-16T02:05:16.1301790Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:16.1301940Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:16.1302110Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:16.1302290Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:16.1302460Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:16.1302630Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:16.1304700Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:16.1305040Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:16.1305430Z   MISE_YES: 1
+2026-11-16T02:05:16.1305580Z ##[endgroup]
+2026-11-16T02:05:16.1310820Z ##[start-action display=Find Zig;id=__self_4.__self_2.zig]
+2026-11-16T02:05:16.1338230Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:16.1338560Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:16.1338860Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:16.1339080Z [36;1melse[0m
+2026-11-16T02:05:16.1339260Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:16.1339470Z [36;1mfi[0m
+2026-11-16T02:05:16.1409710Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:16.1410390Z env:
+2026-11-16T02:05:16.1410800Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:16.1411260Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:16.1411720Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:16.1412250Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:16.1412750Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:16.1413270Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:16.1419200Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:16.1419900Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:16.1420670Z   MISE_YES: 1
+2026-11-16T02:05:16.1421070Z ##[endgroup]
+2026-11-16T02:05:16.2004000Z ##[end-action id=__self_4.__self_2.zig;outcome=success;conclusion=success;duration_ms=68]
+2026-11-16T02:05:16.2006220Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_4.__self_2.__jdx_mise-action]
+2026-11-16T02:05:16.2011040Z ##[end-action id=__self_4.__self_2.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:16.3710110Z ##[start-action display=Look for zlib-ng's artifact;id=__self_4.__self_2.artifact]
+2026-11-16T02:05:16.3741240Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh zlib-ng-ios "$KEY"
+2026-11-16T02:05:16.3741870Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh zlib-ng-ios "$KEY"[0m
+2026-11-16T02:05:16.3786350Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:16.3786860Z env:
+2026-11-16T02:05:16.3787050Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:16.3787260Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:16.3787780Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:16.3788020Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:16.3788210Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:16.3788420Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:16.3791160Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:16.3791510Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:16.3791840Z   MISE_YES: 1
+2026-11-16T02:05:16.3793980Z   GH_TOKEN: ***
+2026-11-16T02:05:16.3794580Z   KEY: zlib-ng-macOS-ARM64-ios-baseline--Dtarget=aarch64-ios.14.0-simulator-cb6b552f6fb4baf28552a3652a915ada42cb33bdd5f5d619aeab0468b3aa1602
+2026-11-16T02:05:16.3795280Z ##[endgroup]
+2026-11-16T02:05:16.8460540Z Artifact zlib-ng-ios-cd6700022de645993203d4ea883ce8014d40398907042eb2eb8d613bfe84c5d3: 43776094526
+2026-11-16T02:05:16.8471870Z ##[end-action id=__self_4.__self_2.artifact;outcome=success;conclusion=success;duration_ms=475]
+2026-11-16T02:05:16.8473990Z ##[start-action display=Download zlib-ng;id=__self_4.__self_2.__actions_download-artifact]
+2026-11-16T02:05:16.8518170Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:16.8518410Z with:
+2026-11-16T02:05:16.8518710Z   name: zlib-ng-ios-cd6700022de645993203d4ea883ce8014d40398907042eb2eb8d613bfe84c5d3
+2026-11-16T02:05:16.8519060Z   run-id: 43776094526
+2026-11-16T02:05:16.8521140Z   github-token: ***
+2026-11-16T02:05:16.8521330Z   path: third-party/zlib-ng/zig-out
+2026-11-16T02:05:16.8521550Z   merge-multiple: false
+2026-11-16T02:05:16.8521740Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:16.8521950Z env:
+2026-11-16T02:05:16.8522090Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:16.8522250Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:16.8522460Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:16.8522670Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:16.8522880Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:16.8523060Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:16.8524990Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:16.8525250Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:16.8525540Z   MISE_YES: 1
+2026-11-16T02:05:16.8525670Z ##[endgroup]
+2026-11-16T02:05:16.9997400Z Downloading single artifact
+2026-11-16T02:05:17.0103040Z (node:4978) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:17.0204430Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:17.0415280Z (node:4978) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:17.3380760Z Preparing to download the following artifacts:
+2026-11-16T02:05:17.3382140Z - zlib-ng-ios-cd6700022de645993203d4ea883ce8014d40398907042eb2eb8d613bfe84c5d3 (ID: 14186747487, Size: 156742, Expected Digest: sha256:4ba7383f3dfce7e557a69524e311e715fb61917c3a79c81303aead3b1b5c573a)
+2026-11-16T02:05:17.3384740Z Downloading artifact '14186747487' from 'ashleydavis/photosphere'
+2026-11-16T02:05:17.6419220Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/7c9847db-4808-825e-a4d4-64c2b6a1c6e4/workflow-job-run-6a85b7df-888d-5fc1-9a78-df9c08fc5df5/artifacts/982cc986823ec4850de560f32cd71f2ed7cd0c5c3d4557f087499bab597a1edd.zip
+2026-11-16T02:05:17.6429650Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/zlib-ng/zig-out
+2026-11-16T02:05:17.8020130Z (node:4978) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:17.9319070Z SHA256 digest of downloaded artifact is 4ba7383f3dfce7e557a69524e311e715fb61917c3a79c81303aead3b1b5c573a
+2026-11-16T02:05:17.9320920Z Artifact download completed successfully.
+2026-11-16T02:05:17.9324050Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:17.9325070Z Download artifact has finished successfully
+2026-11-16T02:05:17.9385300Z ##[end-action id=__self_4.__self_2.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=1090]
+2026-11-16T02:05:17.9389830Z ##[start-action display=Build zlib-ng;id=__self_4.__self_2.__run]
+2026-11-16T02:05:17.9396730Z ##[end-action id=__self_4.__self_2.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:17.9398820Z ##[start-action display=Upload zlib-ng;id=__self_4.__self_2.__actions_upload-artifact]
+2026-11-16T02:05:17.9403660Z ##[end-action id=__self_4.__self_2.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:17.9409820Z ##[end-action id=__self_4.__self_2;outcome=success;conclusion=success;duration_ms=1931]
+2026-11-16T02:05:17.9412040Z ##[start-action display=ImageMagick;id=__self_4.__self_3]
+2026-11-16T02:05:17.9475500Z Prepare all required actions
+2026-11-16T02:05:17.9476080Z Getting action download info
+2026-11-16T02:05:18.1040840Z ##[group]Run ./.github/actions/build-imagemagick
+2026-11-16T02:05:18.1041090Z with:
+2026-11-16T02:05:18.1041230Z   platform: ios
+2026-11-16T02:05:18.1041420Z   build-args: -Dtarget=aarch64-ios.14.0-simulator
+2026-11-16T02:05:18.1041670Z   config-name: aarch64-ios-simulator
+2026-11-16T02:05:18.1041860Z env:
+2026-11-16T02:05:18.1041990Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:18.1042150Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:18.1042320Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:18.1042500Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:18.1042660Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:18.1042840Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:18.1045040Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:18.1045290Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:18.1045580Z   MISE_YES: 1
+2026-11-16T02:05:18.1045740Z ##[endgroup]
+2026-11-16T02:05:18.1050870Z ##[start-action display=Find Zig;id=__self_4.__self_3.zig]
+2026-11-16T02:05:18.1197120Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:18.1197430Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:18.1197690Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:18.1197910Z [36;1melse[0m
+2026-11-16T02:05:18.1198070Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:18.1198290Z [36;1mfi[0m
+2026-11-16T02:05:18.1242970Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:18.1243230Z env:
+2026-11-16T02:05:18.1243370Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:18.1243530Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:18.1243710Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:18.1243890Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:18.1244060Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:18.1244240Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:18.1246460Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:18.1246710Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:18.1247010Z   MISE_YES: 1
+2026-11-16T02:05:18.1247150Z ##[endgroup]
+2026-11-16T02:05:18.1737730Z ##[end-action id=__self_4.__self_3.zig;outcome=success;conclusion=success;duration_ms=68]
+2026-11-16T02:05:18.1739900Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_4.__self_3.__jdx_mise-action]
+2026-11-16T02:05:18.1757960Z ##[end-action id=__self_4.__self_3.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:20.1362700Z ##[start-action display=Look for ImageMagick and its delegates' artifact;id=__self_4.__self_3.artifact]
+2026-11-16T02:05:20.1389820Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh imagemagick-ios "$KEY"
+2026-11-16T02:05:20.1390580Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh imagemagick-ios "$KEY"[0m
+2026-11-16T02:05:20.1442470Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:20.1442800Z env:
+2026-11-16T02:05:20.1443000Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:20.1443580Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:20.1443800Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:20.1444520Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:20.1444730Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:20.1445010Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:20.1447360Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:20.1447720Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:20.1448090Z   MISE_YES: 1
+2026-11-16T02:05:20.1450530Z   GH_TOKEN: ***
+2026-11-16T02:05:20.1451180Z   KEY: imagemagick-macOS-ARM64-ios-baseline--Dtarget=aarch64-ios.14.0-simulator-d492bff2a0e80e897f1839fbfc2ae9cdbc4e9913a26d33ffd9def0544d3a2231
+2026-11-16T02:05:20.1451850Z ##[endgroup]
+2026-11-16T02:05:20.5573990Z Artifact imagemagick-ios-cdf418d8aaa932354370207389859d1f17956f051895dd83110415db401b87dd: 43776094526
+2026-11-16T02:05:20.5592320Z ##[end-action id=__self_4.__self_3.artifact;outcome=success;conclusion=success;duration_ms=422]
+2026-11-16T02:05:20.5598530Z ##[start-action display=Download ImageMagick and its delegates;id=__self_4.__self_3.__actions_download-artifact]
+2026-11-16T02:05:20.5716950Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:20.5717700Z with:
+2026-11-16T02:05:20.5718510Z   name: imagemagick-ios-cdf418d8aaa932354370207389859d1f17956f051895dd83110415db401b87dd
+2026-11-16T02:05:20.5719550Z   run-id: 43776094526
+2026-11-16T02:05:20.5725710Z   github-token: ***
+2026-11-16T02:05:20.5726310Z   path: third-party/imagemagick/zig-out
+2026-11-16T02:05:20.5726960Z   merge-multiple: false
+2026-11-16T02:05:20.5727500Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:20.5728050Z env:
+2026-11-16T02:05:20.5728470Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:20.5728990Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:20.5729470Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:20.5730060Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:20.5730600Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:20.5731120Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:20.5736800Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:20.5738580Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:20.5739150Z   MISE_YES: 1
+2026-11-16T02:05:20.5739370Z ##[endgroup]
+2026-11-16T02:05:20.9127030Z Downloading single artifact
+2026-11-16T02:05:20.9238880Z (node:5005) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:20.9241110Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:20.9536660Z (node:5005) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:21.2698900Z Preparing to download the following artifacts:
+2026-11-16T02:05:21.2810700Z - imagemagick-ios-cdf418d8aaa932354370207389859d1f17956f051895dd83110415db401b87dd (ID: 14186642415, Size: 3482015, Expected Digest: sha256:ec3596aff2c4bb27816bc3c9e75548662b09a7f6a3715eaa8eb2d55a28e69847)
+2026-11-16T02:05:21.2827040Z Downloading artifact '14186642415' from 'ashleydavis/photosphere'
+2026-11-16T02:05:21.6683850Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/7c9847db-4808-825e-a4d4-64c2b6a1c6e4/workflow-job-run-e905b93e-b612-5366-90f8-3db9d4b91ddb/artifacts/906734bf4435d53b24186c67755fffc634571797fd4036c6fdb6e71618c30e04.zip
+2026-11-16T02:05:21.6704100Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/imagemagick/zig-out
+2026-11-16T02:05:21.8808780Z (node:5005) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:22.6061980Z SHA256 digest of downloaded artifact is ec3596aff2c4bb27816bc3c9e75548662b09a7f6a3715eaa8eb2d55a28e69847
+2026-11-16T02:05:22.6065690Z Artifact download completed successfully.
+2026-11-16T02:05:22.6068040Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:22.6560580Z Download artifact has finished successfully
+2026-11-16T02:05:22.6819090Z ##[end-action id=__self_4.__self_3.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=2119]
+2026-11-16T02:05:22.6823200Z ##[start-action display=Make ImageMagick's generated files for the target;id=__self_4.__self_3.__run]
+2026-11-16T02:05:22.6834950Z ##[end-action id=__self_4.__self_3.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:22.6836840Z ##[start-action display=Build ImageMagick and its delegates;id=__self_4.__self_3.__run_2]
+2026-11-16T02:05:22.6840600Z ##[end-action id=__self_4.__self_3.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:22.6842660Z ##[start-action display=Upload ImageMagick and its delegates;id=__self_4.__self_3.__actions_upload-artifact]
+2026-11-16T02:05:22.6846340Z ##[end-action id=__self_4.__self_3.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:22.6852410Z ##[end-action id=__self_4.__self_3;outcome=success;conclusion=success;duration_ms=4741]
+2026-11-16T02:05:22.6854280Z ##[start-action display=FFmpeg;id=__self_4.__self_4]
+2026-11-16T02:05:22.7163940Z Prepare all required actions
+2026-11-16T02:05:22.7164650Z Getting action download info
+2026-11-16T02:05:22.8815980Z ##[group]Run ./.github/actions/build-ffmpeg
+2026-11-16T02:05:22.8816230Z with:
+2026-11-16T02:05:22.8816380Z   platform: ios
+2026-11-16T02:05:22.8816570Z   build-args: -Dtarget=aarch64-ios.14.0-simulator
+2026-11-16T02:05:22.8816830Z   config-name: aarch64-ios-simulator
+2026-11-16T02:05:22.8817020Z env:
+2026-11-16T02:05:22.8817150Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:22.8817310Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:22.8817480Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:22.8817670Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:22.8817840Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:22.8818020Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:22.8820520Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:22.8820810Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:22.8821110Z   MISE_YES: 1
+2026-11-16T02:05:22.8821250Z ##[endgroup]
+2026-11-16T02:05:22.8825950Z ##[start-action display=Find Zig;id=__self_4.__self_4.zig]
+2026-11-16T02:05:22.8852580Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:22.8852870Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:22.8853130Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:22.8853360Z [36;1melse[0m
+2026-11-16T02:05:22.8853530Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:22.8853750Z [36;1mfi[0m
+2026-11-16T02:05:22.8931690Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:22.8931950Z env:
+2026-11-16T02:05:22.8932190Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:22.8932390Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:22.8932590Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:22.8932780Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:22.8933130Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:22.8933350Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:22.8936170Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:22.8936430Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:22.8936730Z   MISE_YES: 1
+2026-11-16T02:05:22.8936900Z ##[endgroup]
+2026-11-16T02:05:23.0022230Z ##[end-action id=__self_4.__self_4.zig;outcome=success;conclusion=success;duration_ms=119]
+2026-11-16T02:05:23.0025320Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_4.__self_4.__jdx_mise-action]
+2026-11-16T02:05:23.0037420Z ##[end-action id=__self_4.__self_4.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:31.6456760Z ##[start-action display=Look for FFmpeg's artifact;id=__self_4.__self_4.artifact]
+2026-11-16T02:05:31.6495210Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh ffmpeg-ios "$KEY"
+2026-11-16T02:05:31.6496020Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh ffmpeg-ios "$KEY"[0m
+2026-11-16T02:05:31.6561110Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:31.6567710Z env:
+2026-11-16T02:05:31.6568500Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:31.6570430Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:31.6570820Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:31.6571060Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:31.6571430Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:31.6571710Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:31.6574150Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:31.6574440Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:31.6574870Z   MISE_YES: 1
+2026-11-16T02:05:31.6576950Z   GH_TOKEN: ***
+2026-11-16T02:05:31.6577480Z   KEY: ffmpeg-macOS-ARM64-ios-baseline--Dtarget=aarch64-ios.14.0-simulator-323ab52a237a6db68b89d9dcbd2873bf3acd179d27b59351f674fd4b20a6f866
+2026-11-16T02:05:31.6578200Z ##[endgroup]
+2026-11-16T02:05:32.1291250Z Artifact ffmpeg-ios-8ecbd85cfa793757aac1969162cf3afa2aadd71bd22c38f243ef6927e4e7f384: 43776094526
+2026-11-16T02:05:32.1422190Z ##[end-action id=__self_4.__self_4.artifact;outcome=success;conclusion=success;duration_ms=496]
+2026-11-16T02:05:32.1425230Z ##[start-action display=Download FFmpeg;id=__self_4.__self_4.__actions_download-artifact]
+2026-11-16T02:05:32.1600480Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:32.1600710Z with:
+2026-11-16T02:05:32.1601030Z   name: ffmpeg-ios-8ecbd85cfa793757aac1969162cf3afa2aadd71bd22c38f243ef6927e4e7f384
+2026-11-16T02:05:32.1601460Z   run-id: 43776094526
+2026-11-16T02:05:32.1603720Z   github-token: ***
+2026-11-16T02:05:32.1603910Z   path: third-party/ffmpeg/zig-out
+2026-11-16T02:05:32.1604160Z   merge-multiple: false
+2026-11-16T02:05:32.1604360Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:32.1604600Z env:
+2026-11-16T02:05:32.1604770Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:32.1604980Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:32.1605220Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:32.1614930Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:32.1615260Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:32.1615460Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:32.1617990Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:32.1618310Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:32.1618740Z   MISE_YES: 1
+2026-11-16T02:05:32.1618890Z ##[endgroup]
+2026-11-16T02:05:32.5101450Z Downloading single artifact
+2026-11-16T02:05:32.5208050Z (node:5656) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:32.5209050Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:32.5437180Z (node:5656) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:32.8071710Z Preparing to download the following artifacts:
+2026-11-16T02:05:32.8074890Z - ffmpeg-ios-8ecbd85cfa793757aac1969162cf3afa2aadd71bd22c38f243ef6927e4e7f384 (ID: 14187346798, Size: 4000562, Expected Digest: sha256:620542ef9ebeb55330b9ffd0d65cf2dadeca25662f798092b6cf75360e6faaf3)
+2026-11-16T02:05:32.8220050Z Downloading artifact '14187346798' from 'ashleydavis/photosphere'
+2026-11-16T02:05:33.1994650Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/7c9847db-4808-825e-a4d4-64c2b6a1c6e4/workflow-job-run-5eda90b7-1ae7-5d40-a30c-b1da27aef504/artifacts/2dfba0306e272181e0f2860ecbb119287fddfc0e7acdf738849728b4ce0efb84.zip
+2026-11-16T02:05:33.1998290Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/ffmpeg/zig-out
+2026-11-16T02:05:33.4049860Z (node:5656) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:33.9928550Z SHA256 digest of downloaded artifact is 620542ef9ebeb55330b9ffd0d65cf2dadeca25662f798092b6cf75360e6faaf3
+2026-11-16T02:05:34.0027980Z Artifact download completed successfully.
+2026-11-16T02:05:34.0130450Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:34.0233080Z Download artifact has finished successfully
+2026-11-16T02:05:34.0314350Z ##[end-action id=__self_4.__self_4.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=1882]
+2026-11-16T02:05:34.0317690Z ##[start-action display=Make FFmpeg's generated files for the target;id=__self_4.__self_4.__run]
+2026-11-16T02:05:34.0322260Z ##[end-action id=__self_4.__self_4.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:34.0323810Z ##[start-action display=Build FFmpeg;id=__self_4.__self_4.__run_2]
+2026-11-16T02:05:34.0326700Z ##[end-action id=__self_4.__self_4.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:34.0328090Z ##[start-action display=Upload FFmpeg;id=__self_4.__self_4.__actions_upload-artifact]
+2026-11-16T02:05:34.0335060Z ##[end-action id=__self_4.__self_4.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:34.0340680Z ##[end-action id=__self_4.__self_4;outcome=success;conclusion=success;duration_ms=11342]
+2026-11-16T02:05:34.0434970Z Prepare all required actions
+2026-11-16T02:05:34.0435670Z Getting action download info
+2026-11-16T02:05:34.0536990Z ##[group]Run ./.github/actions/third-party-libraries
+2026-11-16T02:05:34.0537880Z with:
+2026-11-16T02:05:34.0538410Z   platform: ios
+2026-11-16T02:05:34.0539060Z   build-args: -Dtarget=aarch64-ios.14.0
+2026-11-16T02:05:34.0539730Z   config-name: aarch64-ios
+2026-11-16T02:05:34.0540260Z env:
+2026-11-16T02:05:34.0540840Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:34.0541390Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:34.0542060Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:34.0542770Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:34.0543330Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:34.0544030Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:34.0550240Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:34.0551340Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:34.0551830Z   MISE_YES: 1
+2026-11-16T02:05:34.0552010Z ##[endgroup]
+2026-11-16T02:05:34.0556400Z ##[start-action display=The AWS SDK for C;id=__self_5.__self]
+2026-11-16T02:05:34.0646490Z Prepare all required actions
+2026-11-16T02:05:34.0647230Z Getting action download info
+2026-11-16T02:05:34.2252220Z ##[group]Run ./.github/actions/build-aws-sdk
+2026-11-16T02:05:34.2252450Z with:
+2026-11-16T02:05:34.2252600Z   platform: ios
+2026-11-16T02:05:34.2252770Z   build-args: -Dtarget=aarch64-ios.14.0
+2026-11-16T02:05:34.2252960Z env:
+2026-11-16T02:05:34.2253170Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:34.2253380Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:34.2253600Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:34.2253790Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:34.2253960Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:34.2254140Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:34.2256240Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:34.2256490Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:34.2256820Z   MISE_YES: 1
+2026-11-16T02:05:34.2256990Z ##[endgroup]
+2026-11-16T02:05:34.2260720Z ##[start-action display=Find Zig;id=__self_5.__self.zig]
+2026-11-16T02:05:34.2295610Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:34.2296000Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:34.2296490Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:34.2296880Z [36;1melse[0m
+2026-11-16T02:05:34.2307940Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:34.2308200Z [36;1mfi[0m
+2026-11-16T02:05:34.2389040Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:34.2389740Z env:
+2026-11-16T02:05:34.2390170Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:34.2390640Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:34.2391150Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:34.2391710Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:34.2392710Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:34.2393210Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:34.2399080Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:34.2399780Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:34.2400550Z   MISE_YES: 1
+2026-11-16T02:05:34.2400940Z ##[endgroup]
+2026-11-16T02:05:34.3122500Z ##[end-action id=__self_5.__self.zig;outcome=success;conclusion=success;duration_ms=86]
+2026-11-16T02:05:34.3127430Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_5.__self.__jdx_mise-action]
+2026-11-16T02:05:34.3138840Z ##[end-action id=__self_5.__self.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:36.5357170Z ##[start-action display=Look for the AWS SDK for C and aws-lc's artifact;id=__self_5.__self.artifact]
+2026-11-16T02:05:36.5572770Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh aws-sdk-ios "$KEY"
+2026-11-16T02:05:36.5573600Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh aws-sdk-ios "$KEY"[0m
+2026-11-16T02:05:36.5623920Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:36.5624220Z env:
+2026-11-16T02:05:36.5625050Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:36.5625290Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:36.5625500Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:36.5625760Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:36.5625970Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:36.5626310Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:36.5628920Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:36.5629280Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:36.5629700Z   MISE_YES: 1
+2026-11-16T02:05:36.5632060Z   GH_TOKEN: ***
+2026-11-16T02:05:36.5632630Z   KEY: aws-sdk-macOS-ARM64-ios-baseline--Dtarget=aarch64-ios.14.0-d575377c1f20351595357dcff9aee9f6fa5ef5ad488361e81e4ee0846351cd5c
+2026-11-16T02:05:36.5633370Z ##[endgroup]
+2026-11-16T02:05:37.1105480Z Artifact aws-sdk-ios-c76f8f55017651a7619f9b6a7cb3fa1360a094167e4b34ab9238033e99f0f28c: 43776094526
+2026-11-16T02:05:37.1294510Z ##[end-action id=__self_5.__self.artifact;outcome=success;conclusion=success;duration_ms=593]
+2026-11-16T02:05:37.1299940Z ##[start-action display=Download the AWS SDK for C and aws-lc;id=__self_5.__self.__actions_download-artifact]
+2026-11-16T02:05:37.1542310Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:37.1542720Z with:
+2026-11-16T02:05:37.1543130Z   name: aws-sdk-ios-c76f8f55017651a7619f9b6a7cb3fa1360a094167e4b34ab9238033e99f0f28c
+2026-11-16T02:05:37.1543660Z   run-id: 43776094526
+2026-11-16T02:05:37.1546330Z   github-token: ***
+2026-11-16T02:05:37.1546600Z   path: third-party/aws/zig-out
+2026-11-16T02:05:37.1547060Z   merge-multiple: false
+2026-11-16T02:05:37.1547390Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:37.1547880Z env:
+2026-11-16T02:05:37.1548200Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:37.1549210Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:37.1549440Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:37.1549800Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:37.1550120Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:37.1550330Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:37.1555120Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:37.1556140Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:37.1557050Z   MISE_YES: 1
+2026-11-16T02:05:37.1557660Z ##[endgroup]
+2026-11-16T02:05:37.3980270Z Downloading single artifact
+2026-11-16T02:05:37.4129360Z (node:5887) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:37.4131000Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:37.4376730Z (node:5887) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:37.7364390Z Preparing to download the following artifacts:
+2026-11-16T02:05:37.7371110Z - aws-sdk-ios-c76f8f55017651a7619f9b6a7cb3fa1360a094167e4b34ab9238033e99f0f28c (ID: 14187285499, Size: 8064669, Expected Digest: sha256:137b05412b17e64d2dc07aea9ab8bb2d4f9179f4fd3a2669adcf92433855a606)
+2026-11-16T02:05:37.7400970Z Downloading artifact '14187285499' from 'ashleydavis/photosphere'
+2026-11-16T02:05:38.0975630Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/7c9847db-4808-825e-a4d4-64c2b6a1c6e4/workflow-job-run-df211769-b4dd-5268-8e4b-c243b81446f7/artifacts/25fda73cf6e889b3a992e29da66ff13f6f7288d424a7d6d116e967b606df1b70.zip
+2026-11-16T02:05:38.0977740Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/aws/zig-out
+2026-11-16T02:05:38.3293170Z (node:5887) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:39.2139040Z SHA256 digest of downloaded artifact is 137b05412b17e64d2dc07aea9ab8bb2d4f9179f4fd3a2669adcf92433855a606
+2026-11-16T02:05:39.2139910Z Artifact download completed successfully.
+2026-11-16T02:05:39.2140900Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:39.2154340Z Download artifact has finished successfully
+2026-11-16T02:05:39.2246380Z ##[end-action id=__self_5.__self.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=2093]
+2026-11-16T02:05:39.2248990Z ##[start-action display=Build the AWS SDK for C and aws-lc;id=__self_5.__self.__run]
+2026-11-16T02:05:39.2255010Z ##[end-action id=__self_5.__self.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:39.2257160Z ##[start-action display=Upload the AWS SDK for C and aws-lc;id=__self_5.__self.__actions_upload-artifact]
+2026-11-16T02:05:39.2262060Z ##[end-action id=__self_5.__self.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:39.2268280Z ##[end-action id=__self_5.__self;outcome=success;conclusion=success;duration_ms=5168]
+2026-11-16T02:05:39.2270370Z ##[start-action display=zlib-ng;id=__self_5.__self_2]
+2026-11-16T02:05:39.2332520Z Prepare all required actions
+2026-11-16T02:05:39.2333410Z Getting action download info
+2026-11-16T02:05:39.3789450Z ##[group]Run ./.github/actions/build-zlib-ng
+2026-11-16T02:05:39.3790110Z with:
+2026-11-16T02:05:39.3790540Z   platform: ios
+2026-11-16T02:05:39.3791020Z   build-args: -Dtarget=aarch64-ios.14.0
+2026-11-16T02:05:39.3791560Z env:
+2026-11-16T02:05:39.3791940Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:39.3792410Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:39.3792890Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:39.3793410Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:39.3793890Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:39.3794410Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:39.3808990Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:39.3809710Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:39.3810500Z   MISE_YES: 1
+2026-11-16T02:05:39.3810890Z ##[endgroup]
+2026-11-16T02:05:39.3822100Z ##[start-action display=Find Zig;id=__self_5.__self_2.zig]
+2026-11-16T02:05:39.3850200Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:39.3851000Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:39.3851680Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:39.3852500Z [36;1melse[0m
+2026-11-16T02:05:39.3853010Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:39.3853660Z [36;1mfi[0m
+2026-11-16T02:05:39.3966930Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:39.3967220Z env:
+2026-11-16T02:05:39.3967370Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:39.3967540Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:39.3967730Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:39.3967910Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:39.3968080Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:39.3968290Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:39.3987590Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:39.3988780Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:39.3989120Z   MISE_YES: 1
+2026-11-16T02:05:39.3989270Z ##[endgroup]
+2026-11-16T02:05:39.4899550Z ##[end-action id=__self_5.__self_2.zig;outcome=success;conclusion=success;duration_ms=107]
+2026-11-16T02:05:39.4902410Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_5.__self_2.__jdx_mise-action]
+2026-11-16T02:05:39.4906510Z ##[end-action id=__self_5.__self_2.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:39.6914550Z ##[start-action display=Look for zlib-ng's artifact;id=__self_5.__self_2.artifact]
+2026-11-16T02:05:39.6961440Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh zlib-ng-ios "$KEY"
+2026-11-16T02:05:39.6963680Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh zlib-ng-ios "$KEY"[0m
+2026-11-16T02:05:39.7037110Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:39.7037470Z env:
+2026-11-16T02:05:39.7037660Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:39.7037850Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:39.7038050Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:39.7038690Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:39.7038920Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:39.7039130Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:39.7041360Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:39.7041640Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:39.7041940Z   MISE_YES: 1
+2026-11-16T02:05:39.7043930Z   GH_TOKEN: ***
+2026-11-16T02:05:39.7044400Z   KEY: zlib-ng-macOS-ARM64-ios-baseline--Dtarget=aarch64-ios.14.0-cb6b552f6fb4baf28552a3652a915ada42cb33bdd5f5d619aeab0468b3aa1602
+2026-11-16T02:05:39.7044880Z ##[endgroup]
+2026-11-16T02:05:40.1226430Z Artifact zlib-ng-ios-0c8393a1858e3425a191e6a53b8962e5d73973f8da194c35977fa3630ac98656: 43776094526
+2026-11-16T02:05:40.1246630Z ##[end-action id=__self_5.__self_2.artifact;outcome=success;conclusion=success;duration_ms=432]
+2026-11-16T02:05:40.1248600Z ##[start-action display=Download zlib-ng;id=__self_5.__self_2.__actions_download-artifact]
+2026-11-16T02:05:40.1288920Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:40.1289380Z with:
+2026-11-16T02:05:40.1289850Z   name: zlib-ng-ios-0c8393a1858e3425a191e6a53b8962e5d73973f8da194c35977fa3630ac98656
+2026-11-16T02:05:40.1290370Z   run-id: 43776094526
+2026-11-16T02:05:40.1292730Z   github-token: ***
+2026-11-16T02:05:40.1292990Z   path: third-party/zlib-ng/zig-out
+2026-11-16T02:05:40.1293350Z   merge-multiple: false
+2026-11-16T02:05:40.1293700Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:40.1293970Z env:
+2026-11-16T02:05:40.1294250Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:40.1294510Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:40.1294880Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:40.1295220Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:40.1295500Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:40.1295840Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:40.1298120Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:40.1298390Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:40.1298800Z   MISE_YES: 1
+2026-11-16T02:05:40.1299000Z ##[endgroup]
+2026-11-16T02:05:40.3113880Z (node:5901) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:40.3114610Z Downloading single artifact
+2026-11-16T02:05:40.3116670Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:40.3310550Z (node:5901) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:40.5793970Z Preparing to download the following artifacts:
+2026-11-16T02:05:40.5795540Z - zlib-ng-ios-0c8393a1858e3425a191e6a53b8962e5d73973f8da194c35977fa3630ac98656 (ID: 14186737568, Size: 313380, Expected Digest: sha256:3871e6247e5616559685fff72f7070658ce2cd60000c33c2547853b22a799e64)
+2026-11-16T02:05:40.5835840Z Downloading artifact '14186737568' from 'ashleydavis/photosphere'
+2026-11-16T02:05:40.9731340Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/7c9847db-4808-825e-a4d4-64c2b6a1c6e4/workflow-job-run-6a85b7df-888d-5fc1-9a78-df9c08fc5df5/artifacts/ab3c7006829f9d34418c84a0fa9a3352623004381a3a2f33ca9453fc9eeb264e.zip
+2026-11-16T02:05:40.9733020Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/zlib-ng/zig-out
+2026-11-16T02:05:41.1343520Z (node:5901) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:41.3058490Z SHA256 digest of downloaded artifact is 3871e6247e5616559685fff72f7070658ce2cd60000c33c2547853b22a799e64
+2026-11-16T02:05:41.3059430Z Artifact download completed successfully.
+2026-11-16T02:05:41.3060110Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:41.3070960Z Download artifact has finished successfully
+2026-11-16T02:05:41.3142010Z ##[end-action id=__self_5.__self_2.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=1188]
+2026-11-16T02:05:41.3147250Z ##[start-action display=Build zlib-ng;id=__self_5.__self_2.__run]
+2026-11-16T02:05:41.3187390Z ##[end-action id=__self_5.__self_2.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:41.3192290Z ##[start-action display=Upload zlib-ng;id=__self_5.__self_2.__actions_upload-artifact]
+2026-11-16T02:05:41.3202670Z ##[end-action id=__self_5.__self_2.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:41.3217070Z ##[end-action id=__self_5.__self_2;outcome=success;conclusion=success;duration_ms=2093]
+2026-11-16T02:05:41.3224540Z ##[start-action display=ImageMagick;id=__self_5.__self_3]
+2026-11-16T02:05:41.3370990Z Prepare all required actions
+2026-11-16T02:05:41.3372260Z Getting action download info
+2026-11-16T02:05:41.4743760Z ##[group]Run ./.github/actions/build-imagemagick
+2026-11-16T02:05:41.4744000Z with:
+2026-11-16T02:05:41.4744160Z   platform: ios
+2026-11-16T02:05:41.4744350Z   build-args: -Dtarget=aarch64-ios.14.0
+2026-11-16T02:05:41.4744580Z   config-name: aarch64-ios
+2026-11-16T02:05:41.4744740Z env:
+2026-11-16T02:05:41.4744880Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:41.4745040Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:41.4745210Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:41.4745390Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:41.4745570Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:41.4745750Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:41.4747960Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:41.4748210Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:41.4748500Z   MISE_YES: 1
+2026-11-16T02:05:41.4748660Z ##[endgroup]
+2026-11-16T02:05:41.4754240Z ##[start-action display=Find Zig;id=__self_5.__self_3.zig]
+2026-11-16T02:05:41.4773780Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:41.4774070Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:41.4774340Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:41.4774570Z [36;1melse[0m
+2026-11-16T02:05:41.4774740Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:41.4774960Z [36;1mfi[0m
+2026-11-16T02:05:41.4838020Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:41.4838320Z env:
+2026-11-16T02:05:41.4838570Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:41.4838770Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:41.4838970Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:41.4839160Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:41.4839340Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:41.4839510Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:41.4841740Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:41.4841990Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:41.4842490Z   MISE_YES: 1
+2026-11-16T02:05:41.4842670Z ##[endgroup]
+2026-11-16T02:05:41.5365190Z ##[end-action id=__self_5.__self_3.zig;outcome=success;conclusion=success;duration_ms=61]
+2026-11-16T02:05:41.5367330Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_5.__self_3.__jdx_mise-action]
+2026-11-16T02:05:41.5371490Z ##[end-action id=__self_5.__self_3.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:43.1396840Z ##[start-action display=Look for ImageMagick and its delegates' artifact;id=__self_5.__self_3.artifact]
+2026-11-16T02:05:43.1475260Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh imagemagick-ios "$KEY"
+2026-11-16T02:05:43.1475970Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh imagemagick-ios "$KEY"[0m
+2026-11-16T02:05:43.1547710Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:43.1548580Z env:
+2026-11-16T02:05:43.1549150Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:43.1549790Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:43.1550350Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:43.1550940Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:43.1551610Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:43.1553710Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:43.1560080Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:43.1560770Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:43.1561550Z   MISE_YES: 1
+2026-11-16T02:05:43.1567260Z   GH_TOKEN: ***
+2026-11-16T02:05:43.1568540Z   KEY: imagemagick-macOS-ARM64-ios-baseline--Dtarget=aarch64-ios.14.0-d492bff2a0e80e897f1839fbfc2ae9cdbc4e9913a26d33ffd9def0544d3a2231
+2026-11-16T02:05:43.1569890Z ##[endgroup]
+2026-11-16T02:05:43.5885340Z Artifact imagemagick-ios-e1c7fef6239b65b20f6b985ef1d0c525777f2fb6450af836e2c7ecefd0d39c5f: 43776094526
+2026-11-16T02:05:43.5926030Z ##[end-action id=__self_5.__self_3.artifact;outcome=success;conclusion=success;duration_ms=452]
+2026-11-16T02:05:43.5935640Z ##[start-action display=Download ImageMagick and its delegates;id=__self_5.__self_3.__actions_download-artifact]
+2026-11-16T02:05:43.6004600Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:43.6004850Z with:
+2026-11-16T02:05:43.6005250Z   name: imagemagick-ios-e1c7fef6239b65b20f6b985ef1d0c525777f2fb6450af836e2c7ecefd0d39c5f
+2026-11-16T02:05:43.6005670Z   run-id: 43776094526
+2026-11-16T02:05:43.6008030Z   github-token: ***
+2026-11-16T02:05:43.6008230Z   path: third-party/imagemagick/zig-out
+2026-11-16T02:05:43.6008480Z   merge-multiple: false
+2026-11-16T02:05:43.6008750Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:43.6009010Z env:
+2026-11-16T02:05:43.6009170Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:43.6009350Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:43.6009560Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:43.6009870Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:43.6010130Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:43.6010350Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:43.6012520Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:43.6012800Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:43.6013160Z   MISE_YES: 1
+2026-11-16T02:05:43.6013360Z ##[endgroup]
+2026-11-16T02:05:43.8476450Z Downloading single artifact
+2026-11-16T02:05:43.8572170Z (node:5919) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:43.8573070Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:43.8891550Z (node:5919) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:44.1532400Z Preparing to download the following artifacts:
+2026-11-16T02:05:44.1533930Z - imagemagick-ios-e1c7fef6239b65b20f6b985ef1d0c525777f2fb6450af836e2c7ecefd0d39c5f (ID: 14186957035, Size: 6963920, Expected Digest: sha256:7c92198f418402caac02ed36dcc284da642d9a89cba03c09f11796a0fbb3d201)
+2026-11-16T02:05:44.1554730Z Downloading artifact '14186957035' from 'ashleydavis/photosphere'
+2026-11-16T02:05:44.5569870Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/7c9847db-4808-825e-a4d4-64c2b6a1c6e4/workflow-job-run-e905b93e-b612-5366-90f8-3db9d4b91ddb/artifacts/ff2d573d37d01e8e1a39a51b480804257287b25d8a37d6069b7814f02dbecc7b.zip
+2026-11-16T02:05:44.5571780Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/imagemagick/zig-out
+2026-11-16T02:05:44.7750490Z (node:5919) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:45.6524960Z SHA256 digest of downloaded artifact is 7c92198f418402caac02ed36dcc284da642d9a89cba03c09f11796a0fbb3d201
+2026-11-16T02:05:45.6614770Z Artifact download completed successfully.
+2026-11-16T02:05:45.6650740Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:45.6651560Z Download artifact has finished successfully
+2026-11-16T02:05:45.6664040Z ##[end-action id=__self_5.__self_3.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=2071]
+2026-11-16T02:05:45.6667160Z ##[start-action display=Make ImageMagick's generated files for the target;id=__self_5.__self_3.__run]
+2026-11-16T02:05:45.6673120Z ##[end-action id=__self_5.__self_3.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:45.6675470Z ##[start-action display=Build ImageMagick and its delegates;id=__self_5.__self_3.__run_2]
+2026-11-16T02:05:45.6700080Z ##[end-action id=__self_5.__self_3.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:45.6702260Z ##[start-action display=Upload ImageMagick and its delegates;id=__self_5.__self_3.__actions_upload-artifact]
+2026-11-16T02:05:45.6706650Z ##[end-action id=__self_5.__self_3.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:45.6713850Z ##[end-action id=__self_5.__self_3;outcome=success;conclusion=success;duration_ms=4346]
+2026-11-16T02:05:45.6715560Z ##[start-action display=FFmpeg;id=__self_5.__self_4]
+2026-11-16T02:05:45.6981700Z Prepare all required actions
+2026-11-16T02:05:45.6982110Z Getting action download info
+2026-11-16T02:05:45.8498110Z ##[group]Run ./.github/actions/build-ffmpeg
+2026-11-16T02:05:45.8498740Z with:
+2026-11-16T02:05:45.8499140Z   platform: ios
+2026-11-16T02:05:45.8499600Z   build-args: -Dtarget=aarch64-ios.14.0
+2026-11-16T02:05:45.8500200Z   config-name: aarch64-ios
+2026-11-16T02:05:45.8500660Z env:
+2026-11-16T02:05:45.8501040Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:45.8501480Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:45.8502120Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:45.8502630Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:45.8503110Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:45.8503610Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:45.8509640Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:45.8510400Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:45.8511180Z   MISE_YES: 1
+2026-11-16T02:05:45.8511580Z ##[endgroup]
+2026-11-16T02:05:45.8523720Z ##[start-action display=Find Zig;id=__self_5.__self_4.zig]
+2026-11-16T02:05:45.8546530Z ##[group]Run if command -v zig > /dev/null; then
+2026-11-16T02:05:45.8546820Z [36;1mif command -v zig > /dev/null; then[0m
+2026-11-16T02:05:45.8547080Z [36;1m    echo "found=yes" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:45.8547300Z [36;1melse[0m
+2026-11-16T02:05:45.8547500Z [36;1m    echo "found=no" >> "$GITHUB_OUTPUT"[0m
+2026-11-16T02:05:45.8547770Z [36;1mfi[0m
+2026-11-16T02:05:45.8661460Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:45.8661730Z env:
+2026-11-16T02:05:45.8661880Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:45.8662040Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:45.8662210Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:45.8662400Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:45.8662570Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:45.8676580Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:45.8678850Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:45.8679110Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:45.8679420Z   MISE_YES: 1
+2026-11-16T02:05:45.8679560Z ##[endgroup]
+2026-11-16T02:05:45.9380910Z ##[end-action id=__self_5.__self_4.zig;outcome=success;conclusion=success;duration_ms=85]
+2026-11-16T02:05:45.9383280Z ##[start-action display=Setup Zig (version from mise.toml);id=__self_5.__self_4.__jdx_mise-action]
+2026-11-16T02:05:45.9387780Z ##[end-action id=__self_5.__self_4.__jdx_mise-action;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:53.7889980Z ##[start-action display=Look for FFmpeg's artifact;id=__self_5.__self_4.artifact]
+2026-11-16T02:05:53.7950260Z ##[group]Run bash .github/actions/third-party-libraries/find-library-artifact.sh ffmpeg-ios "$KEY"
+2026-11-16T02:05:53.7951040Z [36;1mbash .github/actions/third-party-libraries/find-library-artifact.sh ffmpeg-ios "$KEY"[0m
+2026-11-16T02:05:53.8047200Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:53.8047550Z env:
+2026-11-16T02:05:53.8047820Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:53.8068460Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:53.8069210Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:53.8069580Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:53.8069890Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:53.8070120Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:53.8072780Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:53.8073190Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:53.8073610Z   MISE_YES: 1
+2026-11-16T02:05:53.8076190Z   GH_TOKEN: ***
+2026-11-16T02:05:53.8076810Z   KEY: ffmpeg-macOS-ARM64-ios-baseline--Dtarget=aarch64-ios.14.0-323ab52a237a6db68b89d9dcbd2873bf3acd179d27b59351f674fd4b20a6f866
+2026-11-16T02:05:53.8077460Z ##[endgroup]
+2026-11-16T02:05:54.3900950Z Artifact ffmpeg-ios-7ebe49654a09abfbb431a1b80c4289d27525264f3220abe62cb4b28e68a9cecf: 43776094526
+2026-11-16T02:05:54.3943700Z ##[end-action id=__self_5.__self_4.artifact;outcome=success;conclusion=success;duration_ms=604]
+2026-11-16T02:05:54.3950880Z ##[start-action display=Download FFmpeg;id=__self_5.__self_4.__actions_download-artifact]
+2026-11-16T02:05:54.4050010Z ##[group]Run actions/download-artifact@v4
+2026-11-16T02:05:54.4050280Z with:
+2026-11-16T02:05:54.4050680Z   name: ffmpeg-ios-7ebe49654a09abfbb431a1b80c4289d27525264f3220abe62cb4b28e68a9cecf
+2026-11-16T02:05:54.4051160Z   run-id: 43776094526
+2026-11-16T02:05:54.4053640Z   github-token: ***
+2026-11-16T02:05:54.4053890Z   path: third-party/ffmpeg/zig-out
+2026-11-16T02:05:54.4054150Z   merge-multiple: false
+2026-11-16T02:05:54.4054380Z   repository: ashleydavis/photosphere
+2026-11-16T02:05:54.4054590Z env:
+2026-11-16T02:05:54.4054790Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:54.4055020Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:54.4055240Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:54.4055540Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:54.4055780Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:54.4056010Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:54.4058440Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:54.4058800Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:54.4059150Z   MISE_YES: 1
+2026-11-16T02:05:54.4059400Z ##[endgroup]
+2026-11-16T02:05:54.6119910Z Downloading single artifact
+2026-11-16T02:05:54.6190670Z (node:6161) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:54.6191520Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:54.6379270Z (node:6161) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:05:55.0392780Z Preparing to download the following artifacts:
+2026-11-16T02:05:55.0425210Z - ffmpeg-ios-7ebe49654a09abfbb431a1b80c4289d27525264f3220abe62cb4b28e68a9cecf (ID: 14187063754, Size: 8001006, Expected Digest: sha256:1c0d00d09c3f606c66e092d861511dc2db8984727dd8ddb426d691d159007fe9)
+2026-11-16T02:05:55.0467760Z Downloading artifact '14187063754' from 'ashleydavis/photosphere'
+2026-11-16T02:05:55.4173900Z Redirecting to blob download url: https://productionresultssa14.blob.core.windows.net/actions-results/7c9847db-4808-825e-a4d4-64c2b6a1c6e4/workflow-job-run-5eda90b7-1ae7-5d40-a30c-b1da27aef504/artifacts/49817dc80197ffc041bbabd36bfd43b3742406085e7640e6b9e8d6bee23aec3f.zip
+2026-11-16T02:05:55.4273410Z Starting download of artifact to: /Users/runner/work/photosphere/photosphere/third-party/ffmpeg/zig-out
+2026-11-16T02:05:55.6343050Z (node:6161) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-16T02:05:56.4006340Z SHA256 digest of downloaded artifact is 1c0d00d09c3f606c66e092d861511dc2db8984727dd8ddb426d691d159007fe9
+2026-11-16T02:05:56.4048020Z Artifact download completed successfully.
+2026-11-16T02:05:56.4069990Z Total of 1 artifact(s) downloaded
+2026-11-16T02:05:56.4084450Z Download artifact has finished successfully
+2026-11-16T02:05:56.4129710Z ##[end-action id=__self_5.__self_4.__actions_download-artifact;outcome=success;conclusion=success;duration_ms=2016]
+2026-11-16T02:05:56.4135810Z ##[start-action display=Make FFmpeg's generated files for the target;id=__self_5.__self_4.__run]
+2026-11-16T02:05:56.4150250Z ##[end-action id=__self_5.__self_4.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:56.4154980Z ##[start-action display=Build FFmpeg;id=__self_5.__self_4.__run_2]
+2026-11-16T02:05:56.4165770Z ##[end-action id=__self_5.__self_4.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:56.4170320Z ##[start-action display=Upload FFmpeg;id=__self_5.__self_4.__actions_upload-artifact]
+2026-11-16T02:05:56.4175050Z ##[end-action id=__self_5.__self_4.__actions_upload-artifact;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:05:56.4182070Z ##[end-action id=__self_5.__self_4;outcome=success;conclusion=success;duration_ms=10741]
+2026-11-16T02:05:56.4252980Z ##[group]Run if [ "false" = "true" ]; then
+2026-11-16T02:05:56.4253290Z [36;1mif [ "false" = "true" ]; then[0m
+2026-11-16T02:05:56.4253530Z [36;1m  VERSION=""[0m
+2026-11-16T02:05:56.4253950Z [36;1m  VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"[0m
+2026-11-16T02:05:56.4254540Z [36;1m  VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "0a24975e05a4d681b7803f62ac169d7544d4c005")"[0m
+2026-11-16T02:05:56.4255050Z [36;1melse[0m
+2026-11-16T02:05:56.4255590Z [36;1m  VERSION="$(bash ./scripts/set-build-config.sh --commit "0a24975e05a4d681b7803f62ac169d7544d4c005")"[0m
+2026-11-16T02:05:56.4256060Z [36;1mfi[0m
+2026-11-16T02:05:56.4256350Z [36;1mecho "VERSION=$VERSION" >> $GITHUB_ENV[0m
+2026-11-16T02:05:56.4313600Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:56.4313960Z env:
+2026-11-16T02:05:56.4314220Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:56.4314480Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:56.4314910Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:56.4315240Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:56.4315560Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:56.4315800Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:56.4318350Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:56.4318650Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:56.4319050Z   MISE_YES: 1
+2026-11-16T02:05:56.4319210Z ##[endgroup]
+2026-11-16T02:05:56.6124760Z Build config set to version dev-nightly.20261116T020556, commit 0a24975e05a4d681b7803f62ac169d7544d4c005, nightly true.
+2026-11-16T02:05:56.6226060Z ##[group]Run actions/cache/restore@v4
+2026-11-16T02:05:56.6226310Z with:
+2026-11-16T02:05:56.6226480Z   path: .zig-cache
+2026-11-16T02:05:56.6226780Z   key: macOS-ARM64-zig-app-build-ios-0a24975e05a4d681b7803f62ac169d7544d4c005
+2026-11-16T02:05:56.6227570Z   restore-keys: macOS-ARM64-zig-app-build-ios-
+
+2026-11-16T02:05:56.6227890Z   enableCrossOsArchive: false
+2026-11-16T02:05:56.6228140Z   fail-on-cache-miss: false
+2026-11-16T02:05:56.6228370Z   lookup-only: false
+2026-11-16T02:05:56.6228560Z env:
+2026-11-16T02:05:56.6228700Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:56.6228930Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:56.6229150Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:56.6229370Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:56.6229620Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:56.6229860Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:56.6232360Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:56.6232680Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:56.6233110Z   MISE_YES: 1
+2026-11-16T02:05:56.6233300Z   VERSION: dev-nightly.20261116T020556
+2026-11-16T02:05:56.6233520Z ##[endgroup]
+2026-11-16T02:05:56.7953850Z (node:6192) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:05:56.7955100Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:05:57.0604510Z Cache not found for input keys: macOS-ARM64-zig-app-build-ios-0a24975e05a4d681b7803f62ac169d7544d4c005, macOS-ARM64-zig-app-build-ios-
+2026-11-16T02:05:57.0716100Z ##[group]Run if [ -d .zig-cache ]; then
+2026-11-16T02:05:57.0735030Z [36;1mif [ -d .zig-cache ]; then[0m
+2026-11-16T02:05:57.0735520Z [36;1m    megabytes="$(du -sm .zig-cache | cut -f1)"[0m
+2026-11-16T02:05:57.0735900Z [36;1m    echo "Restored Zig build cache: ${megabytes} MB"[0m
+2026-11-16T02:05:57.0736320Z [36;1m    if [ "$megabytes" -ge 5120 ]; then[0m
+2026-11-16T02:05:57.0736670Z [36;1m        mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"[0m
+2026-11-16T02:05:57.0737060Z [36;1m        echo "Moved it aside to start a fresh one"[0m
+2026-11-16T02:05:57.0737330Z [36;1m    fi[0m
+2026-11-16T02:05:57.0737520Z [36;1mfi[0m
+2026-11-16T02:05:57.0799790Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:57.0800210Z env:
+2026-11-16T02:05:57.0800400Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:57.0800690Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:57.0800930Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:57.0801190Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:57.0801520Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:57.0801770Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:57.0804430Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:57.0804740Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:57.0805210Z   MISE_YES: 1
+2026-11-16T02:05:57.0805520Z   VERSION: dev-nightly.20261116T020556
+2026-11-16T02:05:57.0805850Z ##[endgroup]
+2026-11-16T02:05:57.1381740Z Restored Zig build cache: 0 MB
+2026-11-16T02:05:57.1428150Z ##[group]Run bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+2026-11-16T02:05:57.1429170Z [36;1mbun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"[0m
+2026-11-16T02:05:57.1474730Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-16T02:05:57.1475060Z env:
+2026-11-16T02:05:57.1475400Z   BUN_VERSION: 1.3.14
+2026-11-16T02:05:57.1475670Z   NODE_VERSION: 24.15.0
+2026-11-16T02:05:57.1475920Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:05:57.1476150Z   RELEASE_PLATFORM: ios
+2026-11-16T02:05:57.1476420Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:05:57.1476740Z   MISE_LOG_LEVEL: info
+2026-11-16T02:05:57.1479260Z   GITHUB_TOKEN: ***
+2026-11-16T02:05:57.1479650Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:05:57.1480090Z   MISE_YES: 1
+2026-11-16T02:05:57.1480490Z   VERSION: dev-nightly.20261116T020556
+2026-11-16T02:05:57.1480800Z ##[endgroup]
+2026-11-16T02:05:57.9365680Z ziggy build:ios: Bundling the page...
+2026-11-16T02:05:57.9587820Z ziggy build:ios: $ bash ./scripts/bundle-ui.sh --out-dir "/Users/runner/work/photosphere/photosphere/apps/photosphere-frontend/page.2GHpkr"
+2026-11-16T02:05:57.9879330Z ziggy build:ios: $ vite build --outDir "/Users/runner/work/photosphere/photosphere/apps/photosphere-frontend/page.2GHpkr" --emptyOutDir
+2026-11-16T02:05:59.1162020Z ziggy build:ios: [36mvite v5.4.21 [32mbuilding for production...[36m[39m
+2026-11-16T02:05:59.1962530Z ziggy build:ios: transforming...
+2026-11-16T02:06:15.4173490Z ziggy build:ios: [32m✓[39m 12218 modules transformed.
+2026-11-16T02:06:15.8472450Z ziggy build:ios: ../../node_modules/eruda/eruda.js (2:424693): Use of eval in "../../node_modules/eruda/eruda.js" is strongly discouraged as it poses security risks and may cause issues with minification.
+2026-11-16T02:06:16.5609780Z ziggy build:ios: rendering chunks...
+2026-11-16T02:06:16.7303320Z ziggy build:ios: computing gzip size...
+2026-11-16T02:06:16.8419550Z ziggy build:ios: [2mpage.2GHpkr/[22m[32mindex.html                                [39m[1m[2m    1.83 kB[22m[1m[22m[2m │ gzip:   0.75 kB[22m
+2026-11-16T02:06:16.8424160Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[32mfa-v4compatibility-C9RhG_FT.woff2  [39m[1m[2m    4.80 kB[22m[1m[22m
+2026-11-16T02:06:16.8425820Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[32mfa-v4compatibility-CCth-dXg.ttf    [39m[1m[2m   10.84 kB[22m[1m[22m
+2026-11-16T02:06:16.8428980Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[32mfa-regular-400-BjRzuEpd.woff2      [39m[1m[2m   25.47 kB[22m[1m[22m
+2026-11-16T02:06:16.8430350Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[32mfa-regular-400-DZaxPHgR.ttf        [39m[1m[2m   68.06 kB[22m[1m[22m
+2026-11-16T02:06:16.8434390Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[32mfa-brands-400-D_cYUPeE.woff2       [39m[1m[2m  118.68 kB[22m[1m[22m
+2026-11-16T02:06:16.8435910Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[32mfa-solid-900-CTAAxXor.woff2        [39m[1m[2m  158.22 kB[22m[1m[22m
+2026-11-16T02:06:16.8456400Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[32mfa-brands-400-D1LuMI3I.ttf         [39m[1m[2m  210.79 kB[22m[1m[22m
+2026-11-16T02:06:16.8467590Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[32mfa-solid-900-D0aA9rwL.ttf          [39m[1m[2m  426.11 kB[22m[1m[22m
+2026-11-16T02:06:16.8470480Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[35mindex-B43TsbVW.css                 [39m[1m[2m  157.98 kB[22m[1m[22m[2m │ gzip:  39.50 kB[22m
+2026-11-16T02:06:16.8472380Z ziggy build:ios: [2mpage.2GHpkr/[22m[2massets/[22m[36mindex-D8fdW0zi.js                  [39m[1m[2m3,226.70 kB[22m[1m[22m[2m │ gzip: 685.48 kB[22m
+2026-11-16T02:06:16.8476340Z ziggy build:ios: [32m✓ built in 17.69s[39m
+2026-11-16T02:06:16.9792980Z ziggy build:ios: Building the Zig library for aarch64-ios.14.0-simulator (optimize ReleaseSafe)...
+2026-11-16T02:06:41.0002480Z ziggy build:ios: third-party/aws is not built for this target, or its files changed since it was. Building it: /Users/runner/.local/share/mise/installs/zig/0.16.0/zig build -Dtarget=aarch64-ios.14.0-simulator -Dcpu=baseline --libc /Users/runner/work/photosphere/photosphere/.zig-cache/iphonesimulator-libc.txt
+2026-11-16T02:08:53.0275910Z ziggy build:ios: third-party/zlib-ng is not built for this target, or its files changed since it was. Building it: /Users/runner/.local/share/mise/installs/zig/0.16.0/zig build -Dtarget=aarch64-ios.14.0-simulator -Dcpu=baseline --libc /Users/runner/work/photosphere/photosphere/.zig-cache/iphonesimulator-libc.txt
+2026-11-16T02:09:10.0478080Z ziggy build:ios: third-party/imagemagick is not built for this target, or its files changed since it was. Building it: /Users/runner/.local/share/mise/installs/zig/0.16.0/zig build -Dtarget=aarch64-ios.14.0-simulator -Dcpu=baseline --libc /Users/runner/work/photosphere/photosphere/.zig-cache/iphonesimulator-libc.txt
+2026-11-16T02:09:20.5199790Z ziggy build:ios: install
+2026-11-16T02:09:20.5201330Z ziggy build:ios: +- fail failure
+2026-11-16T02:09:20.5206990Z ziggy build:ios: error: ImageMagick's generated headers for aarch64-ios-simulator are not in config/aarch64-ios-simulator. Make them with: third-party/imagemagick/generate-config.sh aarch64-ios-simulator
+2026-11-16T02:09:20.5320870Z ziggy build:ios: 
+2026-11-16T02:09:20.5322360Z ziggy build:ios: Build Summary: 0/2 steps succeeded (1 failed)
+2026-11-16T02:09:20.5331140Z ziggy build:ios: install transitive failure
+2026-11-16T02:09:20.5331690Z ziggy build:ios: +- fail failure
+2026-11-16T02:09:20.5333160Z ziggy build:ios: 
+2026-11-16T02:09:20.5337450Z ziggy build:ios: error: the following build command failed with exit code 1:
+2026-11-16T02:09:20.5344470Z ziggy build:ios: .zig-cache/o/10a05919974c6994503c9dd63dfc1bab/build /Users/runner/.local/share/mise/installs/zig/0.16.0/zig /Users/runner/.local/share/mise/installs/zig/0.16.0/lib /Users/runner/work/photosphere/photosphere/third-party/imagemagick .zig-cache /Users/runner/.cache/zig --seed 0x39b1d3d4 -Zeb65687e152a1df0 -Dtarget=aarch64-ios.14.0-simulator -Dcpu=baseline --libc /Users/runner/work/photosphere/photosphere/.zig-cache/iphonesimulator-libc.txt
+2026-11-16T02:09:20.5414120Z ziggy build:ios: error: Building third-party/imagemagick failed (.{ .exited = 1 }). Its output is above.
+2026-11-16T02:09:20.5424770Z ziggy build:ios: error: the following build command failed with exit code 1:
+2026-11-16T02:09:20.5427510Z ziggy build:ios: .zig-cache/o/bcc08fe7e45d3a4cc01eefa99e55c69c/build /Users/runner/.local/share/mise/installs/zig/0.16.0/zig /Users/runner/.local/share/mise/installs/zig/0.16.0/lib /Users/runner/work/photosphere/photosphere .zig-cache /Users/runner/.cache/zig --seed 0x49ae18ca -Z316dac8cf3129f93 photosphere-backend -Dtarget=aarch64-ios.14.0-simulator -Doptimize=ReleaseSafe -Dui-directory=apps/photosphere-frontend/page.2GHpkr -p /Users/runner/work/photosphere/photosphere/out/app/native
+2026-11-16T02:09:20.5780390Z ziggy build:ios: ERROR: the Zig build failed.
+2026-11-16T02:09:20.6338630Z ziggy build:ios: Exited with code 1
+2026-11-16T02:09:20.6413100Z ##[error]Process completed with exit code 1.
+2026-11-16T02:09:20.6808810Z ##[group]Run actions/cache/save@v4
+2026-11-16T02:09:20.6810280Z with:
+2026-11-16T02:09:20.6810790Z   path: .zig-cache
+2026-11-16T02:09:20.6812300Z   key: macOS-ARM64-zig-app-build-ios-0a24975e05a4d681b7803f62ac169d7544d4c005
+2026-11-16T02:09:20.6813680Z   enableCrossOsArchive: false
+2026-11-16T02:09:20.6814320Z env:
+2026-11-16T02:09:20.6814960Z   BUN_VERSION: 1.3.14
+2026-11-16T02:09:20.6815700Z   NODE_VERSION: 24.15.0
+2026-11-16T02:09:20.6816300Z   WHAT_CHANGED_VERSION: v0.0.6
+2026-11-16T02:09:20.6817060Z   RELEASE_PLATFORM: ios
+2026-11-16T02:09:20.6817650Z   RELEASE_PLATFORM_NAME: iOS
+2026-11-16T02:09:20.6818380Z   MISE_LOG_LEVEL: info
+2026-11-16T02:09:20.6824320Z   GITHUB_TOKEN: ***
+2026-11-16T02:09:20.6824910Z   MISE_TRUSTED_CONFIG_PATHS: /Users/runner/work/photosphere/photosphere
+2026-11-16T02:09:20.6825370Z   MISE_YES: 1
+2026-11-16T02:09:20.6825700Z   VERSION: dev-nightly.20261116T020556
+2026-11-16T02:09:20.6825980Z ##[endgroup]
+2026-11-16T02:09:21.7580660Z (node:13474) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-16T02:09:21.7586420Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-16T02:09:21.8114250Z [command]/opt/homebrew/bin/gtar --posix -cf cache.tzst --exclude cache.tzst -P -C /Users/runner/work/photosphere/photosphere --files-from manifest.txt --delay-directory-restore --use-compress-program zstdmt
+2026-11-16T02:09:22.2446310Z (node:13474) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-16T02:09:22.8718310Z Sent 5823645 of 5823645 (100.0%), 8.8 MBs/sec
+2026-11-16T02:09:22.9536930Z Cache saved with key: macOS-ARM64-zig-app-build-ios-0a24975e05a4d681b7803f62ac169d7544d4c005
+2026-11-16T02:09:22.9836470Z Post job cleanup.
+2026-11-16T02:09:22.9916060Z Post job cleanup.
+2026-11-16T02:09:23.0004970Z Post job cleanup.
+2026-11-16T02:09:23.0131620Z Post job cleanup.
+2026-11-16T02:09:23.0142250Z ##[start-action display=Restore the packages Zig fetches;id=__14a9a152-9895-4955-ad58-e41678c91c24.cache]
+2026-11-16T02:09:23.0147380Z ##[end-action id=__14a9a152-9895-4955-ad58-e41678c91c24.cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-11-16T02:09:23.0293680Z Post job cleanup.
+2026-11-16T02:09:23.4940100Z [command]/opt/homebrew/bin/git version
+2026-11-16T02:09:23.5886450Z git version 2.56.0
+2026-11-16T02:09:23.6007310Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/5c0931d1-f140-42e3-b2a0-044144497ffa/.gitconfig'
+2026-11-16T02:09:23.6009030Z Temporarily overriding HOME='/Users/runner/work/_temp/5c0931d1-f140-42e3-b2a0-044144497ffa' before making global git config changes
+2026-11-16T02:09:23.6041500Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-16T02:09:23.6043540Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/photosphere/photosphere
+2026-11-16T02:09:23.6265870Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-16T02:09:23.6363030Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-16T02:09:23.8320580Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-16T02:09:23.8513970Z http.https://github.com/.extraheader
+2026-11-16T02:09:23.8541810Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-16T02:09:23.8728890Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-16T02:09:24.1054300Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-16T02:09:24.1357950Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-16T02:09:24.3207110Z Cleaning up orphan processes
+2026-11-16T02:09:29.4730610Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache/restore@v4, actions/cache/save@v4, actions/cache@v4, actions/checkout@v4, actions/download-artifact@v4, actions/setup-node@v4, jdx/mise-action@v2. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
