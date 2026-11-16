@@ -1,0 +1,267 @@
+=== 2026-11-16T11:42:27Z side-B run 1
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 49)
+PASSED: 8-share-database
+=== RESULT side-B run 1 exit code: 0
+=== 2026-11-16T11:45:46Z side-B run 2
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 49)
+PASSED: 8-share-database
+=== RESULT side-B run 2 exit code: 0
+=== 2026-11-16T11:46:07Z side-B run 3
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 50)
+PASSED: 8-share-database
+=== RESULT side-B run 3 exit code: 0
+=== 2026-11-16T11:46:26Z side-B run 4
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 55)
+PASSED: 8-share-database
+=== RESULT side-B run 4 exit code: 0
+=== 2026-11-16T11:46:40Z side-B run 5
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 55)
+PASSED: 8-share-database
+=== RESULT side-B run 5 exit code: 0
+=== 2026-11-16T11:46:51Z side-B run 6
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 56)
+PASSED: 8-share-database
+=== RESULT side-B run 6 exit code: 0
+=== 2026-11-16T11:47:02Z side-B run 7
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 50)
+PASSED: 8-share-database
+=== RESULT side-B run 7 exit code: 0
+=== 2026-11-16T11:47:14Z side-B run 8
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 55)
+PASSED: 8-share-database
+=== RESULT side-B run 8 exit code: 0
+=== 2026-11-16T11:47:28Z side-B run 9
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 49)
+PASSED: 8-share-database
+=== RESULT side-B run 9 exit code: 0
+=== 2026-11-16T11:47:44Z side-B run 10
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 47)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 47)
+^[[0;34m[INFO]^[[0m Found: Database opened (line 48)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 48)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 49)
+PASSED: 8-share-database
+=== RESULT side-B run 10 exit code: 0
+         send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
+         wait_for_log "$TMP_DIR" "Database entry added"
+=== 2026-11-16T11:47:58Z side-A run 1
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 54)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 54)
+^[[0;31m[FAIL]^[[0m Timed out waiting for log pattern: Database opened
+  [2026-11-16T11:48:10.274Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:48:10.308Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:48:10.358Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:48:10.830Z] [INFO] [Frontend] test-click: clicking element data-id="add-database-confirm" nth=0
+  [2026-11-16T11:48:10.834Z] [EVENT] [Worker 4] Database entry added
+  [2026-11-16T11:48:10.835Z] [INFO] [Frontend] Opening database: test-db
+  [2026-11-16T11:48:10.860Z] [EVENT] [Worker 1] Database opened: test-db
+  [2026-11-16T11:48:10.970Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:48:10.973Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:48:11.361Z] [EVENT] [Frontend] Databases page loaded
+FAILED: 8-share-database (exit 1). Its files are in /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T//photosphere-tests/photosphere-app-8-share-database-KD2vkb
+=== RESULT side-A run 1 exit code: 1
+=== 2026-11-16T11:50:47Z side-A run 2
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 54)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 54)
+^[[0;31m[FAIL]^[[0m Timed out waiting for log pattern: Database opened
+  [2026-11-16T11:51:15.655Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:51:15.724Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:51:15.791Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:51:17.078Z] [INFO] [Frontend] test-click: clicking element data-id="add-database-confirm" nth=0
+  [2026-11-16T11:51:17.081Z] [EVENT] [Worker 4] Database entry added
+  [2026-11-16T11:51:17.082Z] [INFO] [Frontend] Opening database: test-db
+  [2026-11-16T11:51:17.114Z] [EVENT] [Worker 1] Database opened: test-db
+  [2026-11-16T11:51:17.261Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:51:17.445Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:51:17.623Z] [EVENT] [Frontend] Databases page loaded
+FAILED: 8-share-database (exit 1). Its files are in /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T//photosphere-tests/photosphere-app-8-share-database-I9lq1m
+=== RESULT side-A run 2 exit code: 1
+=== 2026-11-16T11:53:37Z side-A run 3
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 54)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 54)
+^[[0;31m[FAIL]^[[0m Timed out waiting for log pattern: Database opened
+  [2026-11-16T11:53:50.267Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:53:50.310Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:53:50.361Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:53:50.842Z] [INFO] [Frontend] test-click: clicking element data-id="add-database-confirm" nth=0
+  [2026-11-16T11:53:50.845Z] [EVENT] [Worker 4] Database entry added
+  [2026-11-16T11:53:50.845Z] [INFO] [Frontend] Opening database: test-db
+  [2026-11-16T11:53:50.879Z] [EVENT] [Worker 1] Database opened: test-db
+  [2026-11-16T11:53:50.992Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:53:50.994Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:53:51.370Z] [EVENT] [Frontend] Databases page loaded
+FAILED: 8-share-database (exit 1). Its files are in /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T//photosphere-tests/photosphere-app-8-share-database-3tdD2X
+=== RESULT side-A run 3 exit code: 1
+=== 2026-11-16T11:56:08Z side-A run 4
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 54)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 54)
+^[[0;31m[FAIL]^[[0m Timed out waiting for log pattern: Database opened
+  [2026-11-16T11:56:19.576Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:56:19.616Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:56:19.666Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:56:20.112Z] [INFO] [Frontend] test-click: clicking element data-id="add-database-confirm" nth=0
+  [2026-11-16T11:56:20.114Z] [EVENT] [Worker 4] Database entry added
+  [2026-11-16T11:56:20.115Z] [INFO] [Frontend] Opening database: test-db
+  [2026-11-16T11:56:20.151Z] [EVENT] [Worker 2] Database opened: test-db
+  [2026-11-16T11:56:20.274Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:56:20.276Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:56:20.635Z] [EVENT] [Frontend] Databases page loaded
+FAILED: 8-share-database (exit 1). Its files are in /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T//photosphere-tests/photosphere-app-8-share-database-yqGuMY
+=== RESULT side-A run 4 exit code: 1
+=== 2026-11-16T11:58:32Z side-A run 5
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 0)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 35)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Add database dialog opened (after line 35)
+^[[0;34m[INFO]^[[0m Found: Add database dialog opened (line 39)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database entry added (after line 39)
+^[[0;34m[INFO]^[[0m Found: Database entry added (line 43)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Databases page loaded (after line 43)
+^[[0;34m[INFO]^[[0m Found: Databases page loaded (line 54)
+^[[0;34m[INFO]^[[0m Waiting for log pattern: Database opened (after line 54)
+^[[0;31m[FAIL]^[[0m Timed out waiting for log pattern: Database opened
+  [2026-11-16T11:58:44.326Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:58:44.358Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:58:44.421Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:58:44.942Z] [INFO] [Frontend] test-click: clicking element data-id="add-database-confirm" nth=0
+  [2026-11-16T11:58:44.945Z] [EVENT] [Worker 4] Database entry added
+  [2026-11-16T11:58:44.945Z] [INFO] [Frontend] Opening database: test-db
+  [2026-11-16T11:58:44.973Z] [EVENT] [Worker 1] Database opened: test-db
+  [2026-11-16T11:58:45.082Z] [EVENT] [Frontend] Databases page loaded
+  [2026-11-16T11:58:45.085Z] [INFO] [Frontend] test-navigate: navigating to /databases
+  [2026-11-16T11:58:45.464Z] [EVENT] [Frontend] Databases page loaded
+FAILED: 8-share-database (exit 1). Its files are in /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T//photosphere-tests/photosphere-app-8-share-database-AW0PTH
+=== RESULT side-A run 5 exit code: 1
