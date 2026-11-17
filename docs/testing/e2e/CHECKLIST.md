@@ -70,29 +70,29 @@ Run the story player and check every story cycles through without failures, then
 - [x] [verify-full](cli/verify/verify-full.md)
 
 ### Remove
-- [ ] [remove-asset-by-id](cli/remove/remove-asset-by-id.md)
+- [x] [remove-asset-by-id](cli/remove/remove-asset-by-id.md)
 
 ### Compare
-- [ ] [compare-after-changes](cli/compare/compare-after-changes.md)
-- [ ] [compare-identical](cli/compare/compare-identical.md)
+- [x] [compare-after-changes](cli/compare/compare-after-changes.md)
+- [x] [compare-identical](cli/compare/compare-identical.md)
 
 ### Sync
-- [ ] [sync-copy-to-original](cli/sync/sync-copy-to-original.md)
-- [ ] [sync-delete-asset-copy](cli/sync/sync-delete-asset-copy.md)
-- [ ] [sync-delete-asset-original](cli/sync/sync-delete-asset-original.md)
-- [ ] [sync-edit-field-copy](cli/sync/sync-edit-field-copy.md)
-- [ ] [sync-edit-field-original](cli/sync/sync-edit-field-original.md)
-- [ ] [sync-original-to-copy](cli/sync/sync-original-to-copy.md)
+- [x] [sync-copy-to-original](cli/sync/sync-copy-to-original.md)
+- [x] [sync-delete-asset-copy](cli/sync/sync-delete-asset-copy.md)
+- [x] [sync-delete-asset-original](cli/sync/sync-delete-asset-original.md)
+- [x] [sync-edit-field-copy](cli/sync/sync-edit-field-copy.md)
+- [x] [sync-edit-field-original](cli/sync/sync-edit-field-original.md)
+- [x] [sync-original-to-copy](cli/sync/sync-original-to-copy.md)
 
 ### Move
-- [ ] [move-file-between-databases](cli/move/move-file-between-databases.md)
+- [-] [move-file-between-databases](cli/move/move-file-between-databases.md)
 
 ### Replication
-- [ ] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
-- [ ] [replicate-full-copy](cli/replication/replicate-full-copy.md)
-- [ ] [replicate-incremental-changes](cli/replication/replicate-incremental-changes.md)
-- [ ] [replicate-no-changes](cli/replication/replicate-no-changes.md)
-- [ ] [replicate-partial-copy](cli/replication/replicate-partial-copy.md)
+- [x] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
+- [x] [replicate-full-copy](cli/replication/replicate-full-copy.md)
+- [x] [replicate-incremental-changes](cli/replication/replicate-incremental-changes.md)
+- [x] [replicate-no-changes](cli/replication/replicate-no-changes.md)
+- [x] [replicate-partial-copy](cli/replication/replicate-partial-copy.md)
 - [ ] [replicate-unrelated-fails](cli/replication/replicate-unrelated-fails.md)
 
 ### Upgrade
@@ -189,7 +189,7 @@ Run the story player and check every story cycles through without failures, then
 - [ ] [download-single-asset](desktop/download/download-single-asset.md)
 
 ### Replication
-- [ ] [replicate-full-copy](desktop/replication/replicate-full-copy.md)
+- [x] [replicate-full-copy](desktop/replication/replicate-full-copy.md)
 - [ ] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
 
 ### Database

@@ -53,6 +53,8 @@ Upcoming version: 0.0.9
 #### move-file-between-databases
 
 - Failed at Test step 1: `psi move` printed `error: unknown command 'move'`. The source still lists `test.jpg` and the destination is empty.
+- Linux: failed again at Test step 1. `psi move test/test.jpg --db ... --dest ...` printed `error: unknown command 'move'` and `(Did you mean remove?)`, and exited 1. `psi help` lists no `move` command.
+- The `psi move` command is not yet implemented.
 
 ### Replication
 
@@ -63,6 +65,10 @@ Upcoming version: 0.0.9
 #### replicate-partial-copy
 
 - Failed at Test step 1: files were expected to be copied, and it reported `Total files copied: 0`. Step 2 then printed `No files found in the database.` where `test.jpg` was expected. Steps 3 and 4 passed.
+- Linux: failed again at Test step 1. The partial replicate reported `Total files copied: 0` and `Total records copied: 0`, then `✅ Replication completed successfully`. Step 2 printed `No files found in the database.` where `test.jpg` was expected. No errors in the errors logs.
+- `psi list` needs work for partial databases: it should show the real file list even when no files were replicated, but it reads only the local disk, where a partial replica holds no records.
+- A partial replica copying 0 files and 0 records is intended: the files are fetched lazily. The "files copied" expectation in step 1 does not hold for a partial replica.
+- Linux: passed with the `psi list` problem above. Steps 3 and 4 passed: `psi verify` on the replica passed with `Files imported: 1` and 0 failures, and `psi origin` showed the source path. No errors in the errors logs.
 
 #### replicate-unrelated-fails
 
