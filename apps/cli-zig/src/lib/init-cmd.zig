@@ -333,7 +333,7 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, log: ILog, 
     }
 
     if (nonInteractive) {
-        log.@"error"(try pc.red(allocator, "\u{2717} S3 credentials are required. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or run interactively to configure credentials."));
+        log.err(try pc.red(allocator, "\u{2717} S3 credentials are required. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or run interactively to configure credentials."));
         exit(io, log, 1);
     }
 
@@ -344,7 +344,7 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, log: ILog, 
     });
 
     if (isCancel(shouldConfigure) or !shouldConfigure.value) {
-        log.@"error"(try pc.red(allocator, "S3 credentials are required."));
+        log.err(try pc.red(allocator, "S3 credentials are required."));
         exit(io, log, 1);
     }
 
@@ -784,9 +784,9 @@ pub fn resolveDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, log: ILog,
     }
 
     if (nameMatches.items.len > 1) {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Ambiguous database name \"{s}\" \u{2014} matches {d} entries:", .{ dbValue, nameMatches.items.len })));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Ambiguous database name \"{s}\" \u{2014} matches {d} entries:", .{ dbValue, nameMatches.items.len })));
         for (nameMatches.items) |match| {
-            log.@"error"(try std.fmt.allocPrint(allocator, "  \u{2022} {s} \u{2192} {s}", .{ match.name, match.path }));
+            log.err(try std.fmt.allocPrint(allocator, "  \u{2022} {s} \u{2192} {s}", .{ match.name, match.path }));
         }
         exit(io, log, 1);
     }

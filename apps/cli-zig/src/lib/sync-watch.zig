@@ -78,7 +78,7 @@ pub fn runSyncWatch(allocator: std.mem.Allocator, io: std.Io, log: ILog, options
             }
         }
         else |err| {
-            log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Sync failed: {s}", .{errorMessage(err)})));
+            log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Sync failed: {s}", .{errorMessage(err)})));
         }
 
         if (options.isStopped(options.context)) {

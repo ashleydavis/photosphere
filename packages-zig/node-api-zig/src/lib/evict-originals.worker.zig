@@ -330,7 +330,7 @@ pub fn evictOriginalsHandler(
         // selected an unconfirmed asset would delete the user's only copy, so it is checked here as
         // well as inside every policy.
         if (!confirmedAssetIds.contains(assetId)) {
-            log.@"error"(try std.fmt.allocPrint(allocator, "Retention policy selected asset {s} for eviction, but the origin does not hold a matching original. Keeping it.", .{assetId}));
+            log.err(try std.fmt.allocPrint(allocator, "Retention policy selected asset {s} for eviction, but the origin does not hold a matching original. Keeping it.", .{assetId}));
             continue;
         }
 

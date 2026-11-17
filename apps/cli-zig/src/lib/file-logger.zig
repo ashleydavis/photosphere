@@ -377,7 +377,7 @@ pub const FileLogger = struct {
     const vtable: ILog.VTable = .{
         .info = infoErased,
         .verbose = verboseErased,
-        .@"error" = errorErased,
+        .err = errorErased,
         .exception = exceptionErased,
         .warn = warnErased,
         .debug = debugErased,
@@ -414,25 +414,25 @@ pub const FileLogger = struct {
     //
     // Logs an error message.
     //
-    pub fn @"error"(self: *FileLogger, message: []const u8) void {
+    pub fn err(self: *FileLogger, message: []const u8) void {
         self.writeToFile("error", message);
         self.writeToErrorFile("error", message);
-        self.consoleLogger.@"error"(message);
+        self.consoleLogger.err(message);
     }
 
     //
     // Logs a message and an error with its cause chain.
     //
-    pub fn exception(self: *FileLogger, message: []const u8, err: anyerror) void {
+    pub fn exception(self: *FileLogger, message: []const u8, cause: anyerror) void {
         var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
         defer arena.deinit();
         var allocating_writer = std.Io.Writer.Allocating.init(arena.allocator());
         allocating_writer.writer.print("{s}\nStack trace: ", .{message}) catch {};
-        utils.wrapped_error.writeErrorChain(&allocating_writer.writer, err) catch {};
+        utils.wrapped_error.writeErrorChain(&allocating_writer.writer, cause) catch {};
         const fullMessage = allocating_writer.written();
         self.writeToFile("exception", fullMessage);
         self.writeToErrorFile("exception", fullMessage);
-        self.consoleLogger.exception(message, err);
+        self.consoleLogger.exception(message, cause);
     }
 
     //
@@ -595,19 +595,19 @@ pub const FileLogger = struct {
     }
 
     //
-    // ILog.error for this implementation.
+    // ILog.err for this implementation.
     //
     fn errorErased(ptr: *anyopaque, message: []const u8) void {
         const self: *FileLogger = @ptrCast(@alignCast(ptr));
-        self.@"error"(message);
+        self.err(message);
     }
 
     //
     // ILog.exception for this implementation.
     //
-    fn exceptionErased(ptr: *anyopaque, message: []const u8, err: anyerror) void {
+    fn exceptionErased(ptr: *anyopaque, message: []const u8, cause: anyerror) void {
         const self: *FileLogger = @ptrCast(@alignCast(ptr));
-        self.exception(message, err);
+        self.exception(message, cause);
     }
 
     //

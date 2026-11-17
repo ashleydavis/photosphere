@@ -35,10 +35,10 @@ pub const IHashCacheCommandOptions = struct {
 //
 pub fn hashCacheCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IHashCacheCommandOptions) !void {
     showHashCache(allocator, io, log, context, options) catch |err| {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "Error reading hash cache: {s}", .{errorMessage(err)})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "Error reading hash cache: {s}", .{errorMessage(err)})));
         if (options.base.verbose orelse false) {
             // Zig errors carry no stack trace, so the error chain stands in for `err.stack`.
-            log.@"error"(try pc.red(allocator, try formatErrorChain(allocator, err)));
+            log.err(try pc.red(allocator, try formatErrorChain(allocator, err)));
         }
         exit(io, log, 1);
     };

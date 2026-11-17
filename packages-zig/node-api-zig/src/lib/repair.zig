@@ -176,7 +176,7 @@ const RepairState = struct {
     //
     fn repairFile(self: *RepairState, log: ILog, fileName: []const u8, expectedHash: []const u8) !bool {
         return self.tryRepairFile(log, fileName, expectedHash) catch |err| {
-            log.@"error"(try std.fmt.allocPrint(self.allocator, "Error repairing file {s}: {s}", .{ fileName, errors.errorMessage(err) }));
+            log.err(try std.fmt.allocPrint(self.allocator, "Error repairing file {s}: {s}", .{ fileName, errors.errorMessage(err) }));
             return false;
         };
     }

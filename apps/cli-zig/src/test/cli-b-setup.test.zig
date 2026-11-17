@@ -294,7 +294,7 @@ test "nothing after close reaches the log files, and an error after close is not
     const afterCloseLength = (try environment.readFile(environment.logger.getLogFilePath())).len;
     environment.logger.info("late info");
     environment.logger.warn("late warning");
-    environment.logger.@"error"("late error");
+    environment.logger.err("late error");
     try std.testing.expect(!environment.logger.hasLoggedErrors());
 
     const content = try environment.readFile(environment.logger.getLogFilePath());

@@ -341,7 +341,7 @@ pub fn getDirectoryForCommand(
         else {
             // Current directory is not empty, skip asking and go straight to picker in interactive mode
             if (nonInteractive) {
-                log.@"error"(try pc.red(allocator, "Current directory is not empty. Please specify an empty directory or use a different location."));
+                log.err(try pc.red(allocator, "Current directory is not empty. Please specify an empty directory or use a different location."));
                 exit(io, log, 1);
             }
         }
@@ -355,10 +355,10 @@ pub fn getDirectoryForCommand(
     // If non-interactive and we get here, we can't proceed
     if (nonInteractive) {
         if (commandType == .init) {
-            log.@"error"(try pc.red(allocator, "Current directory is not empty. Please specify an empty directory or use a different location."));
+            log.err(try pc.red(allocator, "Current directory is not empty. Please specify an empty directory or use a different location."));
         }
         else {
-            log.@"error"(try pc.red(allocator, "Current directory is not a media database. Please specify a valid media database directory."));
+            log.err(try pc.red(allocator, "Current directory is not a media database. Please specify a valid media database directory."));
         }
         exit(io, log, 1);
     }

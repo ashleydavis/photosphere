@@ -600,7 +600,7 @@ pub const HashCache = struct {
         // File exists - read and decode it.
         const fileBytes = try std.Io.Dir.cwd().readFileAlloc(io, cachePath, allocator, .unlimited);
         const entries = try decodeEntries(allocator, fileBytes) orelse {
-            log.@"error"(try std.fmt.allocPrint(allocator, "Hash cache at {s} is unusable (too small, an unsupported version, corrupted, or failing its checksum) - starting with a fresh cache", .{cachePath}));
+            log.err(try std.fmt.allocPrint(allocator, "Hash cache at {s} is unusable (too small, an unsupported version, corrupted, or failing its checksum) - starting with a fresh cache", .{cachePath}));
             try self.initializeFreshCache();
             return false;
         };
@@ -673,7 +673,7 @@ pub const HashCache = struct {
         var index: u32 = 0;
         while (index < self.entryCount) : (index += 1) {
             if (offset + 4 > buffer.len) {
-                log.@"error"("Hash cache may be corrupted: insufficient data for entry");
+                log.err("Hash cache may be corrupted: insufficient data for entry");
                 try self.initializeFreshCache();
                 return;
             }
@@ -683,7 +683,7 @@ pub const HashCache = struct {
             const size = entrySize(keyLength);
 
             if (offset + size > buffer.len) {
-                log.@"error"("Hash cache may be corrupted: entry extends beyond buffer");
+                log.err("Hash cache may be corrupted: entry extends beyond buffer");
                 try self.initializeFreshCache();
                 return;
             }

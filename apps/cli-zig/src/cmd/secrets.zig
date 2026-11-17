@@ -91,7 +91,7 @@ fn checkVaultPrereqs(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void 
     const vault = try getVault(getDefaultVaultType());
     const result = try vault.checkPrereqs(allocator, io);
     if (!result.ok) {
-        log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} {s}", .{result.message orelse "undefined"})));
+        log.err(try pc.red(allocator, try format(allocator, "\u{2717} {s}", .{result.message orelse "undefined"})));
         exit(io, log, 1);
     }
 }
@@ -310,20 +310,20 @@ pub fn secretsAdd(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOption
 
     if (cmdOptions.yes orelse false) {
         if (cmdOptions.name == null or cmdOptions.name.?.len == 0 or cmdOptions.type == null or cmdOptions.type.?.len == 0 or cmdOptions.value == null or cmdOptions.value.?.len == 0) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --name, --type, and --value are required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --name, --type, and --value are required with --yes"));
             exit(io, log, 1);
         }
 
         cmdOptions.name = trim(cmdOptions.name.?);
 
         if (!isSecretType(cmdOptions.type.?)) {
-            log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} Invalid secret type \"{s}\". Must be one of: {s}", .{ cmdOptions.type.?, try std.mem.join(allocator, ", ", &SECRET_TYPES) })));
+            log.err(try pc.red(allocator, try format(allocator, "\u{2717} Invalid secret type \"{s}\". Must be one of: {s}", .{ cmdOptions.type.?, try std.mem.join(allocator, ", ", &SECRET_TYPES) })));
             exit(io, log, 1);
         }
 
         const existing = try vault.get(allocator, io, cmdOptions.name.?);
         if (existing != null) {
-            log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} A secret named \"{s}\" already exists. Use \"secrets edit\" to update it.", .{cmdOptions.name.?})));
+            log.err(try pc.red(allocator, try format(allocator, "\u{2717} A secret named \"{s}\" already exists. Use \"secrets edit\" to update it.", .{cmdOptions.name.?})));
             exit(io, log, 1);
         }
 
@@ -507,7 +507,7 @@ pub fn secretsView(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptio
 
     if (secretName == null) {
         if (cmdOptions.yes orelse false) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --name is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --name is required with --yes"));
             exit(io, log, 1);
         }
 
@@ -517,7 +517,7 @@ pub fn secretsView(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptio
     }
 
     const secret = try vault.get(allocator, io, secretName.?) orelse {
-        log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} No secret named \"{s}\" found.", .{secretName.?})));
+        log.err(try pc.red(allocator, try format(allocator, "\u{2717} No secret named \"{s}\" found.", .{secretName.?})));
         try logSimilarSecretNames(allocator, io, log, secretName.?);
         exit(io, log, 1);
     };
@@ -592,7 +592,7 @@ pub fn secretsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptio
 
     if (secretName == null) {
         if (cmdOptions.yes orelse false) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --name is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --name is required with --yes"));
             exit(io, log, 1);
         }
 
@@ -602,7 +602,7 @@ pub fn secretsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptio
     }
 
     const secret = try vault.get(allocator, io, secretName.?) orelse {
-        log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} No secret named \"{s}\" found.", .{secretName.?})));
+        log.err(try pc.red(allocator, try format(allocator, "\u{2717} No secret named \"{s}\" found.", .{secretName.?})));
         try logSimilarSecretNames(allocator, io, log, secretName.?);
         exit(io, log, 1);
     };
@@ -623,7 +623,7 @@ pub fn secretsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptio
         const hasValue = cmdOptions.value != null and cmdOptions.value.?.len > 0;
         const hasValueFile = cmdOptions.valueFile != null and cmdOptions.valueFile.?.len > 0;
         if (!hasNewName and !hasValue and !hasValueFile) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --new-name, --value, or --value-file is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --new-name, --value, or --value-file is required with --yes"));
             exit(io, log, 1);
         }
 
@@ -631,7 +631,7 @@ pub fn secretsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptio
 
         if (hasValueFile) {
             if (!pathExists(io, cmdOptions.valueFile.?)) {
-                log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} File not found: {s}", .{cmdOptions.valueFile.?})));
+                log.err(try pc.red(allocator, try format(allocator, "\u{2717} File not found: {s}", .{cmdOptions.valueFile.?})));
                 exit(io, log, 1);
             }
 
@@ -727,7 +727,7 @@ pub fn secretsRemove(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOpt
 
     if (secretName == null) {
         if (cmdOptions.yes orelse false) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --name is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --name is required with --yes"));
             exit(io, log, 1);
         }
 
@@ -739,7 +739,7 @@ pub fn secretsRemove(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOpt
     const secret = try vault.get(allocator, io, secretName.?);
 
     if (secret == null) {
-        log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} No secret named \"{s}\" found.", .{secretName.?})));
+        log.err(try pc.red(allocator, try format(allocator, "\u{2717} No secret named \"{s}\" found.", .{secretName.?})));
         try logSimilarSecretNames(allocator, io, log, secretName.?);
         exit(io, log, 1);
     }
@@ -827,13 +827,13 @@ pub fn secretsImport(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOpt
     try checkVaultPrereqs(allocator, io, log);
     if (cmdOptions.yes orelse false) {
         if (cmdOptions.privateKey == null or cmdOptions.privateKey.?.len == 0) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --private-key is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --private-key is required with --yes"));
             exit(io, log, 1);
         }
 
         const privatePath = trim(cmdOptions.privateKey.?);
         if (!pathExists(io, privatePath)) {
-            log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} File not found: {s}", .{privatePath})));
+            log.err(try pc.red(allocator, try format(allocator, "\u{2717} File not found: {s}", .{privatePath})));
             exit(io, log, 1);
         }
 
@@ -934,7 +934,7 @@ fn networkRequirementNote(allocator: std.mem.Allocator, io: std.Io) !void {
 //
 pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *ISecretsSendOptions) !void {
     const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
         exit(io, log, 1);
     };
 
@@ -949,7 +949,7 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptio
     if (cmdOptions.name != null and cmdOptions.name.?.len > 0) {
         const secret = try vault.get(allocator, io, cmdOptions.name.?);
         if (secret == null) {
-            log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} No secret named \"{s}\" found.", .{cmdOptions.name.?})));
+            log.err(try pc.red(allocator, try format(allocator, "\u{2717} No secret named \"{s}\" found.", .{cmdOptions.name.?})));
             try logSimilarSecretNames(allocator, io, log, cmdOptions.name.?);
             exit(io, log, 1);
         }
@@ -1034,7 +1034,7 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptio
         try outro(io, try pc.green(allocator, "\u{2713} Secret sent successfully!"), .{});
     }
     else {
-        log.@"error"(try pc.red(allocator, "\u{2717} Pairing code rejected by receiver."));
+        log.err(try pc.red(allocator, "\u{2717} Pairing code rejected by receiver."));
         exit(io, log, 1);
     }
 }
@@ -1058,7 +1058,7 @@ fn payloadString(payload: std.json.Value, field: []const u8) ![]const u8 {
 //
 pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *ISecretsReceiveOptions) !void {
     const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
         exit(io, log, 1);
     };
 
@@ -1075,7 +1075,7 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOp
 
     if (skipPrompts) {
         if (cmdOptions.code == null or cmdOptions.code.?.len == 0) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --code is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --code is required with --yes"));
             exit(io, log, 1);
         }
         code = cmdOptions.code.?;

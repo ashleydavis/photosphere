@@ -411,7 +411,7 @@ fn upgradeLocked(
                 log.info(try pc.green(allocator, "\u{2713} Wrote public key to database directory"));
             }
             else |err| {
-                log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "Warning: Could not write public key to database directory: {s}", .{errorMessage(err)})));
+                log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "Warning: Could not write public key to database directory: {s}", .{errorMessage(err)})));
             }
         }
 

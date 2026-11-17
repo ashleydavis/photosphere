@@ -723,11 +723,11 @@ fn handleServerMessage(io: std.Io, allocator: std.mem.Allocator, log: utils.log.
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const parsed = std.json.parseFromSliceLeaky(std.json.Value, arena_state.allocator(), message.text, .{}) catch {
-        log.@"error"("The HTTP server was sent a message that is not JSON");
+        log.err("The HTTP server was sent a message that is not JSON");
         return true;
     };
     const key = json.getString(parsed, "key") orelse {
-        log.@"error"("The HTTP server was sent a message with no key");
+        log.err("The HTTP server was sent a message with no key");
         return true;
     };
     if (message.from != from_owner) {

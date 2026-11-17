@@ -41,7 +41,7 @@ fn loadNewsStateUnsafe(allocator: std.mem.Allocator, io: std.Io, state_path: []c
 //
 pub fn loadNewsState(allocator: std.mem.Allocator, io: std.Io, log: ILog, state_path: []const u8) !INewsState {
     return loadNewsStateUnsafe(allocator, io, state_path) catch |err| {
-        log.@"error"(try std.fmt.allocPrint(allocator, "The news state could not be read, carrying on with an empty one: {s}: {s}", .{
+        log.err(try std.fmt.allocPrint(allocator, "The news state could not be read, carrying on with an empty one: {s}: {s}", .{
             if (err == error.Thrown or err == error.FatalError) errors.lastErrorName() else "Error",
             errors.errorMessage(err),
         }));

@@ -3290,7 +3290,7 @@ pub fn handleError(allocator: std.mem.Allocator, log: utils.log.ILog, err: anyer
     if (FatalError.isInstance(err)) {
         const red = pc.red(allocator, utils.errors.errorMessage(err)) catch utils.errors.errorMessage(err);
         const message = std.fmt.allocPrint(allocator, "\n\n{s}", .{red}) catch red;
-        log.@"error"(message);
+        log.err(message);
         return;
     }
 

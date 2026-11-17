@@ -478,7 +478,7 @@ fn extractNestedZip(
     // Verify the file was written correctly
     const zipStats = try statPath(io, tempZipPath.*.?);
     if (zipStats.size == 0) {
-        log.@"error"(try std.fmt.allocPrint(allocator, "Extracted nested zip file \"{s}\" from {s} is empty (0 bytes), skipping", .{ fileName, displayPath }));
+        log.err(try std.fmt.allocPrint(allocator, "Extracted nested zip file \"{s}\" from {s} is empty (0 bytes), skipping", .{ fileName, displayPath }));
         state.numFilesFailed += 1;
         log.verbose(try std.fmt.allocPrint(allocator, "Keeping temporary zip file \"{s}\" for inspection due to error", .{tempZipPath.*.?}));
         return;
@@ -532,7 +532,7 @@ fn extractFile(
     // Verify the file was written correctly
     const stats = try statPath(io, tempFilePath.*.?);
     if (stats.size == 0) {
-        log.@"error"(try std.fmt.allocPrint(allocator, "Extracted file \"{s}\" from zip {s} is empty (0 bytes), skipping", .{ fileName, displayPath }));
+        log.err(try std.fmt.allocPrint(allocator, "Extracted file \"{s}\" from zip {s} is empty (0 bytes), skipping", .{ fileName, displayPath }));
         state.numFilesFailed += 1;
         log.verbose(try std.fmt.allocPrint(allocator, "Keeping temporary file \"{s}\" for inspection due to error", .{tempFilePath.*.?}));
         return;

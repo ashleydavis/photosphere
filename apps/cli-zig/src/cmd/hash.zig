@@ -39,7 +39,7 @@ pub const IHashCommandOptions = struct {
 //
 pub fn hashCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, options: *const IHashCommandOptions) !void {
     if (filePath.len == 0) {
-        log.@"error"(try pc.red(allocator, "File path is required."));
+        log.err(try pc.red(allocator, "File path is required."));
         exit(io, log, 1);
     }
 
@@ -61,7 +61,7 @@ pub fn hashCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath
     }
 
     const fileInfo = try storage.info(allocator, io, fileName) orelse {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "File not found: {s}", .{filePath})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "File not found: {s}", .{filePath})));
         exit(io, log, 1);
     };
 

@@ -120,7 +120,7 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, contex
         const config = try loadDatabaseConfig(allocator, io, log, target.rawAssetStorage);
         sourcePath = configOrigin(config);
         if (sourcePath == null) {
-            log.@"error"(try pc.red(allocator, "Source database path is required for repair command. Specify --source or set an origin (psi set-origin <path>)."));
+            log.err(try pc.red(allocator, "Source database path is required for repair command. Specify --source or set an origin (psi set-origin <path>)."));
             exit(io, log, 1);
         }
     }

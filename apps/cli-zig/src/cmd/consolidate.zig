@@ -126,7 +126,7 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, c
     const localTree = try loadMerkleTree(allocator, io, log, localStorage);
     const remoteTree = try loadMerkleTree(allocator, io, log, remoteStorage);
     if (localTree == null or remoteTree == null) {
-        log.@"error"(try pc.red(allocator, "\u{2717} Could not read the merkle tree of one of the databases."));
+        log.err(try pc.red(allocator, "\u{2717} Could not read the merkle tree of one of the databases."));
         exit(io, log, 1);
         return;
     }
@@ -168,7 +168,7 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, c
 
         if (taskResult == null or taskResult.?.status != TaskStatus.Succeeded) {
             const errorMessage = if (taskResult) |failedResult| failedResult.errorMessage orelse "the task did not finish" else "the task did not finish";
-            log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Consolidation failed: {s}", .{errorMessage})));
+            log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Consolidation failed: {s}", .{errorMessage})));
             exit(io, log, 1);
             return;
         }

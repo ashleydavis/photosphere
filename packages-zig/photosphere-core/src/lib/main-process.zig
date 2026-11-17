@@ -515,7 +515,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
             }
         }
         else if (end.status == .failed) {
-            log.@"error"(try std.fmt.allocPrint(arena, "The background {s} pass failed: {s}", .{ pass.label(), errorMessageOrUnknown(end.error_message) }));
+            log.err(try std.fmt.allocPrint(arena, "The background {s} pass failed: {s}", .{ pass.label(), errorMessageOrUnknown(end.error_message) }));
         }
         state.backgroundPassEnded(services, timers, io, allocator, pass, result);
     }
@@ -543,7 +543,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
                 .ignore_unknown_fields = true,
             }) catch main_state.IEnsureAutoImportData{};
             const what = if (given.restarting) "restarting" else "starting";
-            log.@"error"(try std.fmt.allocPrint(arena, "Error {s} automatic import: {s}", .{ what, errorMessageOrUnknown(end.error_message) }));
+            log.err(try std.fmt.allocPrint(arena, "Error {s} automatic import: {s}", .{ what, errorMessageOrUnknown(end.error_message) }));
         }
         else if (end.status == .succeeded) {
             if (end.result_json) |text| {
@@ -584,7 +584,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
             main_state.freeOwned(allocator, &state.auto_import_database_path);
             main_state.freeOwned(allocator, &state.auto_import_settings_json);
             if (end.status != .succeeded) {
-                log.@"error"(try std.fmt.allocPrint(arena, "Automatic import stopped: {s}", .{errorMessageOrUnknown(end.error_message)}));
+                log.err(try std.fmt.allocPrint(arena, "Automatic import stopped: {s}", .{errorMessageOrUnknown(end.error_message)}));
             }
             return;
         }

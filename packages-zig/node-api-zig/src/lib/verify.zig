@@ -208,7 +208,7 @@ const VerifyState = struct {
                 log.exception(message, error.Thrown);
             }
             else {
-                log.@"error"(message);
+                log.err(message);
             }
             self.result.numFailures += 1;
         }

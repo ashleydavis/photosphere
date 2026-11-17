@@ -203,7 +203,7 @@ test "error, warn and exception go to both files and the error file ends with a 
     const logger = try fixture.createLogger(consoleLog);
     defer logger.deinit();
     const log = logger.ilog();
-    log.@"error"("an error line");
+    log.err("an error line");
     log.warn("a warn line");
     log.exception("an exception line", error.OutOfMemory);
     try std.testing.expect(logger.hasLoggedErrors());
@@ -254,7 +254,7 @@ test "nothing is logged after close, and closing again does nothing" {
     defer logger.deinit();
     try logger.close();
     logger.ilog().info("too late");
-    logger.ilog().@"error"("too late as well");
+    logger.ilog().err("too late as well");
     try logger.close();
     const log_text = try readFile(logger.getLogFilePath());
     defer std.testing.allocator.free(log_text);

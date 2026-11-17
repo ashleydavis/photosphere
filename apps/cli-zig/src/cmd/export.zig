@@ -112,7 +112,7 @@ pub fn exportCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, contex
     const assetStorage = try openLazyOriginStorage(allocator, io, log, "", localStorage, rawAssetStorage, null);
 
     const asset = try metadataCollection.getOne(io, log, assetId) orelse {
-        log.@"error"(try std.fmt.allocPrint(allocator, "Asset {s} not found in database.", .{assetId}));
+        log.err(try std.fmt.allocPrint(allocator, "Asset {s} not found in database.", .{assetId}));
         exit(io, log, 1);
     };
 

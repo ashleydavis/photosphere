@@ -288,7 +288,7 @@ fn logDidYouMean(allocator: std.mem.Allocator, log: ILog, similarNames: []const 
 // and exits with code 1 (the shared not-found branch of view, remove and send).
 //
 fn exitNoMatchingDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, name: ?[]const u8) !noreturn {
-    log.@"error"(try pc.red(allocator, "\u{2717} No database matching the given name or path was found."));
+    log.err(try pc.red(allocator, "\u{2717} No database matching the given name or path was found."));
     if (isGiven(name)) {
         try logDidYouMean(allocator, log, try findSimilarDatabaseNames(allocator, io, name.?));
     }
@@ -305,7 +305,7 @@ fn checkSecretsExist(allocator: std.mem.Allocator, io: std.Io, log: ILog, encryp
         const vault = try getVault(getDefaultVaultType());
         const encryptionKeySecret = try vault.get(allocator, io, encryptionKey.?);
         if (encryptionKeySecret == null) {
-            log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} Encryption key \"{s}\" not found in vault.", .{encryptionKey.?})));
+            log.err(try pc.red(allocator, try format(allocator, "\u{2717} Encryption key \"{s}\" not found in vault.", .{encryptionKey.?})));
             try logDidYouMean(allocator, log, try findSimilarKeyNames(allocator, io, encryptionKey.?));
             exit(io, log, 1);
         }
@@ -315,7 +315,7 @@ fn checkSecretsExist(allocator: std.mem.Allocator, io: std.Io, log: ILog, encryp
         const vault = try getVault(getDefaultVaultType());
         const s3CredSecret = try vault.get(allocator, io, s3Cred.?);
         if (s3CredSecret == null) {
-            log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} S3 credential \"{s}\" not found in vault.", .{s3Cred.?})));
+            log.err(try pc.red(allocator, try format(allocator, "\u{2717} S3 credential \"{s}\" not found in vault.", .{s3Cred.?})));
             try logDidYouMean(allocator, log, try findSimilarSecretNames(allocator, io, s3Cred.?, "s3-credentials"));
             exit(io, log, 1);
         }
@@ -325,7 +325,7 @@ fn checkSecretsExist(allocator: std.mem.Allocator, io: std.Io, log: ILog, encryp
         const vault = try getVault(getDefaultVaultType());
         const geocodingKeySecret = try vault.get(allocator, io, geocodingKey.?);
         if (geocodingKeySecret == null) {
-            log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} Geocoding API key \"{s}\" not found in vault.", .{geocodingKey.?})));
+            log.err(try pc.red(allocator, try format(allocator, "\u{2717} Geocoding API key \"{s}\" not found in vault.", .{geocodingKey.?})));
             try logDidYouMean(allocator, log, try findSimilarSecretNames(allocator, io, geocodingKey.?, "api-key"));
             exit(io, log, 1);
         }
@@ -553,7 +553,7 @@ fn resolveUniqueSecretName(allocator: std.mem.Allocator, io: std.Io, log: ILog, 
         if (conflict == null) {
             return candidate;
         }
-        log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} A secret named \"{s}\" already exists in the vault. Choose a different name.", .{candidate})));
+        log.err(try pc.red(allocator, try format(allocator, "\u{2717} A secret named \"{s}\" already exists in the vault. Choose a different name.", .{candidate})));
     }
 }
 
@@ -672,7 +672,7 @@ pub fn dbsList(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
 pub fn dbsAdd(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsAddOptions) !void {
     if (cmdOptions.yes orelse false) {
         if (!isGiven(cmdOptions.name) or !isGiven(cmdOptions.path)) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --name and --path are required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --name and --path are required with --yes"));
             exit(io, log, 1);
         }
 
@@ -692,7 +692,7 @@ pub fn dbsAdd(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *
         };
 
         if (try findDatabase(allocator, io, entry.name)) |existing| {
-            log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists ({s}). Use a different name or remove the existing entry first.", .{ entry.name, existing.path })));
+            log.err(try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists ({s}). Use a different name or remove the existing entry first.", .{ entry.name, existing.path })));
             exit(io, log, 1);
         }
 
@@ -788,7 +788,7 @@ pub fn dbsView(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: 
 
     if (!isGiven(cmdOptions.name) and !isGiven(cmdOptions.path)) {
         if (cmdOptions.yes orelse false) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --name or --path is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --name or --path is required with --yes"));
             exit(io, log, 1);
         }
 
@@ -840,7 +840,7 @@ pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: 
 
     if (!isGiven(cmdOptions.name)) {
         if (cmdOptions.yes orelse false) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --name is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --name is required with --yes"));
             exit(io, log, 1);
         }
 
@@ -864,7 +864,7 @@ pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: 
     }
 
     const found = entry orelse {
-        log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} No database named \"{s}\" found.", .{cmdOptions.name orelse "undefined"})));
+        log.err(try pc.red(allocator, try format(allocator, "\u{2717} No database named \"{s}\" found.", .{cmdOptions.name orelse "undefined"})));
         try logDidYouMean(allocator, log, try findSimilarDatabaseNames(allocator, io, cmdOptions.name orelse "undefined"));
         exit(io, log, 1);
     };
@@ -966,7 +966,7 @@ pub fn dbsRemove(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions
 
     if (!isGiven(cmdOptions.name) and !isGiven(cmdOptions.path)) {
         if (cmdOptions.yes orelse false) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --name or --path is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --name or --path is required with --yes"));
             exit(io, log, 1);
         }
 
@@ -1217,7 +1217,7 @@ fn cancelReceiver(context: *anyopaque) void {
 //
 pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsSendOptions) !void {
     const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
         exit(io, log, 1);
     };
 
@@ -1269,7 +1269,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: 
             }
         }
         entry = selectedEntry orelse {
-            log.@"error"(try pc.red(allocator, "\u{2717} Database not found."));
+            log.err(try pc.red(allocator, "\u{2717} Database not found."));
             exit(io, log, 1);
         };
     }
@@ -1368,7 +1368,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: 
         try outro(io, try pc.green(allocator, "\u{2713} Database sent successfully!"), .{});
     }
     else {
-        log.@"error"(try pc.red(allocator, "\u{2717} Pairing code rejected by other device."));
+        log.err(try pc.red(allocator, "\u{2717} Pairing code rejected by other device."));
         exit(io, log, 1);
     }
 }
@@ -1496,7 +1496,7 @@ fn toDatabaseSharePayload(allocator: std.mem.Allocator, rawPayload: std.json.Val
 //
 pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsReceiveOptions) !void {
     const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
         exit(io, log, 1);
     };
 
@@ -1512,7 +1512,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOption
 
     if (skipPrompts) {
         if (!isGiven(cmdOptions.code)) {
-            log.@"error"(try pc.red(allocator, "\u{2717} --code is required with --yes"));
+            log.err(try pc.red(allocator, "\u{2717} --code is required with --yes"));
             exit(io, log, 1);
         }
         code = cmdOptions.code.?;
@@ -1636,7 +1636,7 @@ fn resolveDatabaseNameConflict(allocator: std.mem.Allocator, io: std.Io, log: IL
     };
 
     if (skipPrompts) {
-        log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists ({s}). Use a different name or remove the existing entry first.", .{ proposedName, collision.path })));
+        log.err(try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists ({s}). Use a different name or remove the existing entry first.", .{ proposedName, collision.path })));
         exit(io, log, 1);
     }
 
@@ -1693,6 +1693,6 @@ fn resolveDatabaseNameConflict(allocator: std.mem.Allocator, io: std.Io, log: IL
                 .replaceExisting = null,
             };
         }
-        log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists. Choose a different name.", .{trimmed})));
+        log.err(try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists. Choose a different name.", .{trimmed})));
     }
 }

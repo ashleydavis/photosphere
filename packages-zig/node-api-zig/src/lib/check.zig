@@ -131,7 +131,7 @@ const CheckPathsState = struct {
                 }
             }
             else {
-                log.@"error"(try std.fmt.allocPrint(allocator, "Failed to get hash for file {s}", .{inputs.logicalPath}));
+                log.err(try std.fmt.allocPrint(allocator, "Failed to get hash for file {s}", .{inputs.logicalPath}));
                 self.summary.filesFailed += 1;
             }
         }
@@ -144,7 +144,7 @@ const CheckPathsState = struct {
                 log.exception(message, error.Thrown);
             }
             else {
-                log.@"error"(message);
+                log.err(message);
             }
             self.summary.filesFailed += 1;
             self.summary.filesProcessed += 1;

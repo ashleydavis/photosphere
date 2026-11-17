@@ -110,7 +110,7 @@ pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog,
         }
         else |err| {
             errorCount += 1;
-            log.@"error"(try std.fmt.allocPrint(allocator, "Failed to delete {s}: {s}", .{ file, errorMessage(err) }));
+            log.err(try std.fmt.allocPrint(allocator, "Failed to delete {s}: {s}", .{ file, errorMessage(err) }));
         }
     }
 

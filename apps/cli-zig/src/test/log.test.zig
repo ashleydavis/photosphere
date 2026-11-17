@@ -38,7 +38,7 @@ test "the CLI's console log writes each kind of message to the right stream" {
     quiet.tool("magick", .{ .stdout = "out", .stderr = null });
     quiet.event("happened");
     quiet.warn("warning");
-    quiet.@"error"("failure");
+    quiet.err("failure");
     try std.testing.expect(!quiet.verboseEnabled());
     try std.testing.expectEqualStrings("info\n[EVENT] happened\n", capture.stdout.written());
     try std.testing.expectEqualStrings("warning\nfailure\n", capture.stderr.written());

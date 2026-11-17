@@ -125,7 +125,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, con
     const nonInteractive = options.base.yes orelse false;
 
     if ((options.partial orelse false) and (options.full orelse false)) {
-        log.@"error"(try pc.red(allocator, "\u{2717} --partial and --full cannot be used together. Please specify only one."));
+        log.err(try pc.red(allocator, "\u{2717} --partial and --full cannot be used together. Please specify only one."));
         exit(io, log, 1);
     }
 
@@ -213,12 +213,12 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, con
             // Database is encrypted - user must provide a key
             if (!isSet(options.destKey)) {
                 if (nonInteractive) {
-                    log.@"error"(try pc.red(allocator, "\u{2717} The destination database is encrypted and requires a private key to access."));
-                    log.@"error"(try pc.red(allocator, "  Please provide the private key using the --dest-key option."));
-                    log.@"error"("");
-                    log.@"error"("Example:");
-                    log.@"error"(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi replicate --dest-key my-photos.key --dest {s}", .{destDir}))}));
-                    log.@"error"(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi replicate --dest-key <full or relative path to key> --dest {s}", .{destDir}))}));
+                    log.err(try pc.red(allocator, "\u{2717} The destination database is encrypted and requires a private key to access."));
+                    log.err(try pc.red(allocator, "  Please provide the private key using the --dest-key option."));
+                    log.err("");
+                    log.err("Example:");
+                    log.err(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi replicate --dest-key my-photos.key --dest {s}", .{destDir}))}));
+                    log.err(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi replicate --dest-key <full or relative path to key> --dest {s}", .{destDir}))}));
                     exit(io, log, 1);
                 }
                 else {
@@ -234,7 +234,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, con
             // Verify the key works by trying to load encryption keys
             const verifyKeyPems = try resolveKeyPemsWithPrompt(allocator, io, options.destKey, nonInteractive, false);
             if (verifyKeyPems.len == 0) {
-                log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found. Use \"psi secrets list\" to see available keys.", .{options.destKey orelse "undefined"})));
+                log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found. Use \"psi secrets list\" to see available keys.", .{options.destKey orelse "undefined"})));
                 const similarKeyNames = try findSimilarKeyNames(allocator, io, options.destKey.?);
                 if (similarKeyNames.len > 0) {
                     log.info(try std.fmt.allocPrint(allocator, "Did you mean:\n{s}", .{try similarNamesList(allocator, similarKeyNames)}));
@@ -242,16 +242,16 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, con
                 exit(io, log, 1);
             }
             _ = loadEncryptionKeysFromPem(allocator, verifyKeyPems) catch |err| {
-                log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Failed to load encryption key: {s}", .{utils.errors.errorMessage(err)})));
-                log.@"error"(try pc.red(allocator, "  Please check that the key exists. Use \"psi secrets list\" to see available keys."));
+                log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Failed to load encryption key: {s}", .{utils.errors.errorMessage(err)})));
+                log.err(try pc.red(allocator, "  Please check that the key exists. Use \"psi secrets list\" to see available keys."));
                 exit(io, log, 1);
             };
         }
         else {
             // Database is not encrypted
             if (isSet(options.destKey)) {
-                log.@"error"(try pc.red(allocator, "\u{2717} You specified an encryption key, but the destination database is not encrypted."));
-                log.@"error"(try pc.red(allocator, "  Either remove the --dest-key option, or replicate to a different location to create a new encrypted database."));
+                log.err(try pc.red(allocator, "\u{2717} You specified an encryption key, but the destination database is not encrypted."));
+                log.err(try pc.red(allocator, "  Either remove the --dest-key option, or replicate to a different location to create a new encrypted database."));
                 exit(io, log, 1);
             }
         }
@@ -288,7 +288,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, con
     if (isSet(options.destKey)) {
         const destKeyPems = try resolveKeyPemsWithPrompt(allocator, io, options.destKey, nonInteractive, true);
         if (destKeyPems.len == 0) {
-            log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found. Use \"psi secrets list\" to see available keys.", .{options.destKey.?})));
+            log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found. Use \"psi secrets list\" to see available keys.", .{options.destKey.?})));
             const similarKeyNames = try findSimilarKeyNames(allocator, io, options.destKey.?);
             if (similarKeyNames.len > 0) {
                 log.info(try std.fmt.allocPrint(allocator, "Did you mean:\n{s}", .{try similarNamesList(allocator, similarKeyNames)}));
@@ -301,9 +301,9 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, con
     // If destination database exists, warn user and ask for confirmation (unless --ues is used)
     if (destDbExists and !(options.base.yes orelse false)) {
         if (nonInteractive) {
-            log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} The destination database already exists at {s}.", .{destDir})));
-            log.@"error"(try pc.red(allocator, "  Replication will overwrite any changes made to the destination database."));
-            log.@"error"(try pc.red(allocator, "  Use the --force flag to proceed without confirmation."));
+            log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} The destination database already exists at {s}.", .{destDir})));
+            log.err(try pc.red(allocator, "  Replication will overwrite any changes made to the destination database."));
+            log.err(try pc.red(allocator, "  Use the --force flag to proceed without confirmation."));
             exit(io, log, 1);
         }
         else {

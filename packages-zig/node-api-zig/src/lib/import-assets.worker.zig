@@ -1066,7 +1066,7 @@ const ImportRun = struct {
                 }
             }
             else if (taskResult.status == TaskStatus.Failed) {
-                log.@"error"(try std.fmt.allocPrint(allocator, "Failed to hash file \"{s}\": {s}", .{ hashFileData.logicalPath, taskResult.errorMessage orelse "undefined" }));
+                log.err(try std.fmt.allocPrint(allocator, "Failed to hash file \"{s}\": {s}", .{ hashFileData.logicalPath, taskResult.errorMessage orelse "undefined" }));
                 self.failedCount += 1;
                 try self.recordImportOutcome(log, .{
                     .assetId = hashFileData.assetId,
@@ -1116,7 +1116,7 @@ const ImportRun = struct {
                 self.releaseFile(log, uploadData.filePath);
             }
             else if (taskResult.status == TaskStatus.Failed) {
-                log.@"error"(try std.fmt.allocPrint(allocator, "Failed to upload file \"{s}\": {s}", .{ uploadData.logicalPath, taskResult.errorMessage orelse "undefined" }));
+                log.err(try std.fmt.allocPrint(allocator, "Failed to upload file \"{s}\": {s}", .{ uploadData.logicalPath, taskResult.errorMessage orelse "undefined" }));
                 self.failedCount += 1;
                 try self.recordImportOutcome(log, .{
                     .assetId = uploadData.assetId,
@@ -1600,7 +1600,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, timers: Tim
     while (run.pendingDatabaseUpdates.items.len > 0) {
         const processed = try run.processPendingDatabaseUpdates(log, run.pendingDatabaseUpdates.items);
         if (!processed) {
-            log.@"error"(try std.fmt.allocPrint(allocator, "Failed to acquire write lock for final {d} pending database updates; retrying.", .{run.pendingDatabaseUpdates.items.len}));
+            log.err(try std.fmt.allocPrint(allocator, "Failed to acquire write lock for final {d} pending database updates; retrying.", .{run.pendingDatabaseUpdates.items.len}));
             try run.waitAWhile(log, timers, 1000);
         }
         else {

@@ -29,7 +29,7 @@ const RecordingLog = struct {
     const vtable: utils.log.ILog.VTable = .{
         .info = info,
         .verbose = verbose,
-        .@"error" = logError,
+        .err = logError,
         .exception = exception,
         .warn = warn,
         .debug = debug,
@@ -156,7 +156,7 @@ test "a console log with no options writes info and event to stdout, error, warn
     log.debug("debug message");
     log.event("something happened");
     log.tool("some-tool", .{ .stdout = "out", .stderr = null });
-    log.@"error"("error message");
+    log.err("error message");
     log.warn("warn message");
     throwRootCause() catch |err| {
         log.exception("Failed.", err);
@@ -188,7 +188,7 @@ test "an ILog passes each call to the log it was made from" {
     try std.testing.expectEqualStrings("info", recording.lastMethod);
     log.verbose("b");
     try std.testing.expectEqualStrings("verbose", recording.lastMethod);
-    log.@"error"("c");
+    log.err("c");
     try std.testing.expectEqualStrings("error", recording.lastMethod);
     log.exception("d", error.FileNotFound);
     try std.testing.expectEqualStrings("exception", recording.lastMethod);

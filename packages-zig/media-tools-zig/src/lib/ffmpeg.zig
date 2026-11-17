@@ -175,7 +175,7 @@ const message_buffer_size = line_size + " [cut short]".len;
 //
 fn writeToLog(log: ILog, program: []const u8, level: c_int, text: []const u8) void {
     if (level <= av_log_error) {
-        log.@"error"(text);
+        log.err(text);
         return;
     }
     // The line is made in a buffer on the calling thread's stack, because this runs on whichever thread logs, and a message is never
@@ -212,7 +212,7 @@ fn logMessage(avcl: ?*anyopaque, level: c_int, fmt: [*c]const u8, vl: ?*anyopaqu
     var print_prefix: c_int = 1;
     const length = av_log_format_line2(avcl, level, fmt, vl, &line, line.len, &print_prefix);
     if (length < 0) {
-        console_log.@"error"("A message of FFmpeg's log could not be written out.");
+        console_log.err("A message of FFmpeg's log could not be written out.");
         return;
     }
     const written: usize = @min(@as(usize, @intCast(length)), line.len - 1);

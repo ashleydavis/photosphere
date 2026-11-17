@@ -353,7 +353,7 @@ fn metadataFromExif(log: ILog, allocator: std.mem.Allocator, exif: exif_parser.E
     if (isTruthy(exif.tags.get("GPSLatitude")) and isTruthy(exif.tags.get("GPSLongitude"))) {
         coordinates = try convertExifCoordinates(exif.tags);
         if (!isLocationInRange(coordinates.?)) {
-            log.@"error"(try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: lat {d}, lng {d}, for asset {s}.", .{ coordinates.?.lat, coordinates.?.lng, filePath }));
+            log.err(try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: lat {d}, lng {d}, for asset {s}.", .{ coordinates.?.lat, coordinates.?.lng, filePath }));
             coordinates = null;
         }
     }

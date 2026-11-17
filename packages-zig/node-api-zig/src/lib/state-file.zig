@@ -28,8 +28,8 @@ pub fn readStateSetting(comptime T: type, arena: std.mem.Allocator, io: std.Io, 
     }
     return ziggy.config_state.state.get(T, arena, io, target.statePath, target.keyPath) catch |err| switch (err) {
         error.SettingWrongType => {
-            log.@"error"(ziggy.utils.errors.lastErrorMessage());
-            log.@"error"("The setting is at its default.");
+            log.err(ziggy.utils.errors.lastErrorMessage());
+            log.err("The setting is at its default.");
             return null;
         },
         else => return err,

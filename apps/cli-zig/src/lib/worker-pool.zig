@@ -923,12 +923,12 @@ pub const WorkerPoolBun = struct {
         switch (message.level) {
             .info => log.info(prefixMessage(arena, workerId, taskId, message.message)),
             .verbose => log.verbose(prefixMessage(arena, workerId, taskId, message.message)),
-            .@"error" => log.@"error"(prefixMessage(arena, workerId, taskId, message.message)),
+            .@"error" => log.err(prefixMessage(arena, workerId, taskId, message.message)),
             .warn => log.warn(prefixMessage(arena, workerId, taskId, message.message)),
             .exception => {
-                log.@"error"(prefixMessage(arena, workerId, taskId, message.message));
+                log.err(prefixMessage(arena, workerId, taskId, message.message));
                 if (message.@"error") |errorText| {
-                    log.@"error"(errorText);
+                    log.err(errorText);
                 }
             },
             .debug => {},
@@ -968,7 +968,7 @@ pub const WorkerPoolBun = struct {
         const taskId = try arena.dupe(u8, workerState.currentTaskId.?);
 
         const timeoutText = try formatNumber(arena, self.taskTimeout);
-        log.@"error"(try std.fmt.allocPrint(arena, "[Task Queue] Task {s} timed out after {s}ms", .{ taskId, timeoutText }));
+        log.err(try std.fmt.allocPrint(arena, "[Task Queue] Task {s} timed out after {s}ms", .{ taskId, timeoutText }));
 
         // Abandon the worker: a thread cannot be stopped, so it is left to finish on its own.
         workerState.worker.abandon();

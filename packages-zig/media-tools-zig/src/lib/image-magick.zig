@@ -294,7 +294,7 @@ const RunConsole = struct {
                 .stdout = null,
                 .stderr = line,
             }),
-            .stderr => self.log.@"error"(line),
+            .stderr => self.log.err(line),
         }
     }
 };

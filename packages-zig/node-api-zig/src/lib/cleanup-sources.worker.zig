@@ -220,7 +220,7 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers
     if (cleanupResult.failedSourceIds.len > 0) {
         // Not retried: a source that refused once will refuse again, and looping would ask the
         // user the same question forever. Said out loud so the files are known to still be there.
-        log.@"error"(try std.fmt.allocPrint(allocator, "Cleanup could not delete {d} source file(s): {s}", .{ cleanupResult.failedSourceIds.len, try std.mem.join(allocator, ", ", cleanupResult.failedSourceIds) }));
+        log.err(try std.fmt.allocPrint(allocator, "Cleanup could not delete {d} source file(s): {s}", .{ cleanupResult.failedSourceIds.len, try std.mem.join(allocator, ", ", cleanupResult.failedSourceIds) }));
     }
 
     return resultToJson(allocator, .{

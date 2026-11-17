@@ -106,7 +106,7 @@ fn runToolLoggedInner(allocator: std.mem.Allocator, io: std.Io, log: ILog, runne
         const validationFailedReason = try check.function(check.context, allocator, io);
         if (validationFailedReason) |reason| {
             const msg = try std.fmt.allocPrint(allocator, "Validation failed for command: {s}\nReason: {s}", .{ description, reason });
-            log.@"error"(msg);
+            log.err(msg);
             log.info(try std.fmt.allocPrint(allocator, "===\nCommand: {s}\nCommand stdout:\n{s}\nCommand stderr:\n{s}\n===", .{
                 description,
                 if (result.stdout.len > 0) result.stdout else "No output",

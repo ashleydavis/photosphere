@@ -15,7 +15,7 @@ const IFileStat = file_scanner.IFileStat;
 pub fn validateFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8, fileStat: IFileStat) !bool {
     // Check that it's not a zero-byte file.
     if (fileStat.length == 0) {
-        log.@"error"(try std.fmt.allocPrint(allocator, "Invalid file {s} - zero-byte file", .{filePath}));
+        log.err(try std.fmt.allocPrint(allocator, "Invalid file {s} - zero-byte file", .{filePath}));
         return false;
     }
 
@@ -43,7 +43,7 @@ fn validateImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner
         log.exception(try std.fmt.allocPrint(allocator, "Invalid image {s} - analysis failed", .{filePath}), err);
         return false;
     } orelse {
-        log.@"error"(try std.fmt.allocPrint(allocator, "Invalid image {s} - failed to get file info", .{filePath}));
+        log.err(try std.fmt.allocPrint(allocator, "Invalid image {s} - failed to get file info", .{filePath}));
         return false;
     };
 
@@ -52,7 +52,7 @@ fn validateImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner
         return true;
     }
     else {
-        log.@"error"(try std.fmt.allocPrint(allocator, "Invalid image {s} - invalid dimensions: {d}x{d}", .{ filePath, fileInfo.dimensions.width, fileInfo.dimensions.height }));
+        log.err(try std.fmt.allocPrint(allocator, "Invalid image {s} - invalid dimensions: {d}x{d}", .{ filePath, fileInfo.dimensions.width, fileInfo.dimensions.height }));
         return false;
     }
 }
@@ -66,7 +66,7 @@ fn validateVideo(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner
         log.exception(try std.fmt.allocPrint(allocator, "Invalid video {s} - analysis failed", .{filePath}), err);
         return false;
     } orelse {
-        log.@"error"(try std.fmt.allocPrint(allocator, "Invalid video {s} - failed to get file info", .{filePath}));
+        log.err(try std.fmt.allocPrint(allocator, "Invalid video {s} - failed to get file info", .{filePath}));
         return false;
     };
 
@@ -75,7 +75,7 @@ fn validateVideo(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner
         return true;
     }
     else {
-        log.@"error"(try std.fmt.allocPrint(allocator, "Invalid video {s} - invalid dimensions: {d}x{d}", .{ filePath, fileInfo.dimensions.width, fileInfo.dimensions.height }));
+        log.err(try std.fmt.allocPrint(allocator, "Invalid video {s} - invalid dimensions: {d}x{d}", .{ filePath, fileInfo.dimensions.width, fileInfo.dimensions.height }));
         return false;
     }
 }

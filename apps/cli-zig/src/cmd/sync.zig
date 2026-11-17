@@ -191,12 +191,12 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
             // Database is encrypted - user must provide a key
             if (!isSet(options.destKey)) {
                 if (nonInteractive) {
-                    log.@"error"(try pc.red(allocator, "\u{2717} The destination database is encrypted and requires a private key to access."));
-                    log.@"error"(try pc.red(allocator, "  Please provide the private key using the --dest-key option."));
-                    log.@"error"("");
-                    log.@"error"("Example:");
-                    log.@"error"(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi sync --dest-key my-photos.key --dest {s}", .{destPath}))}));
-                    log.@"error"(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi sync --dest-key <full or relative path to key> --dest {s}", .{destPath}))}));
+                    log.err(try pc.red(allocator, "\u{2717} The destination database is encrypted and requires a private key to access."));
+                    log.err(try pc.red(allocator, "  Please provide the private key using the --dest-key option."));
+                    log.err("");
+                    log.err("Example:");
+                    log.err(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi sync --dest-key my-photos.key --dest {s}", .{destPath}))}));
+                    log.err(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi sync --dest-key <full or relative path to key> --dest {s}", .{destPath}))}));
                     exit(io, log, 1);
                 }
                 else {
@@ -212,7 +212,7 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
             // Verify the key works by trying to load encryption keys
             const destKeyPems = try resolveKeyPemsWithPrompt(allocator, io, options.destKey, nonInteractive, false);
             if (destKeyPems.len == 0) {
-                log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found. Use \"psi secrets list\" to see available keys.", .{options.destKey orelse "undefined"})));
+                log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found. Use \"psi secrets list\" to see available keys.", .{options.destKey orelse "undefined"})));
                 const similarKeyNames = try findSimilarKeyNames(allocator, io, options.destKey.?);
                 if (similarKeyNames.len > 0) {
                     log.info(try std.fmt.allocPrint(allocator, "Did you mean:\n{s}", .{try similarNamesList(allocator, similarKeyNames)}));
@@ -220,16 +220,16 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
                 exit(io, log, 1);
             }
             _ = loadEncryptionKeysFromPem(allocator, destKeyPems) catch |err| {
-                log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Failed to load encryption key: {s}", .{utils.errors.errorMessage(err)})));
-                log.@"error"(try pc.red(allocator, "  Please check that the key exists. Use \"psi secrets list\" to see available keys."));
+                log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Failed to load encryption key: {s}", .{utils.errors.errorMessage(err)})));
+                log.err(try pc.red(allocator, "  Please check that the key exists. Use \"psi secrets list\" to see available keys."));
                 exit(io, log, 1);
             };
         }
         else {
             // Database is not encrypted
             if (isSet(options.destKey)) {
-                log.@"error"(try pc.red(allocator, "\u{2717} You specified an encryption key, but the destination database is not encrypted."));
-                log.@"error"(try pc.red(allocator, "  Either remove the --dest-key option, or sync to a different location."));
+                log.err(try pc.red(allocator, "\u{2717} You specified an encryption key, but the destination database is not encrypted."));
+                log.err(try pc.red(allocator, "  Either remove the --dest-key option, or sync to a different location."));
                 exit(io, log, 1);
             }
         }

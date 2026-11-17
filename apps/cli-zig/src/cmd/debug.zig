@@ -1062,19 +1062,19 @@ pub fn debugSetFieldCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog,
     const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, context.uuidGenerator, context.timestampProvider, context.sessionId, false);
 
     const parsedValue = parseFieldValue(allocator, value, options.json orelse false) catch {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Invalid JSON value: {s}", .{value})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Invalid JSON value: {s}", .{value})));
         exit(io, log, 1);
     };
 
     if (!try acquireWriteLock(allocator, io, log, loaded.rawAssetStorage, loaded.sessionId, 3)) {
-        log.@"error"(try pc.red(allocator, "\u{2717} Failed to acquire the database write lock."));
+        log.err(try pc.red(allocator, "\u{2717} Failed to acquire the database write lock."));
         exit(io, log, 1);
     }
     const updated = setFieldUnderLock(allocator, io, log, loaded, recordId, fieldName, parsedValue);
     try releaseWriteLock(allocator, io, log, loaded.rawAssetStorage);
 
     if (!try updated) {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Record '{s}' not found in the metadata collection.", .{recordId})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Record '{s}' not found in the metadata collection.", .{recordId})));
         exit(io, log, 1);
     }
 
@@ -1134,27 +1134,27 @@ pub fn debugCheckMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, log
     const loaded = try loadDatabase(allocator, io, log, options.db, options, context.uuidGenerator, context.timestampProvider, context.sessionId, false);
 
     const filesTree = try loadMerkleTree(allocator, io, log, loaded.assetStorage) orelse {
-        log.@"error"(try pc.red(allocator, "\u{2717} Failed to load the files merkle tree"));
+        log.err(try pc.red(allocator, "\u{2717} Failed to load the files merkle tree"));
         exit(io, log, 1);
     };
     const sortRoot = filesTree.sort orelse {
-        log.@"error"(try pc.red(allocator, "\u{2717} The files merkle tree has no sort tree"));
+        log.err(try pc.red(allocator, "\u{2717} The files merkle tree has no sort tree"));
         exit(io, log, 1);
     };
     const merkleRoot = filesTree.merkle orelse {
-        log.@"error"(try pc.red(allocator, "\u{2717} The files merkle tree has no merkle tree"));
+        log.err(try pc.red(allocator, "\u{2717} The files merkle tree has no merkle tree"));
         exit(io, log, 1);
     };
 
     const sortNames = try leafNames(SortNode, allocator, sortRoot);
     if (findUnsortedName(sortNames)) |index| {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Sort tree leaf nodes are not in sorted order: {s} comes after {s}", .{ sortNames[index], sortNames[index - 1] })));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Sort tree leaf nodes are not in sorted order: {s} comes after {s}", .{ sortNames[index], sortNames[index - 1] })));
         exit(io, log, 1);
     }
 
     const merkleNames = try leafNames(MerkleNode, allocator, merkleRoot);
     if (findUnsortedName(merkleNames)) |index| {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Merkle tree leaf nodes are not in sorted order: {s} comes after {s}", .{ merkleNames[index], merkleNames[index - 1] })));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Merkle tree leaf nodes are not in sorted order: {s} comes after {s}", .{ merkleNames[index], merkleNames[index - 1] })));
         exit(io, log, 1);
     }
 

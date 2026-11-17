@@ -662,11 +662,11 @@ fn sendBackgroundLog(services: TaskServices, io: std.Io, allocator: std.mem.Allo
         .@"error" = is_error,
         .message = message,
     }) catch {
-        log.@"error"(message);
+        log.err(message);
         return;
     };
     _ = callNativeApp(services, io, allocator, timers, "backgroundLog", request) catch |err| {
-        log.@"error"(std.fmt.allocPrint(allocator, "The background work could not tell the system log \"{s}\": {s}", .{ message, utils.errors.errorMessage(err) }) catch message);
+        log.err(std.fmt.allocPrint(allocator, "The background work could not tell the system log \"{s}\": {s}", .{ message, utils.errors.errorMessage(err) }) catch message);
     };
 }
 

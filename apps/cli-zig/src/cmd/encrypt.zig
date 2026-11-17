@@ -74,7 +74,7 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, optio
         dbDir = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd orelse try std.process.currentPathAlloc(io, allocator));
     }
     if (dbDir == null or dbDir.?.len == 0) {
-        log.@"error"(try pc.red(allocator, "\u{2717} Database directory is required (--db)."));
+        log.err(try pc.red(allocator, "\u{2717} Database directory is required (--db)."));
         exit(io, log, 1);
     }
     const databaseDir = dbDir.?;
@@ -119,21 +119,21 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, optio
 
     const keyPems = try resolveKeyPemsWithPrompt(allocator, io, options.base.key, nonInteractive, true);
     if (keyPems.len == 0) {
-        log.@"error"(try pc.red(allocator, "\u{2717} Encryption requires --key."));
+        log.err(try pc.red(allocator, "\u{2717} Encryption requires --key."));
         exit(io, log, 1);
     }
 
     const loaded = try loadEncryptionKeysFromPem(allocator, keyPems);
     const writeStorageOptions = loaded.options;
     if (!loaded.isEncrypted) {
-        log.@"error"(try pc.red(allocator, "\u{2717} Failed to load encryption key."));
+        log.err(try pc.red(allocator, "\u{2717} Failed to load encryption key."));
         exit(io, log, 1);
     }
 
     const rawStorage = (try createStorageForPath(allocator, io, databaseDir, null)).storage;
     const hasTree = try merkleTreeExists(allocator, io, rawStorage);
     if (!hasTree) {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} No database found at: {s}", .{try pc.cyan(allocator, databaseDir)})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} No database found at: {s}", .{try pc.cyan(allocator, databaseDir)})));
         exit(io, log, 1);
     }
 
@@ -142,7 +142,7 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, optio
 
     if (nonInteractive) {
         if (!(yes orelse false)) {
-            log.@"error"(try pc.red(allocator, "\u{2717} Non interactive encryption requires --yes to proceed."));
+            log.err(try pc.red(allocator, "\u{2717} Non interactive encryption requires --yes to proceed."));
             exit(io, log, 1);
         }
     }

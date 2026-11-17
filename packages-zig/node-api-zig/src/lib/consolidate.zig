@@ -301,7 +301,7 @@ fn pushAbsentAssets(
             // The tree names a file the metadata knows nothing about. Pushing the bytes with no
             // record would put an asset in the remote that nothing can show, so it is reported
             // and skipped rather than half-pushed.
-            log.@"error"(try std.fmt.allocPrint(allocator, "Consolidation skipped asset {s}: the local database has the file but no metadata record for it.", .{assetId}));
+            log.err(try std.fmt.allocPrint(allocator, "Consolidation skipped asset {s}: the local database has the file but no metadata record for it.", .{assetId}));
             continue;
         };
 

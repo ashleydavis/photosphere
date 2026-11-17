@@ -138,10 +138,10 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: 
     // Validate that all paths exist before processing.
     for (paths) |filePath| {
         if (!pathExists(io, filePath)) {
-            log.@"error"("");
-            log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Path does not exist: {s}", .{try pc.cyan(allocator, filePath)})));
-            log.@"error"(try pc.red(allocator, "  Please verify the path is correct and try again."));
-            log.@"error"("");
+            log.err("");
+            log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Path does not exist: {s}", .{try pc.cyan(allocator, filePath)})));
+            log.err(try pc.red(allocator, "  Please verify the path is correct and try again."));
+            log.err("");
             exit(io, log, 1);
         }
     }
@@ -332,7 +332,7 @@ fn cleanUpImportedSources(
     });
 
     if (cleanupResult.failedSourceIds.len > 0) {
-        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {d} source file(s) could not be deleted.", .{cleanupResult.failedSourceIds.len})));
+        log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {d} source file(s) could not be deleted.", .{cleanupResult.failedSourceIds.len})));
     }
     return cleanupResult.deletedSourceIds.len;
 }

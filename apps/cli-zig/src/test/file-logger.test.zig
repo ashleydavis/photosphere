@@ -60,7 +60,7 @@ test "the file logger writes the headers, entries and footers" {
     try std.testing.expectEqual(@as(u8, 'T'), baseName[14]);
 
     logger.info("hello info");
-    logger.@"error"("bad thing");
+    logger.err("bad thing");
     logger.verbose("hidden verbose");
     try std.testing.expect(logger.hasLoggedErrors());
     logger.close();
