@@ -348,7 +348,11 @@ pub fn enableRawMode(fd: Fd) !Mode {
     raw.lflag.ISIG = false;
     raw.cc[@intFromEnum(std.posix.V.MIN)] = 1;
     raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
-    try std.posix.tcsetattr(fd, .FLUSH, raw);
+
+    // TCSANOW, as libuv does, keeps a key typed before the switch. TCSAFLUSH discarded it: psi list then waited forever for
+    // the Enter the "list shows every record of a sort index page over pages of the page size" test had already sent, and
+    // zig-unit-tests timed out after 20 minutes on macOS.
+    try std.posix.tcsetattr(fd, .NOW, raw);
     return original;
 }
 
