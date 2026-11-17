@@ -45,6 +45,8 @@ Upcoming version: 0.0.9
 #### verify-full
 
 - Failed at Test step 2: output showing that every file hash was checked was expected. `verify --full` prints the same as a quick verify. The Zig verify worker does not read the `full` option, and recomputes a hash only when a file's size or timestamp has changed.
+- Linux: failed again at Test step 2. `psi verify --full` printed exactly the same output as the quick verify in step 1 (`Unmodified: 4`, `Modified: 0`, `New: 0`, `Removed: 0`, `Database verification passed - all files are intact`), with nothing to show that file hashes were checked. No errors in the errors logs.
+- Linux: passed after the verify worker was changed to hash every file when `--full` is set, and the test was changed to prove the full check by what it finds: step 3 changes the asset's content but keeps its size and modification time, the quick verify in step 4 reports `Modified: 0` and the full verify in step 5 reports `Modified: 1` naming the asset. No errors in the errors logs.
 
 ### Move
 

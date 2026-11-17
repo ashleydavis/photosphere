@@ -27,9 +27,17 @@ fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message:
 }
 
 //
-// Runs the handler for the tree leaf of a file of a database.
+// Runs the handler for the tree leaf of a file of a database, as a quick verify does.
 //
 fn runHandler(allocator: std.mem.Allocator, io: std.Io, log: ILog, databaseDir: []const u8, fileName: []const u8, adjust: *const fn (*SortNode) void) !verify_worker.IVerifyFileResult {
+    return runHandlerWithFull(allocator, io, log, databaseDir, fileName, adjust, false);
+}
+
+//
+// Runs the handler for the tree leaf of a file of a database, with the task's full option set to
+// `full`, so tests can compare a quick verify of a file with a full one.
+//
+fn runHandlerWithFull(allocator: std.mem.Allocator, io: std.Io, log: ILog, databaseDir: []const u8, fileName: []const u8, adjust: *const fn (*SortNode) void, full: bool) !verify_worker.IVerifyFileResult {
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
     const tree = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
     const leaf = merkle_tree_zig.merkle_tree.findItemInTree(tree.sort, fileName).?;
@@ -38,7 +46,7 @@ fn runHandler(allocator: std.mem.Allocator, io: std.Io, log: ILog, databaseDir: 
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     var context = TaskContext.init(uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", "task", .{ .context = null, .function = ignoreMessage }, 10, "", "");
-    const data = try verify_worker.verifyFileDataToJson(allocator, .{ .node = node, .storageDescriptor = .{ .databasePath = databaseDir }, .options = .{ .full = false } });
+    const data = try verify_worker.verifyFileDataToJson(allocator, .{ .node = node, .storageDescriptor = .{ .databasePath = databaseDir }, .options = .{ .full = full } });
     const output = try verify_worker.verifyFileHandler(allocator, io, test_timers.timers(), log, data, context.taskContext());
     return std.json.parseFromValueLeaky(verify_worker.IVerifyFileResult, allocator, output, .{});
 }
@@ -148,6 +156,69 @@ test "verifyFileHandler does not hash a file whose size and timestamp are unchan
     };
     Adjust.lastModified = info.lastModified;
     const result = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, Adjust.call);
+    try std.testing.expectEqual(verify_worker.VerifyFileStatus.unmodified, result.status);
+}
+
+//
+// Checks that a full verify hashes a file whose size and timestamp match the tree, so it finds a
+// change to the content that kept both. The file is corrupted without changing its size, and the
+// tree's leaf is given the file's new timestamp, so only a hash can notice the change.
+//
+test "verifyFileHandler hashes a file whose size and timestamp are unchanged when full is set" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const storage = try test_files.directoryStorage(allocator, io, databaseDir);
+
+    const original = (try storage.read(allocator, io, log, THUMB_PATH)).?;
+    const corrupted = try allocator.dupe(u8, original);
+    corrupted[0] ^= 0xff;
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), corrupted);
+    const info = (try storage.info(allocator, io, THUMB_PATH)).?;
+    const Adjust = struct {
+        var lastModified: i64 = 0;
+        fn call(node: *SortNode) void {
+            node.lastModified = lastModified;
+        }
+    };
+    Adjust.lastModified = info.lastModified;
+    const result = try runHandlerWithFull(allocator, io, log, databaseDir, THUMB_PATH, Adjust.call, true);
+    try std.testing.expectEqual(verify_worker.VerifyFileStatus.modified, result.status);
+    try std.testing.expectEqual(@as(usize, 1), result.reasons.?.len);
+    try std.testing.expectEqualStrings("content hash changed", result.reasons.?[0]);
+}
+
+//
+// Checks that a full verify of an unchanged file reports it unmodified, so hashing every file
+// raises no false change.
+//
+test "verifyFileHandler reports an unchanged file unmodified when full is set" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const storage = try test_files.directoryStorage(allocator, io, databaseDir);
+
+    const info = (try storage.info(allocator, io, THUMB_PATH)).?;
+    const Adjust = struct {
+        var lastModified: i64 = 0;
+        fn call(node: *SortNode) void {
+            node.lastModified = lastModified;
+        }
+    };
+    Adjust.lastModified = info.lastModified;
+    const result = try runHandlerWithFull(allocator, io, log, databaseDir, THUMB_PATH, Adjust.call, true);
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.unmodified, result.status);
 }
 

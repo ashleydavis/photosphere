@@ -31,7 +31,8 @@ const computeAssetHash = hash.computeAssetHash;
 // The options of a verify-file task.
 //
 pub const IVerifyFileOptions = struct {
-    // Enables full verification (not used by the handler).
+    // Makes the handler hash the file even when its size and timestamp match the tree, so a
+    // change to the content that kept both is found.
     full: ?bool = null,
 };
 
@@ -300,8 +301,10 @@ pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, lo
 
     const sizeChanged = node.size != fileInfo.length;
     const timestampChanged = node.lastModified == null or node.lastModified.? != fileInfo.lastModified;
-    if (sizeChanged or timestampChanged) {
-        // File metadata has changed - check if content actually changed by computing the hash.
+    const full = if (data.options) |options| options.full orelse false else false;
+    if (sizeChanged or timestampChanged or full) {
+        // File metadata has changed, or a full verify was asked for: check whether the content
+        // changed by computing the hash.
         var hashOperation: ComputeAssetHashOperation = .{ .allocator = allocator, .storage = storage, .fileName = fileName, .fileInfo = fileInfo };
         const freshHash = try retry(io, log, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
         const contentHash = node.contentHash orelse {
@@ -338,7 +341,7 @@ pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, lo
             });
         }
         else {
-            // Metadata changed but content is the same - file is unmodified.
+            // The hash matches - file is unmodified.
             return verifyFileResultToJson(allocator, .{
                 .fileName = fileName,
                 .status = .unmodified,

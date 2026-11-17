@@ -63,11 +63,11 @@ Run the story player and check every story cycles through without failures, then
 - [x] [list-paging](cli/inspect/list-paging.md)
 
 ### Verify
-- [ ] [detect-deleted-file](cli/verify/detect-deleted-file.md)
-- [ ] [detect-modified-file](cli/verify/detect-modified-file.md)
-- [ ] [repair-clean-database](cli/verify/repair-clean-database.md)
-- [ ] [repair-damaged-database](cli/verify/repair-damaged-database.md)
-- [ ] [verify-full](cli/verify/verify-full.md)
+- [x] [detect-deleted-file](cli/verify/detect-deleted-file.md)
+- [x] [detect-modified-file](cli/verify/detect-modified-file.md)
+- [x] [repair-clean-database](cli/verify/repair-clean-database.md)
+- [x] [repair-damaged-database](cli/verify/repair-damaged-database.md)
+- [x] [verify-full](cli/verify/verify-full.md)
 
 ### Remove
 - [ ] [remove-asset-by-id](cli/remove/remove-asset-by-id.md)

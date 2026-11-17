@@ -4,6 +4,7 @@ const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
+const merkle_tree_zig = @import("merkle-tree-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
@@ -84,6 +85,44 @@ test "verify detects removed and modified files" {
     try std.testing.expectEqualStrings("display/" ++ ASSET_ID, result.removed[0]);
     try std.testing.expectEqual(@as(usize, 1), result.modified.len);
     try std.testing.expectEqualStrings("thumb/" ++ ASSET_ID, result.modified[0]);
+}
+
+//
+// Checks that a full verify finds a change to a file's content that kept its size and
+// modification time, which a quick verify of the same database misses. The thumb is
+// corrupted without changing its size, and its modification time is put back to the one the tree
+// records.
+//
+test "verify with full finds a change that kept the size and timestamp, which a quick verify misses" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const test_env = try test_environment.setupEnvironmentWith(std.testing.io, allocator);
+    defer test_env.deinitWith(log, allocator);
+    const io = std.testing.io;
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+
+    const thumbName = "thumb/" ++ ASSET_ID;
+    const storage = try test_files.directoryStorage(allocator, io, databaseDir);
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
+    const thumbNode = merkle_tree_zig.merkle_tree.findItemInTree(filesTree.sort, thumbName).?;
+    const thumbPath = try std.fs.path.join(allocator, &.{ databaseDir, thumbName });
+    const thumb = try test_files.readFile(allocator, io, thumbPath);
+    @memset(thumb[0..16], 0);
+    try test_files.writeFile(io, thumbPath, thumb);
+    const thumbFile = try std.Io.Dir.cwd().openFile(io, thumbPath, .{ .mode = .read_write });
+    try thumbFile.setTimestamps(io, .{ .modify_timestamp = .{ .new = std.Io.Timestamp.fromNanoseconds(@as(i96, thumbNode.lastModified.?) * std.time.ns_per_ms) } });
+    thumbFile.close(io);
+
+    const quick = try runVerify(allocator, io, log, databaseDir, null, null);
+    try std.testing.expectEqual(@as(usize, 0), quick.modified.len);
+
+    const full = try runVerify(allocator, io, log, databaseDir, .{ .full = true }, null);
+    try std.testing.expectEqual(@as(usize, 1), full.modified.len);
+    try std.testing.expectEqualStrings(thumbName, full.modified[0]);
+    try std.testing.expectEqual(@as(u64, 4), full.filesProcessed);
 }
 
 test "verify with a path filter only verifies the matching files" {
