@@ -26,6 +26,7 @@ Upcoming version: 0.0.9
 
 - The test named files the zip does not hold. Changed the expected files to `PXL_20260322_023611216.mp4` and `test-3.jpg` and the counts from 3 to 2.
 - Failed at Test step 2: `psi list` shows both assets under UUID names (such as `6e4286d9-….jpg`) with a temporary path under `/tmp/photosphere/.../file-scanner`, so the names inside the zip are lost on import. Steps 1 and 3 passed.
+- Linux rerun: failed at Check step 2 again. Prep and step 1 passed (`Files added: 2`, `Files failed: 0`). `psi list` showed the two assets as `b73ac4be-41d4-4754-a893-332f63fb927e.jpg` and `ef56064c-7e94-4e3e-a10d-99edeb08c614.mp4`, both with path `/tmp/photosphere/d33ad7da-f3f6-47e9-8587-602249037473/file-scanner`, not `PXL_20260322_023611216.mp4` and `test-3.jpg`. Step 3 was not run.
 
 ### Inspect
 
@@ -36,6 +37,8 @@ Upcoming version: 0.0.9
 #### list-paging
 
 - Failed at Test step 1: pages 1 to 3 and `Displayed 60 files total` were expected. Only `--- Page 1 ---` and `Displayed 20 files total` were printed, and step 2 counted 20 files, not 60.
+- Linux: failed again at Test step 1. The prep summary showed `Files imported: 60`. `psi list --page-size 20` printed only `--- Page 1 ---` with 20 files, then `End of results. Displayed 20 files total.` and exited 0. No errors or warnings in the errors logs.
+- Linux: passed after `psi list` was fixed to show the rest of a sort index page as further pages, and the test's expected count was changed to the number of assets (50).
 
 ### Verify
 

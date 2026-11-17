@@ -162,6 +162,126 @@ test "list and summary report a database with no assets" {
     try std.testing.expect(std.mem.indexOf(u8, summary.stdout, "Database hash:") == null);
 }
 
+//
+// Runs `psi list` with a pseudo-terminal as its stdin and stdout, pressing Enter each time it asks for the next
+// page, and returns everything it wrote to the terminal. psi waits for a key between pages only on a terminal.
+//
+fn listOnTerminal(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, db: []const u8, pageSize: []const u8) ![]const u8 {
+    const io = std.testing.io;
+    const terminal = try helpers.openPseudoTerminal(allocator);
+    defer terminal.master.close(io);
+    var child = std.process.spawn(io, .{
+        .argv = &.{ try zigCliPath(allocator), "list", "--db", db, "--page-size", pageSize, "--yes" },
+        .environ_map = environment,
+        .stdin = .{ .file = terminal.slave },
+        .stdout = .{ .file = terminal.slave },
+        .stderr = .inherit,
+    }) catch |err| {
+        terminal.slave.close(io);
+        return err;
+    };
+
+    // The slave stays open until the master has been read: macOS discards what is waiting on the master once
+    // the last slave descriptor is closed.
+    defer terminal.slave.close(io);
+
+    // A thread waits for the child and then closes the write end of a pipe, so the reading stops once the child
+    // has gone and nothing more is waiting on the master.
+    const exitPipe = try std.Io.Threaded.pipe2(.{ .CLOEXEC = true });
+    const exitRead: std.Io.File = .{ .handle = exitPipe[0], .flags = .{ .nonblocking = false } };
+    defer exitRead.close(io);
+    const exitWrite: std.Io.File = .{ .handle = exitPipe[1], .flags = .{ .nonblocking = false } };
+    var term: std.process.Child.WaitError!std.process.Child.Term = undefined;
+    const waiter = try std.Thread.spawn(.{}, waitForListChild, .{ io, &child, &term, exitWrite });
+    errdefer waiter.join();
+
+    const prompt = "Press Enter or any key for next page";
+    var promptsAnswered: usize = 0;
+    var output: std.ArrayList(u8) = .empty;
+    var buffer: [4096]u8 = undefined;
+    while (true) {
+        var pollFds = [2]std.posix.pollfd{
+            .{
+                .fd = terminal.master.handle,
+                .events = std.posix.POLL.IN,
+                .revents = 0,
+            },
+            .{
+                .fd = exitRead.handle,
+                .events = std.posix.POLL.IN,
+                .revents = 0,
+            },
+        };
+        _ = try std.posix.poll(&pollFds, -1);
+        if (pollFds[0].revents == 0) {
+            break;
+        }
+        const count = try terminal.master.readStreaming(io, &.{&buffer});
+        if (count == 0) {
+            break;
+        }
+        try output.appendSlice(allocator, buffer[0..count]);
+        if (countLines(output.items, prompt) > promptsAnswered) {
+            promptsAnswered += 1;
+            try terminal.master.writeStreamingAll(io, "\r");
+        }
+    }
+    waiter.join();
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, try term);
+    return output.items;
+}
+
+//
+// Waits for the child of listOnTerminal, keeps how it ended, and closes the write end of the pipe so the reader of
+// the terminal sees that the child has gone.
+//
+fn waitForListChild(io: std.Io, child: *std.process.Child, term: *std.process.Child.WaitError!std.process.Child.Term, exited: std.Io.File) void {
+    term.* = child.wait(io);
+    exited.close(io);
+}
+
+test "list shows every record of a sort index page over pages of the page size" {
+    if (builtin.os.tag == .windows) {
+        // A Windows console cannot be given to a child and read back by a test.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setupDatabase(allocator, "cmd-d-list-paging", "50-assets");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try isolatedCacheEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+
+    // test/dbs/50-assets holds its 50 records in one sort index page, so pages of 20 are 20, 20 and 10 records
+    // taken from that one sort index page.
+    const output = try listOnTerminal(allocator, environment, db, "20");
+
+    try std.testing.expectEqual(@as(usize, 1), countLines(output, "--- Page 1 ---"));
+    try std.testing.expectEqual(@as(usize, 1), countLines(output, "--- Page 2 ---"));
+    try std.testing.expectEqual(@as(usize, 1), countLines(output, "--- Page 3 ---"));
+    try std.testing.expectEqual(@as(usize, 0), countLines(output, "--- Page 4 ---"));
+    try std.testing.expectEqual(@as(usize, 2), countLines(output, "Press Enter or any key for next page"));
+    try std.testing.expectEqual(@as(usize, 50), countLines(output, "  Encryption: unencrypted"));
+    try std.testing.expect(std.mem.indexOf(u8, output, "End of results. Displayed 50 files total.") != null);
+
+    // Every asset of the database is shown exactly once.
+    const shown: helpers.CliResult = .{
+        .exitCode = 0,
+        .stdout = output,
+        .stderr = "",
+    };
+    var assets = try std.Io.Dir.cwd().openDir(std.testing.io, try std.fs.path.join(allocator, &.{ db, "asset" }), .{ .iterate = true });
+    defer assets.close(std.testing.io);
+    var iterator = assets.iterate();
+    var assetCount: usize = 0;
+    while (try iterator.next(std.testing.io)) |entry| {
+        assetCount += 1;
+        try expectWhat(shown, countLines(output, entry.name) == 1, allocator, try std.fmt.allocPrint(allocator, "asset {s} was not shown exactly once", .{entry.name}));
+    }
+    try std.testing.expectEqual(@as(usize, 50), assetCount);
+}
+
 test "list counts back from the end of the page for a negative page size" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

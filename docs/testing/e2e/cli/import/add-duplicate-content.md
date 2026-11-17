@@ -28,7 +28,10 @@ psi add test/duplicate-images/ --db /tmp/psi-cli-import-add-duplicate-content/so
 ```
 
 Expected:
-- Output shows both files processed.
+- `Files considered:` reports `2` (both files were looked at).
+- `Files added:` reports `1`.
+- `Already added:` reports `1` (the second file has the same content as the first).
+- `Files failed:` reports `0`.
 
 ## Check
 

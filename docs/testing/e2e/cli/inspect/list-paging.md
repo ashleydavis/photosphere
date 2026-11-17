@@ -14,11 +14,11 @@ export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-cli-inspect-list-paging
 mkdir -p /tmp/psi-cli-inspect-list-paging
 cp -r test/dbs/50-assets /tmp/psi-cli-inspect-list-paging/db
-psi summary --db /tmp/psi-cli-inspect-list-paging/db --yes
+ls /tmp/psi-cli-inspect-list-paging/db/asset | wc -l
 ```
 
 Expected:
-- `Files imported:` reports the number of assets in the fixture. Note it.
+- `wc -l` prints the number of assets in the fixture (50). Note it.
 
 ## Test
 
@@ -27,6 +27,8 @@ Expected:
 ```bash
 psi list --db /tmp/psi-cli-inspect-list-paging/db --page-size 20 --yes
 ```
+
+Press Enter each time `Press Enter or any key for next page` appears.
 
 Expected:
 - The output has `--- Page 1 ---`, `--- Page 2 ---` and `--- Page 3 ---` headings, and no others.
@@ -40,6 +42,8 @@ Expected:
 psi list --db /tmp/psi-cli-inspect-list-paging/db --page-size 20 --yes | grep -cE '^[0-9a-f-]{36} '
 psi list --db /tmp/psi-cli-inspect-list-paging/db --page-size 20 --yes | grep -oE '^[0-9a-f-]{36}' | sort | uniq -d
 ```
+
+Press Enter twice for each command: it waits for a key between pages, and the prompt goes into the pipe, so it is not shown.
 
 Expected:
 - The first command prints the count from the prep.

@@ -65,8 +65,17 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
     var pageNumber: u32 = 1;
     var totalDisplayed: usize = 0;
 
+    //
+    // The sort index page being shown and how many of its records have been shown. A sort index page holds up
+    // to 1500 records, far more than a page of the list, so it is shown a page size at a time before the next
+    // sort index page is read.
+    //
+    var sortIndexPage: ?bdb.sort_index.ISortIndexResult = null;
+    var sortIndexPageShown: usize = 0;
+
     while (true) {
-        const result = try (try metadataCollection.sortIndex("photoDate", .desc)).getPage(io, log, nextPageId);
+        const result = sortIndexPage orelse try (try metadataCollection.sortIndex("photoDate", .desc)).getPage(io, log, nextPageId);
+        std.debug.assert(sortIndexPageShown <= result.records.len);
 
         if (result.records.len == 0) {
             if (totalDisplayed == 0) {
@@ -78,7 +87,8 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
             break;
         }
 
-        const pageRecords = result.records[0..sliceEnd(result.records.len, pageSize)];
+        const unshownRecords = result.records[sortIndexPageShown..];
+        const pageRecords = unshownRecords[0..sliceEnd(unshownRecords.len, pageSize)];
 
         // Read encryption headers for each record
         const encryptionHeaders = try allocator.alloc(?[]const u8, pageRecords.len);
@@ -92,9 +102,14 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
         try displayPage(log, allocator, pageRecords, pageNumber, pageSize, encryptionHeaders);
         totalDisplayed += pageRecords.len;
 
+        //
+        // A page size under 1 (0, negative or not a number) shows one slice of the sort index page and stops.
+        //
+        const hasMoreInSortIndexPage = pageSize >= 1 and sortIndexPageShown + pageRecords.len < result.records.len;
+
         // Check if there are more pages
         // Either we have a nextPageId from database or we displayed less than pageSize
-        const hasMorePages = isSet(result.nextPageId) and @as(f64, @floatFromInt(pageRecords.len)) == pageSize;
+        const hasMorePages = hasMoreInSortIndexPage or (isSet(result.nextPageId) and @as(f64, @floatFromInt(pageRecords.len)) == pageSize);
 
         if (!hasMorePages) {
             log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\nEnd of results. Displayed {d} files total.", .{totalDisplayed})));
@@ -109,14 +124,13 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
             break;
         }
 
-        // If we displayed fewer records than available, use the remainder for next page
-        if (@as(f64, @floatFromInt(result.records.len)) > pageSize) {
-            // We need to keep the remaining records for the next page
-            // This is a bit tricky with the current API, so let's keep it simple
-            // and just use the database's pagination
-            nextPageId = result.nextPageId;
+        if (hasMoreInSortIndexPage) {
+            sortIndexPage = result;
+            sortIndexPageShown += pageRecords.len;
         }
         else {
+            sortIndexPage = null;
+            sortIndexPageShown = 0;
             nextPageId = result.nextPageId;
         }
         pageNumber += 1;

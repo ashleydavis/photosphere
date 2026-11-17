@@ -48,19 +48,19 @@ Run the story player and check every story cycles through without failures, then
 ### Import
 - [x] [add-and-verify](cli/import/add-and-verify.md)
 - [ ] [add-duplicate-content](cli/import/add-duplicate-content.md)
-- [ ] [add-mp4](cli/import/add-mp4.md)
-- [ ] [add-multiple-files](cli/import/add-multiple-files.md)
-- [ ] [add-png](cli/import/add-png.md)
+- [x] [add-mp4](cli/import/add-mp4.md)
+- [x] [add-multiple-files](cli/import/add-multiple-files.md)
+- [x] [add-png](cli/import/add-png.md)
 - [ ] [add-same-file-twice](cli/import/add-same-file-twice.md)
-- [ ] [add-zip](cli/import/add-zip.md)
-- [ ] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
-- [ ] [check-new-files](cli/import/check-new-files.md)
+- [-] [add-zip](cli/import/add-zip.md)
+- [x] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
+- [x] [check-new-files](cli/import/check-new-files.md)
 
 ### Inspect
-- [ ] [database-summary](cli/inspect/database-summary.md)
-- [ ] [export-asset](cli/inspect/export-asset.md)
-- [ ] [export-display-and-thumb](cli/inspect/export-display-and-thumb.md)
-- [ ] [list-paging](cli/inspect/list-paging.md)
+- [x] [database-summary](cli/inspect/database-summary.md)
+- [x] [export-asset](cli/inspect/export-asset.md)
+- [x] [export-display-and-thumb](cli/inspect/export-display-and-thumb.md)
+- [x] [list-paging](cli/inspect/list-paging.md)
 
 ### Verify
 - [ ] [detect-deleted-file](cli/verify/detect-deleted-file.md)

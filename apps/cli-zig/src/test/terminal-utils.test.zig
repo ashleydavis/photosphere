@@ -4,82 +4,6 @@ const builtin = @import("builtin");
 const helpers = @import("test-helpers.zig");
 
 //
-// A pseudo-terminal: the child writes to the slave side, which is a TTY, and the test reads the master side.
-//
-const PseudoTerminal = struct {
-    // The master side, read by the test.
-    master: std.Io.File,
-
-    // The slave side, given to the child as stdout.
-    slave: std.Io.File,
-};
-
-//
-// Opens a pseudo-terminal (POSIX posix_openpt, grantpt, unlockpt and ptsname, from libc on macOS).
-//
-extern "c" fn posix_openpt(flags: c_int) c_int;
-
-//
-// Grants access to the slave side of a pseudo-terminal (libc).
-//
-extern "c" fn grantpt(fd: c_int) c_int;
-
-//
-// Unlocks the slave side of a pseudo-terminal (libc).
-//
-extern "c" fn unlockpt(fd: c_int) c_int;
-
-//
-// Gets the path of the slave side of a pseudo-terminal (libc).
-//
-extern "c" fn ptsname(fd: c_int) ?[*:0]const u8;
-
-//
-// Opens a pseudo-terminal (on Linux through /dev/ptmx, on macOS through libc).
-//
-fn openPseudoTerminal(allocator: std.mem.Allocator) !PseudoTerminal {
-    const io = std.testing.io;
-    const cwd = std.Io.Dir.cwd();
-    if (builtin.os.tag == .linux) {
-        const linux = std.os.linux;
-        const master = try cwd.openFile(io, "/dev/ptmx", .{ .mode = .read_write });
-        errdefer master.close(io);
-        var unlock: c_int = 0;
-        if (linux.errno(linux.ioctl(master.handle, linux.T.IOCSPTLCK, @intFromPtr(&unlock))) != .SUCCESS) {
-            return error.PseudoTerminalUnlockFailed;
-        }
-        var number: c_uint = 0;
-        if (linux.errno(linux.ioctl(master.handle, linux.T.IOCGPTN, @intFromPtr(&number))) != .SUCCESS) {
-            return error.PseudoTerminalNumberUnavailable;
-        }
-        const slave = try cwd.openFile(io, try std.fmt.allocPrint(allocator, "/dev/pts/{d}", .{number}), .{ .mode = .read_write });
-        return .{ .master = master, .slave = slave };
-    }
-    else {
-        return openPseudoTerminalWithLibc(io);
-    }
-}
-
-//
-// Opens a pseudo-terminal through libc (macOS and other POSIX systems).
-//
-fn openPseudoTerminalWithLibc(io: std.Io) !PseudoTerminal {
-    const cwd = std.Io.Dir.cwd();
-    const masterFd = posix_openpt(@bitCast(std.posix.O{ .ACCMODE = .RDWR, .NOCTTY = true }));
-    if (masterFd < 0) {
-        return error.PseudoTerminalOpenFailed;
-    }
-    const master: std.Io.File = .{ .handle = masterFd, .flags = .{ .nonblocking = false } };
-    errdefer master.close(io);
-    if (grantpt(masterFd) != 0 or unlockpt(masterFd) != 0) {
-        return error.PseudoTerminalUnlockFailed;
-    }
-    const slavePath = ptsname(masterFd) orelse return error.PseudoTerminalNumberUnavailable;
-    const slave = try cwd.openFile(io, std.mem.span(slavePath), .{ .mode = .read_write });
-    return .{ .master = master, .slave = slave };
-}
-
-//
 // The directories `psi check` is run on: a database made by `psi init`, an empty directory to search for files in, and
 // the environment variables that keep psi's configuration and temporary files in a directory of the test's own.
 //
@@ -124,7 +48,7 @@ fn setUpCheck(allocator: std.mem.Allocator, verbose: bool) !ICheckSetup {
 //
 fn checkOnTerminal(allocator: std.mem.Allocator, verbose: bool) ![]const u8 {
     const io = std.testing.io;
-    const terminal = try openPseudoTerminal(allocator);
+    const terminal = try helpers.openPseudoTerminal(allocator);
     defer terminal.master.close(io);
     const setup = try setUpCheck(allocator, verbose);
     defer std.Io.Dir.cwd().deleteTree(io, setup.root) catch {};
