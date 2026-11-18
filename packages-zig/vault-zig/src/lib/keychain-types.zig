@@ -105,7 +105,8 @@ pub fn spawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8,
 
 //
 // The default SpawnFunction: runs the process with std.process.spawn, inheriting the process environment.
-// A program that cannot be found fails with "spawn <cmd> ENOENT".
+// A program that cannot be found fails with "spawn <cmd> ENOENT". On Windows the process gets no console window: started from
+// the desktop app, which has no console, a console program such as PowerShell otherwise opens a terminal window over the app.
 //
 fn spawnChildProcess(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!ISpawnResult {
     var child = std.process.spawn(io, .{
@@ -114,6 +115,7 @@ fn spawnChildProcess(allocator: std.mem.Allocator, io: std.Io, args: []const []c
         .stdin = .pipe,
         .stdout = .pipe,
         .stderr = .pipe,
+        .create_no_window = true,
     }) catch |err| {
         if (err == error.FileNotFound) {
             return errors.throwError("spawn {s} ENOENT", .{args[0]});
