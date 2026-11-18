@@ -2,7 +2,7 @@ const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const ziggy = @import("ziggy");
-const WorkerPoolBun = cli.worker_pool.WorkerPoolBun;
+const worker_log = cli.worker_log;
 const worker_messages = ziggy.worker_messages;
 
 //
@@ -10,7 +10,7 @@ const worker_messages = ziggy.worker_messages;
 // when `toolsShown` (the command's --tools).
 //
 fn writeLine(arena: std.mem.Allocator, log: utils.log.ILog, toolsShown: bool, workerId: u32, taskId: ?[]const u8, message: worker_messages.IWorkerLogMessage) !void {
-    WorkerPoolBun.writeWorkerLog(arena, log, toolsShown, workerId, taskId, try worker_messages.encode(arena, message));
+    worker_log.writeWorkerLog(arena, log, toolsShown, workerId, taskId, try worker_messages.encode(arena, message));
 }
 
 test "a worker's log lines are written prefixed with the worker and task IDs" {
@@ -35,6 +35,28 @@ test "a worker's log lines are written prefixed with the worker and task IDs" {
     try writeLine(allocator, memory.log, true, 3, "task-1", .{ .level = .exception, .message = "failed", .@"error" = "Error: Cause" });
     try std.testing.expectEqualStrings("[W3] idle\n[W3:task-1] busy\n[W3:task-1] [EVENT] done\n[W3:task-1] == ffprobe stdout ==\no\n", memory.stdout());
     try std.testing.expectEqualStrings("[W3:task-1] careful\n[W3:task-1] bad\n[W3:task-1] failed\nError: Cause\n", memory.stderr());
+}
+
+//
+// Goal: the handler logHandler makes for Ziggy's worker pool writes each line with the worker and task the pool names.
+// Method: make the handler on a memory log, call its write as the pool does, for a worker running a task and for one between tasks,
+// and read what the log was given.
+//
+test "the pool's log handler writes a worker's line prefixed with the worker and task the pool gives it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
+
+    const handler = try worker_log.logHandler(allocator, memory.log, false);
+    handler.write(handler.user_data, 2, "task-9", try worker_messages.encode(allocator, worker_messages.IWorkerLogMessage{ .level = .info, .message = "busy" }));
+    handler.write(handler.user_data, 2, null, try worker_messages.encode(allocator, worker_messages.IWorkerLogMessage{ .level = .info, .message = "idle" }));
+    try std.testing.expectEqualStrings("[W2:task-9] busy\n[W2] idle\n", memory.stdout());
 }
 
 test "a worker's long event is written whole, as the template string does" {

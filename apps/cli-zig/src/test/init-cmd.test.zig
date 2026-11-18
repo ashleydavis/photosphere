@@ -6,7 +6,8 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const media_tools = @import("media-tools-zig");
 const vault_zig = @import("vault-zig");
-const task_queue = @import("ziggy").task_queue;
+const ziggy = @import("ziggy");
+const task_queue = ziggy.task_queue;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
 const encryption_zig = @import("encryption-zig");
@@ -595,6 +596,85 @@ test "jsNumber converts option text like Number()" {
     try std.testing.expect(std.math.isNan(init_cmd.jsNumber("0x1p3")));
 }
 
+//
+// Goal: the --workers value, a JavaScript number, becomes the most workers the pool may start, as the TypeScript pool counted them.
+// Method: convert the values a user or the CPU count can give, including the ones that allow no worker and one past the largest u32.
+//
+test "maxWorkers converts the --workers number to the most workers the pool may start" {
+    try std.testing.expectEqual(@as(u32, 0), init_cmd.maxWorkers(std.math.nan(f64)));
+    try std.testing.expectEqual(@as(u32, 0), init_cmd.maxWorkers(std.math.inf(f64)));
+    try std.testing.expectEqual(@as(u32, 0), init_cmd.maxWorkers(-std.math.inf(f64)));
+    try std.testing.expectEqual(@as(u32, 0), init_cmd.maxWorkers(0));
+    try std.testing.expectEqual(@as(u32, 0), init_cmd.maxWorkers(0.5));
+    try std.testing.expectEqual(@as(u32, 1), init_cmd.maxWorkers(1));
+    // The TypeScript pool started a worker while it had fewer than 2.5, so it ran 3.
+    try std.testing.expectEqual(@as(u32, 3), init_cmd.maxWorkers(2.5));
+    try std.testing.expectEqual(@as(u32, 8), init_cmd.maxWorkers(8));
+    try std.testing.expectEqual(std.math.maxInt(u32), init_cmd.maxWorkers(1e12));
+}
+
+//
+// Captures what the CLI writes to stdout and stderr, for a test of a line written with writeOutputLine.
+//
+const OutputCapture = struct {
+    // What was written to stdout.
+    stdout: std.Io.Writer.Allocating,
+    // What was written to stderr.
+    stderr: std.Io.Writer.Allocating,
+};
+
+//
+// Goal: with verbose logging on, the completion callback initContext registers writes which task failed, with its error's name and
+// message, and writes nothing for a task that succeeded or when verbose logging is off.
+// Method: call the callback with a failed and a succeeded result on a verbose log and with a failed one on a log that is not verbose,
+// capturing stdout.
+//
+test "writeFailedTaskLine writes a failed task's error when verbose logging is on" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var capture: OutputCapture = .{
+        .stdout = std.Io.Writer.Allocating.init(allocator),
+        .stderr = std.Io.Writer.Allocating.init(allocator),
+    };
+    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
+    defer utils.console.setCapture(null, null);
+    const verbose = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = true,
+        .debug = false,
+        .tools = false,
+    });
+    defer verbose.deinit();
+    const quiet = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer quiet.deinit();
+    var timer_list = ziggy.timers.TimerList.init();
+    const failed: task_queue.types.ITaskResult = .{
+        .taskId = "t1",
+        .status = .Failed,
+        .@"error" = .{
+            .name = "Error",
+            .message = "boom 42",
+        },
+        .errorMessage = "boom 42",
+        .type = "fail",
+        .inputs = .null,
+    };
+    const succeeded: task_queue.types.ITaskResult = .{
+        .taskId = "t2",
+        .status = .Succeeded,
+        .type = "echo",
+        .inputs = .null,
+    };
+    try init_cmd.writeFailedTaskLine(null, std.testing.io, allocator, timer_list.interface(), verbose.log, failed);
+    try init_cmd.writeFailedTaskLine(null, std.testing.io, allocator, timer_list.interface(), verbose.log, succeeded);
+    try init_cmd.writeFailedTaskLine(null, std.testing.io, allocator, timer_list.interface(), quiet.log, failed);
+    try std.testing.expectEqualStrings("Task t1 failed: Error: boom 42\n", capture.stdout.written());
+}
+
 test "initContext creates the session, the worker pool and the cleanup callback" {
     var environment: TestEnvironment = undefined;
     try environment.init();
@@ -626,9 +706,9 @@ test "initContext creates the session, the worker pool and the cleanup callback"
     const expectedDir = try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", context.sessionId });
     try std.testing.expectEqualStrings(expectedDir, context.sessionTempDir);
     try std.testing.expect(node_utils.fs.pathExists(io, context.sessionTempDir));
-    const pool: *cli.worker_pool.WorkerPoolBun = @ptrCast(@alignCast(context.workerPool.ptr));
-    try std.testing.expectEqual(@as(f64, 3), pool.maxWorkers);
-    try std.testing.expectEqual(@as(f64, 5000), pool.taskTimeout);
+    const pool: *ziggy.worker_pool.WorkerPool = @ptrCast(@alignCast(context.workerPool.ptr));
+    try std.testing.expectEqual(@as(u32, 3), pool.options.max_workers);
+    try std.testing.expectEqual(@as(?u64, 5000), pool.options.task_timeout_ms);
     const backend = try task_queue.queue_backend.getQueueBackend();
     try std.testing.expectEqual(context.workerPool.ptr, backend.ptr);
     const timestamp = context.timestampProvider.now(io);
@@ -666,9 +746,9 @@ test "initContext uses the given session ID and keeps the temporary files on fai
     try std.testing.expectEqualStrings("my-session", context.sessionId);
     const expectedDir = try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "my-session" });
     try std.testing.expectEqualStrings(expectedDir, context.sessionTempDir);
-    const pool: *cli.worker_pool.WorkerPoolBun = @ptrCast(@alignCast(context.workerPool.ptr));
-    try std.testing.expectEqual(@as(f64, 2400000), pool.taskTimeout);
-    try std.testing.expectEqual(@as(f64, @floatFromInt(try init_cmd.cpuCount(allocator, io))), pool.maxWorkers);
+    const pool: *ziggy.worker_pool.WorkerPool = @ptrCast(@alignCast(context.workerPool.ptr));
+    try std.testing.expectEqual(@as(?u64, 2400000), pool.options.task_timeout_ms);
+    try std.testing.expectEqual(@as(u32, @intCast(try init_cmd.cpuCount(allocator, io))), pool.options.max_workers);
 
     try node_utils.termination.invokeTerminationCallbacks(io, memory.log, 1);
     try std.testing.expect(node_utils.fs.pathExists(io, context.sessionTempDir));

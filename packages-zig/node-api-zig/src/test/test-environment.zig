@@ -5,13 +5,13 @@ const node_utils = @import("node-utils-zig");
 const ziggy = @import("ziggy");
 const node_api = @import("node-api-zig");
 const task_queue_zig = ziggy.task_queue;
-const MockWorkerPool = task_queue_zig.mock_worker_pool.MockWorkerPool;
+const WorkerPool = ziggy.worker_pool.WorkerPool;
 const temp_dirs = @import("temp-dirs.zig");
 const lan_share_network = @import("lan-share-network-zig");
 
 //
 // The environment of one test: an isolated config dir, vault and temp dir in a directory of its own, an environment that points at
-// them, and a MockWorkerPool installed as the test thread's queue backend, whose workers run the application's task handlers. Each
+// them, and a WorkerPool installed as the test thread's queue backend, whose workers run the application's task handlers. Each
 // test makes its own with setupEnvironment and frees it with deinit, so no test sees another's.
 //
 
@@ -65,7 +65,7 @@ pub const TestEnvironment = struct {
     map: *std.process.Environ.Map,
 
     // The worker pool installed as the test thread's queue backend.
-    pool: *MockWorkerPool,
+    pool: *WorkerPool,
 
     // How many setupEnvironment calls share the environment and have not freed it yet (a test and a fixture it uses each set one
     // up).
@@ -87,7 +87,7 @@ pub const TestEnvironment = struct {
         if (self.uses > 0) {
             return;
         }
-        self.pool.deinit(std.testing.io, allocator, test_timers.timers(), log);
+        self.pool.destroy(std.testing.io, allocator, test_timers.timers(), log);
         task_queue_zig.queue_backend.setQueueBackend(null);
         node_utils.process_env.setEnvironMap(null);
         self.map.deinit();
@@ -102,7 +102,7 @@ pub const TestEnvironment = struct {
 
 //
 // Sets up the environment of a test: the inherited environment plus an isolated config dir (databases.toml), a plaintext vault,
-// TEST_TMP_DIR, and a MockWorkerPool installed as the queue backend. The returned value must be freed with deinit when the test ends
+// TEST_TMP_DIR, and a WorkerPool installed as the queue backend. The returned value must be freed with deinit when the test ends
 // (`defer test_env.deinit()`), and must not move: setEnv reaches it through its address. A call while the thread already has an
 // environment (from a fixture inside a test that set one up) shares that one, and each call frees it once.
 //
@@ -148,9 +148,7 @@ pub fn setupEnvironmentWith(io: std.Io, allocator: std.mem.Allocator) !*TestEnvi
 
     // The test's thread registers the media source builders for itself, and each task on its own thread.
     try node_api.task_handlers.registerMediaSourceBuilders();
-    const pool = try MockWorkerPool.init(allocator, 4, .{
-        .sessionId = "test-session",
-    }, &task_entries);
+    const pool = try createPool(allocator, 4, &task_entries);
     task_queue_zig.queue_backend.setQueueBackend(pool.queueBackend());
 
     const environment = try allocator.create(TestEnvironment);
@@ -162,6 +160,35 @@ pub fn setupEnvironmentWith(io: std.Io, allocator: std.mem.Allocator) !*TestEnvi
     };
     current = environment;
     return environment;
+}
+
+//
+// Makes the worker pool of a test, run by the test's thread, with the given number of workers and task types, the session every task
+// of a test runs with and two child tasks in flight at once, allocated with the allocator, which every call on the pool must be given.
+//
+pub fn createPool(allocator: std.mem.Allocator, workers: u32, tasks: []const ziggy.task_runner.TaskHandlerEntry) !*WorkerPool {
+    return try WorkerPool.create(allocator, .{
+        .max_workers = workers,
+        .tasks = tasks,
+        .describe_error = describeError,
+        .worker_options = .{
+            .workerId = 0,
+            .sessionId = "test-session",
+            .maxConcurrentChildTasks = 2,
+        },
+    });
+}
+
+//
+// Gives the text of a failed task's error: the message the handler recorded (throwError), or the error's name, so the tests see the
+// messages the task handlers throw.
+//
+fn describeError(err: anyerror) ?[]const u8 {
+    const message = ziggy.utils.errors.errorMessage(err);
+    if (message.len == 0) {
+        return null;
+    }
+    return message;
 }
 
 //

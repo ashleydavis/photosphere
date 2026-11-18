@@ -2,9 +2,7 @@ const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const ziggy = @import("ziggy");
-const media_tools = @import("media-tools-zig");
 const worker_pool_test = @import("worker-pool.test.zig");
-const WorkerPoolBun = cli.worker_pool.WorkerPoolBun;
 const Collector = worker_pool_test.Collector;
 const types = ziggy.task_queue.types;
 const Timers = ziggy.timers.Timers;
@@ -46,13 +44,11 @@ test "an error message longer than the collector's buffer is recorded whole" {
     defer arena.deinit();
     const allocator = std.testing.allocator;
     var timer_list = ziggy.timers.TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
-    defer pool.deinit(std.testing.io, allocator);
+    const pool = try worker_pool_test.createPool(allocator, 1, 10000, "", &test_tasks);
+    defer pool.destroy(std.testing.io, allocator, timer_list.interface(), log);
     var collector = Collector.init(arena.allocator());
-    _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
-    const taskId = try pool.addTask(allocator, std.testing.io, log, long_error_task_type, .null, "source", null, null);
+    _ = try pool.queueBackend().onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
+    const taskId = try pool.queueBackend().addTask(allocator, std.testing.io, log, long_error_task_type, .null, "source", null, null);
     allocator.free(taskId);
     try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
 

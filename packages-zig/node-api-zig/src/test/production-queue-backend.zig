@@ -7,7 +7,7 @@ const test_environment = @import("test-environment.zig");
 const test_timers = @import("test-timers.zig");
 
 const MediaTools = media_tools.MediaTools;
-const MockWorkerPool = ziggy.task_queue.mock_worker_pool.MockWorkerPool;
+const WorkerPool = ziggy.worker_pool.WorkerPool;
 
 //
 // The task types of the pool: every task handler of node-api, each task that runs the tools making them on its own thread.
@@ -21,7 +21,7 @@ const task_entries = node_api.task_handlers.taskEntries(media_tools.ThreadTools,
 //
 pub const ProductionQueueBackend = struct {
     // The pool.
-    pool: *MockWorkerPool,
+    pool: *WorkerPool,
 
     // The tools built into the program, started for it, which the tools each task makes on its own thread need.
     mediaTools: MediaTools,
@@ -34,12 +34,7 @@ pub const ProductionQueueBackend = struct {
         self.mediaTools = try MediaTools.init();
         errdefer self.mediaTools.deinit();
         // Two child tasks in flight at once and four workers, as the pool the other tests run on.
-        self.pool = try MockWorkerPool.init(allocator, 4, .{
-            .sessionId = "test-session",
-            .maxConcurrentChildTasks = 2,
-            .configPath = "",
-            .statePath = "",
-        }, &task_entries);
+        self.pool = try test_environment.createPool(allocator, 4, &task_entries);
         ziggy.task_queue.queue_backend.setQueueBackend(self.pool.queueBackend());
     }
 
@@ -49,7 +44,7 @@ pub const ProductionQueueBackend = struct {
     //
     pub fn stop(self: *ProductionQueueBackend, log: ILog, allocator: std.mem.Allocator) void {
         test_environment.restoreQueueBackend();
-        self.pool.deinit(std.testing.io, allocator, test_timers.timers(), log);
+        self.pool.destroy(std.testing.io, allocator, test_timers.timers(), log);
         self.mediaTools.deinit();
     }
 };

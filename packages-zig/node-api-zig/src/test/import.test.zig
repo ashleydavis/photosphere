@@ -161,8 +161,8 @@ test "addPaths counts a photo whose content the database already holds as alread
     const first = try addPaths(allocator, io, log, test_timers.timers(), fixture.uuidGenerator.uuidGenerator(), .{ .databasePath = fixture.databaseDir }, &.{fixture.photosDir}, null, "skipped-session-1", false, null, null);
     try std.testing.expectEqual(@as(f64, 1), first.filesAdded);
 
-    // The worker pool the tests use keeps a source cancelled for as long as the process runs (as TypeScript's
-    // MockWorkerPool does), and an import's source is its database path. Ending the first import cancelled the
+    // The worker pool the tests use keeps a source cancelled for as long as the process runs, and an import's
+    // source is its database path. Ending the first import cancelled the
     // path, so the same database is named another way (with its "fs:" prefix) for the second import.
     const prefixedDatabasePath = try std.fmt.allocPrint(allocator, "fs:{s}", .{fixture.databaseDir});
     const second = try addPaths(allocator, io, log, test_timers.timers(), fixture.uuidGenerator.uuidGenerator(), .{ .databasePath = prefixedDatabasePath }, &.{otherDir}, null, "skipped-session-2", false, null, null);

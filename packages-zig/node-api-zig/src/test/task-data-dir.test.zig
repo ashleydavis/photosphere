@@ -16,7 +16,6 @@ const temp_dirs = @import("temp-dirs.zig");
 const fixture_dirs = @import("fixture-dirs.zig");
 const test_environment = @import("test-environment.zig");
 const test_timers = @import("test-timers.zig");
-const MockWorkerPool = ziggy.task_queue.mock_worker_pool.MockWorkerPool;
 const TaskQueue = ziggy.task_queue.task_queue.TaskQueue;
 
 //
@@ -49,15 +48,13 @@ fn copyTestDatabaseToDataDir(allocator: std.mem.Allocator, io: std.Io, name: []c
 // task's outputs. The pool is the test thread's queue backend while the task runs.
 //
 fn runDatabaseTask(allocator: std.mem.Allocator, io: std.Io, log: ILog, data_dir: []const u8, taskType: []const u8, databasePath: []const u8) !?std.json.Value {
-    const pool = try MockWorkerPool.init(allocator, 1, .{
-        .sessionId = "test-session",
-    }, &task_entries);
+    const pool = try test_environment.createPool(allocator, 1, &task_entries);
     // A worker takes its options when it starts, which is when the first task is added, so this is the data directory its tasks get.
-    pool.pool.options.worker_options.dataDir = data_dir;
+    pool.options.worker_options.dataDir = data_dir;
     ziggy.task_queue.queue_backend.setQueueBackend(pool.queueBackend());
     defer {
         test_environment.restoreQueueBackend();
-        pool.deinit(io, allocator, test_timers.timers(), log);
+        pool.destroy(io, allocator, test_timers.timers(), log);
     }
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "task-data-dir-test");

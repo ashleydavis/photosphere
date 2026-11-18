@@ -18,11 +18,13 @@ Photosphere starts threads of its own for its two HTTP servers on loopback. Both
 
 ## The Zig CLI
 
-The CLI has no Ziggy core and no main thread of Ziggy's. Its own thread owns `WorkerPoolBun` (`apps/cli-zig/src/lib/worker-pool.zig`), whose workers are Ziggy's `Worker` and whose queues are Ziggy's `MessageQueue`. That pool is the CLI thread's queue backend, so a command queues tasks with a `TaskQueue` and waits in `awaitTask` or `awaitAllTasks`, which reads the workers' messages while it waits.
+The CLI has no Ziggy core and no main thread of Ziggy's. Its own thread owns a `TaskPool`, Ziggy's loop for a program with no core (`ziggy.task_pool`), which `initContext` (`apps/cli-zig/src/lib/init-cmd.zig`) makes. Its workers are Ziggy's `Worker`, its queues are Ziggy's `MessageQueue`, and the pool logic is Ziggy's `WorkerPool`, the same that runs the Photosphere App's tasks. The pool is the CLI thread's queue backend, so a command queues tasks with a `TaskQueue` and waits in `awaitTask` or `awaitAllTasks`, which reads the workers' messages while it waits.
 
 - The pool's size is the processor count unless `--workers` sets it.
-- A task has a timeout (`--timeout`). A task that runs past it is failed. Its worker is detached (left to run, with what it still sends ignored) and replaced, because a thread cannot be stopped from outside.
-- A worker that cannot be started is a crashed worker: its task fails and it is replaced.
+- A task has a timeout (`--timeout`, in milliseconds, given to the pool as `task_timeout_ms`). A task that runs past it is failed with `Task timeout`, and `[Task Queue] Task <id> timed out after <ms>ms` is logged. Its worker is abandoned (left to run, with what it still sends dropped) and replaced by a worker with the same number, because a thread cannot be stopped from outside.
+- A worker that cannot be started logs `Worker <n> could not start: <reason>` and is let go. Its task waits for another worker.
+- A worker's log lines are written by `apps/cli-zig/src/lib/worker-log.zig`, prefixed with the worker and its task (`[W<n>:<task id>]`). With `--verbose`, a failed task is reported as `Task <id> failed: <error name>: <error message>`.
+- When the process ends, the termination callback sends each running task a cancel and waits for every worker's thread to end (`TaskPool.stopWorkers`).
 - Other CLI threads: the signal watcher (`process-signals.zig`) and the spinner and key swallower of the prompts (`apps/cli-zig/src/lib/clack`).
 
 ## What Photosphere's threads do while they have no message
@@ -32,7 +34,7 @@ The CLI has no Ziggy core and no main thread of Ziggy's. Its own thread owns `Wo
 - **An HTTP server's accepting thread** sleeps in `accept` on the listening socket.
 - **An HTTP server's server thread** sleeps on its queue until a connection or a message comes. When a connection has sent no request, it waits no longer than until that connection reaches the idle limit, then ends that connection's read so its connection thread is free again.
 - **An HTTP connection thread** with no connection sleeps on its queue until it is given one. While it serves a connection it sleeps in a read on the socket. A handler that holds its connection open (the MCP server's event stream) sleeps on the thread's queue with a timeout (`Request.waitForMessage`).
-- **The CLI's thread** sleeps in `WorkerPoolBun.waitForMessage` while a command waits on its tasks. It waits on its queue no longer than until the next of its timers or task timeouts is due. When it wakes it handles the message, fails the tasks that are past their timeout and runs the timers that are due.
+- **The CLI's thread** sleeps in `TaskPool.waitForMessage` while a command waits on its tasks. It waits on its queue no longer than until the next of its timers or task timeouts is due. When it wakes it handles the message, fails the tasks that are past their timeout and runs the timers that are due.
 - **The signal watcher** sleeps in `poll` on a pipe that the signal handler writes to.
 - **The spinner** sleeps between frames of its animation.
 - **The key swallower** waits for a key with a timeout of 100 ms, so it sees its stop flag within that time.

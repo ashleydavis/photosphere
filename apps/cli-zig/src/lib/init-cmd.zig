@@ -18,7 +18,8 @@ const media_tools = @import("media-tools-zig");
 const pc = @import("picocolors.zig");
 const directory_picker = @import("directory-picker.zig");
 const prompts = @import("clack/prompts.zig");
-const worker_pool = @import("worker-pool.zig");
+const worker_log = @import("worker-log.zig");
+const console_output = @import("console-output.zig");
 const process_argv = @import("process-argv.zig");
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
 const IStorage = storage_zig.storage.IStorage;
@@ -53,7 +54,8 @@ const RandomUuidGenerator = utils.random_uuid_generator.RandomUuidGenerator;
 const TimestampProvider = utils.timestamp_provider.TimestampProvider;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
-const WorkerPoolBun = worker_pool.WorkerPoolBun;
+const WorkerPool = ziggy.worker_pool.WorkerPool;
+const Timers = ziggy.timers.Timers;
 const exit = node_utils.termination.exit;
 const registerTerminationCallback = node_utils.termination.registerTerminationCallback;
 const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
@@ -974,11 +976,82 @@ pub fn jsNumber(textValue: []const u8) f64 {
 }
 
 //
+// How many child tasks one task may have running at once.
+//
+// Ten, because a desktop machine has cores and a fast disk to spare, and whatever queued the work is
+// usually what the user is waiting on. It is not the size of the worker pool: it is how much of that
+// pool one task may fill, so a second import, a sync, or anything the user does still gets a worker.
+//
+const MAX_CONCURRENT_CHILD_TASKS = 10;
+
+//
+// The task types the workers run: every task handler of the application. Each task that runs ImageMagick or FFmpeg makes the tools
+// built into the program on its own thread.
+//
+const task_types = node_api.task_handlers.taskEntries(media_tools.ThreadTools, registerMediaSources);
+
+//
+// Registers, on a task's thread before the task runs, the builders of the media sources an import reads (initTaskHandlers in
+// TypeScript).
+//
+fn registerMediaSources(context: task_queue.types.ITaskContext) anyerror!void {
+    _ = context;
+    try node_api.task_handlers.registerMediaSourceBuilders();
+}
+
+//
+// Gives the text of a failed task's error for the worker pool to report: the message the handler recorded (throwError), or the
+// error's name.
+//
+fn describeError(err: anyerror) ?[]const u8 {
+    return utils.errors.errorMessage(err);
+}
+
+//
+// Converts the --workers value, or the CPU count, to the most workers the pool may start. The value is a JavaScript number, and the
+// TypeScript pool started a worker while the number of workers was below it, so a fraction is rounded up. NaN, the infinities and
+// anything below 1 allow no worker, and a value past the largest u32 is that largest u32.
+//
+pub fn maxWorkers(value: f64) u32 {
+    if (std.math.isNan(value) or std.math.isInf(value) or value < 1) {
+        return 0;
+    }
+    const rounded = @ceil(value);
+    if (rounded >= @as(f64, @floatFromInt(std.math.maxInt(u32)))) {
+        return std.math.maxInt(u32);
+    }
+    return @intFromFloat(rounded);
+}
+
+//
+// The completion callback initContext registers: with verbose logging on, writes `Task <id> failed: <error name>: <error message>`
+// for a task that failed, so a command that runs many tasks says which failed and why.
+//
+pub fn writeFailedTaskLine(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, log: ILog, result: task_queue.types.ITaskResult) anyerror!void {
+    _ = context;
+    _ = io;
+    _ = timers;
+    if (result.status != .Failed) {
+        return;
+    }
+    if (!log.verboseEnabled()) {
+        return;
+    }
+    const line = try std.fmt.allocPrint(allocator, "Task {s} failed: {s}: {s}", .{
+        result.taskId,
+        if (result.@"error") |failure| failure.name else "Error",
+        result.errorMessage orelse "",
+    });
+    defer allocator.free(line);
+    console_output.writeOutputLine(line);
+}
+
+//
 // The state of the termination callback registered by initContext.
 //
 const ICleanupContext = struct {
     // The worker pool to shut down.
-    workerPool: *WorkerPoolBun,
+    workerPool: *WorkerPool,
 
     // The session temporary directory to delete on success.
     sessionTempDir: []const u8,
@@ -1058,14 +1131,27 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, log: ILog, mediaToo
     const timeout: f64 = if (options.timeout) |timeoutText| jsNumber(timeoutText) else 2400000;
     const config_file_path = try ziggy.config_path.desktopAppConfigPath(allocator);
     const state_file_path = try ziggy.state_path.desktopAppStatePath(allocator);
-    const workerPool = try WorkerPoolBun.init(allocator, mediaTools, workers, timeout, .{
-        .verbose = options.verbose,
-        .tools = options.tools,
-        .sessionId = sessionId,
-        .configPath = config_file_path,
-        .statePath = state_file_path,
+    const workerPool = try WorkerPool.create(allocator, .{
+        .max_workers = maxWorkers(workers),
+        .tasks = &task_types,
+        .describe_error = describeError,
+        .worker_options = .{
+            .workerId = 0,
+            .verbose = options.verbose orelse false,
+            .tools = options.tools orelse false,
+            .sessionId = sessionId,
+            .maxConcurrentChildTasks = MAX_CONCURRENT_CHILD_TASKS,
+            .configPath = config_file_path,
+            .statePath = state_file_path,
+        },
+        .on_log = try worker_log.logHandler(allocator, log, options.tools orelse false),
+        .task_timeout_ms = utils.sleep.setTimeoutDelay(timeout),
     });
     setQueueBackend(workerPool.queueBackend());
+    _ = try workerPool.queueBackend().onTaskComplete(allocator, .{
+        .context = null,
+        .function = writeFailedTaskLine,
+    });
 
     const context: ICommandContext = .{
         .uuidGenerator = uuidGenerator,
