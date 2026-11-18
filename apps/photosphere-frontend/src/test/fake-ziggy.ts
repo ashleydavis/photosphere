@@ -197,6 +197,14 @@ export class FakeZiggy implements IZiggyBridge {
         });
     }
 
+    // Records the call as the "splash-fading" system message, with the fade's duration.
+    splashFading(durationMilliseconds: number): void {
+        this.sent.push({
+            name: "splash-fading",
+            data: durationMilliseconds,
+        });
+    }
+
     // Records the line as the "log" message, with the error text and the tool output only when they were given.
     log(level: LogLevel, message: string, errorText?: string, toolOutput?: IToolOutput): void {
         const data: IJsonObject = {

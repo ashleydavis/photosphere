@@ -6,7 +6,7 @@
       "name": "photosphere-monorepo",
       "devDependencies": {
         "@aws-sdk/client-s3": "3.1016.0",
-        "ziggy-remote-control-server": "git+https://github.com/ashleydavis/ziggy.git#v0.0.25",
+        "ziggy-remote-control-server": "git+https://github.com/ashleydavis/ziggy.git#v0.0.26",
       },
     },
     "apps/photosphere": {
@@ -27,7 +27,7 @@
         "task-queue": "workspace:*",
         "user-interface": "workspace:*",
         "uuid": "^9.0.1",
-        "ziggy": "git+https://github.com/ashleydavis/ziggy.git#v0.0.25",
+        "ziggy": "git+https://github.com/ashleydavis/ziggy.git#v0.0.26",
       },
       "devDependencies": {
         "@fortawesome/fontawesome-free": "^6.2.1",
@@ -1777,7 +1777,7 @@
 
     "ziggy": ["ziggy@workspace:apps/photosphere"],
 
-    "ziggy-remote-control-server": ["ziggy-monorepo@github:ashleydavis/ziggy#9ff4aa5", { "dependencies": { "express": "5.3.0", "ws": "8.22.0" }, "bin": { "ziggy-remote-control-server": "tools/remote-control-server/src/index.ts" } }, "ashleydavis-ziggy-9ff4aa5", "sha512-dqY+QmucWlCzv55a1YNaBXMnJnBdtERhACT4gCZKbqWEcKjVg9/6gwni4W+HxhoIJSzb2gnsSa+dzpfaK8l6kw=="],
+    "ziggy-remote-control-server": ["ziggy-monorepo@github:ashleydavis/ziggy#8674f67", { "dependencies": { "express": "5.3.0", "ws": "8.22.0" }, "bin": { "ziggy-remote-control-server": "tools/remote-control-server/src/index.ts" } }, "ashleydavis-ziggy-8674f67", "sha512-A9HnKhhkZJqZ0ALu+Au6tt5zAJvmGhZ0lAoh4utR3W8nAclTy/sHVTt67Sv3mj4Ggmf6NXlrAui07kXHHge9fw=="],
 
     "@aws-crypto/sha1-browser/@smithy/util-utf8": ["@smithy/util-utf8@2.3.0", "", { "dependencies": { "@smithy/util-buffer-from": "^2.2.0", "tslib": "^2.6.2" } }, "sha512-R8Rdn8Hy72KKcebgLiv8jQcQkXoLMOGGv5uI1/k0l+snqkOzQ1R0ChUBCxWMlBsFMekWjq0wRudIweFs7sKT5A=="],
 
@@ -1921,7 +1921,7 @@
 
     "path-scurry/lru-cache": ["lru-cache@10.4.3", "", {}, "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ=="],
 
-    "photosphere-ziggy-frontend/ziggy": ["ziggy-monorepo@github:ashleydavis/ziggy#9ff4aa5", { "dependencies": { "express": "5.3.0", "ws": "8.22.0" }, "bin": { "ziggy-remote-control-server": "tools/remote-control-server/src/index.ts" } }, "ashleydavis-ziggy-9ff4aa5", "sha512-dqY+QmucWlCzv55a1YNaBXMnJnBdtERhACT4gCZKbqWEcKjVg9/6gwni4W+HxhoIJSzb2gnsSa+dzpfaK8l6kw=="],
+    "photosphere-ziggy-frontend/ziggy": ["ziggy-monorepo@github:ashleydavis/ziggy#8674f67", { "dependencies": { "express": "5.3.0", "ws": "8.22.0" }, "bin": { "ziggy-remote-control-server": "tools/remote-control-server/src/index.ts" } }, "ashleydavis-ziggy-8674f67", "sha512-A9HnKhhkZJqZ0ALu+Au6tt5zAJvmGhZ0lAoh4utR3W8nAclTy/sHVTt67Sv3mj4Ggmf6NXlrAui07kXHHge9fw=="],
 
     "prop-types/react-is": ["react-is@16.13.1", "", {}, "sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ=="],
 
