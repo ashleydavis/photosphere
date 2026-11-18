@@ -16,6 +16,8 @@ class FakeElement implements ISplashElement {
         overflow: "",
         opacity: "",
         display: "",
+        top: "",
+        left: "",
         width: "",
         height: "",
         objectFit: "",
@@ -117,6 +119,11 @@ describe("installSplashScreen", () => {
         expect(image.attributes["src"]).toBe("/ziggy-splash-portrait.png");
         expect(image.attributes["alt"]).toBe("");
         expect(image.style.objectFit).toBe("cover");
+        expect(image.style.position).toBe("absolute");
+        expect(image.style.top).toBe("calc(-1 * var(--ziggy-window-inset-top, 0px))");
+        expect(image.style.left).toBe("calc(-1 * var(--ziggy-window-inset-left, 0px))");
+        expect(image.style.width).toBe("calc(100% + var(--ziggy-window-inset-left, 0px) + var(--ziggy-window-inset-right, 0px))");
+        expect(image.style.height).toBe("calc(100% + var(--ziggy-window-inset-top, 0px) + var(--ziggy-window-inset-bottom, 0px))");
     });
 
     test("an image that fails to load removes the overlay at once", async () => {
