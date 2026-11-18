@@ -972,7 +972,7 @@ fn decryptAction(state: *IProgramState, args: []const ArgumentValue, options: *c
 
 //
 // The action of the bug command (`bugReportCommand`): `run` calls the command. Commander stores `--no-browser`
-// as the `browser` option, so `noBrowser` is never set.
+// as the `browser` option, true unless `--no-browser` is given.
 //
 fn bugAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
     _ = args;
@@ -982,7 +982,7 @@ fn bugAction(state: *IProgramState, args: []const ArgumentValue, options: *const
             .verbose = flagValue(options, "verbose"),
             .tools = flagValue(options, "tools"),
             .yes = flagValue(options, "yes"),
-            .noBrowser = flagValue(options, "noBrowser"),
+            .browser = flagValue(options, "browser"),
         },
     };
 }
@@ -1638,7 +1638,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(bugDefinition, verboseOption);
     _ = optionFrom(bugDefinition, yesOption);
     _ = bugDefinition
-        .option("--no-browser", "Don't open the browser automatically", .{ .boolean = false })
+        .option("--no-browser", "Don't open the browser automatically", null)
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "bug"))
         .action(state, bugAction);
 

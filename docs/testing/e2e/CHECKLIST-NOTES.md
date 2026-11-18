@@ -108,6 +108,8 @@ Upcoming version: 0.0.9
 #### bug
 
 - Failed at Test step 1: `psi bug --no-browser --yes` printed `✓ Bug report opened in browser!` and neither the `issues/new` link nor any tool versions. `bug.zig` reads a `noBrowser` field, but the option parser handles `--no-browser` by setting `browser` to false, so the flag has no effect.
+- Linux: failed again at Test step 1. `psi bug --no-browser --yes` printed `✓ Bug report opened in browser!` and opened the browser, showed the system and psi version but no tool versions, and printed no `issues/new` link. It exited 0. The comment above the bug command in `apps/cli-zig/index.zig` says `noBrowser` is never set.
+- Linux: passed after the bug command was changed to read the `browser` option commander stores for `--no-browser`, without the `false` default that kept it false. No browser opened, it printed the `issues/new` URL and exited 0. The printed summary now has a `Tools:` line with the ImageMagick, ffmpeg and ffprobe versions, beside the system and the psi version. No errors in the errors logs.
 
 ## Desktop
 

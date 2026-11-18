@@ -42,9 +42,10 @@ pub const IBugReportCommandOptions = struct {
     yes: ?bool = null,
 
     //
-    // Don't open the browser automatically
+    // Whether to open the bug report in the browser. `--no-browser` makes it false, and then the
+    // report's URL is printed instead.
     //
-    noBrowser: ?bool = null,
+    browser: ?bool = null,
 };
 
 //
@@ -284,12 +285,15 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, too
     const githubUrl = try createGitHubIssueUrl(allocator, bugInfo.title, bugReportTemplate);
 
     // Prepare summary information
-    const summaryInfo = try std.fmt.allocPrint(allocator, "Title: {s}\nPhotosphere Version: {s}\nSystem: {s} {s} ({s})\nLog File: {s}", .{
+    const summaryInfo = try std.fmt.allocPrint(allocator, "Title: {s}\nPhotosphere Version: {s}\nSystem: {s} {s} ({s})\nTools: {s}, {s}, {s}\nLog File: {s}", .{
         bugInfo.title,
         version,
         systemInfo.platform,
         systemInfo.arch,
         systemInfo.release,
+        toolVersions.imagemagick,
+        toolVersions.ffmpeg,
+        toolVersions.ffprobe,
         latestLogFile orelse "None available",
     });
 
@@ -298,17 +302,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, too
     else
         "";
 
-    if (options.noBrowser orelse false) {
-        try outro(io, try std.fmt.allocPrint(allocator, "{s}\n\n{s}{s}\n\n{s}\n{s}\n\n{s}", .{
-            try pc.green(allocator, "\u{2713} Bug report generated successfully!"),
-            summaryInfo,
-            logInfo,
-            try pc.yellow(allocator, "GitHub Issue URL:"),
-            githubUrl,
-            try pc.dim(allocator, "Copy and paste the URL above into your browser to create the issue."),
-        }), .{});
-    }
-    else {
+    if (options.browser orelse true) {
         if (open(allocator, io, log, githubUrl)) {
             try outro(io, try std.fmt.allocPrint(allocator, "{s}\n\n{s}{s}", .{ try pc.green(allocator, "\u{2713} Bug report opened in browser!"), summaryInfo, logInfo }), .{});
         }
@@ -322,6 +316,16 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, too
                 try pc.yellow(allocator, "Please copy the URL above to submit the bug report."),
             }), .{});
         }
+    }
+    else {
+        try outro(io, try std.fmt.allocPrint(allocator, "{s}\n\n{s}{s}\n\n{s}\n{s}\n\n{s}", .{
+            try pc.green(allocator, "\u{2713} Bug report generated successfully!"),
+            summaryInfo,
+            logInfo,
+            try pc.yellow(allocator, "GitHub Issue URL:"),
+            githubUrl,
+            try pc.dim(allocator, "Copy and paste the URL above into your browser to create the issue."),
+        }), .{});
     }
 
     exit(io, log, 0);

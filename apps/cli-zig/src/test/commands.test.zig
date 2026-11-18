@@ -4068,14 +4068,19 @@ fn expectOpened(allocator: std.mem.Allocator, environment: *const std.process.En
 }
 
 //
-// The summary `psi bug` prints for a report with this title, on this system.
+// The summary `psi bug` prints for a report with this title, on this system, with the versions of the tools
+// built into psi.
 //
 fn bugSummary(allocator: std.mem.Allocator, title: []const u8, logFile: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "Title: {s}\nPhotosphere Version: dev\nSystem: {s} {s} ({s})\nLog File: {s}", .{
+    const toolVersions = try builtInToolVersions(utils.mute_log.MuteLog.init(), allocator);
+    return std.fmt.allocPrint(allocator, "Title: {s}\nPhotosphere Version: dev\nSystem: {s} {s} ({s})\nTools: ImageMagick v{s}, ffmpeg v{s}, ffprobe v{s}\nLog File: {s}", .{
         title,
         cli.file_logger.osPlatform(),
         cli.file_logger.osArch(),
         try cli.file_logger.osRelease(allocator),
+        toolVersions.magick,
+        toolVersions.ffmpeg,
+        toolVersions.ffprobe,
         logFile,
     });
 }
@@ -4135,14 +4140,16 @@ test "bug --yes reports the bug" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try bugEnvironment(allocator, root, true);
 
-    // Commander stores --no-browser as the browser option, so it changes nothing.
-    const outro = try bugOutro(allocator, try bugSummary(allocator, "Bug Report", "None available"));
+    const summary = try bugSummary(allocator, "Bug Report", "None available");
+    const outro = try bugOutro(allocator, summary);
     const url = try bugUrl(log, allocator, "Bug Report", bug_template_details, "No log file available", "No log file available");
     const expected = try std.mem.concat(allocator, u8, &.{ bug_header, outro });
     try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
     try expectOpened(allocator, environment,url);
-    try expectResult(try runZig(allocator, environment, &.{ "bug", "-y", "--no-browser" }), expected, "", 0);
-    try expectOpened(allocator, environment,url);
+
+    // --no-browser prints the URL of the report instead of opening it.
+    const noBrowserOutro = try std.fmt.allocPrint(allocator, "✓ Bug report generated successfully!\n\n{s}\n\nGitHub Issue URL:\n{s}\n\nCopy and paste the URL above into your browser to create the issue.\n", .{ summary, url });
+    try expectResult(try runZig(allocator, environment, &.{ "bug", "-y", "--no-browser" }), try std.mem.concat(allocator, u8, &.{ bug_header, noBrowserOutro }), "", 0);
 }
 
 test "bug --yes includes the header of the newest log file" {

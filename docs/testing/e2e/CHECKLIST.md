@@ -159,19 +159,19 @@ Run the story player and check every story cycles through without failures, then
 - [x] [info](cli/info/info.md)
 
 ### Hash
-- [ ] [hash](cli/hash/hash.md)
+- [x] [hash](cli/hash/hash.md)
 
 ### Tools
-- [ ] [tools](cli/tools/tools.md)
+- [x] [tools](cli/tools/tools.md)
 
 ### Version
-- [ ] [version](cli/version/version.md)
+- [x] [version](cli/version/version.md)
 
 ### News
-- [ ] [news](cli/news/news.md)
+- [x] [news](cli/news/news.md)
 
 ### Bug
-- [ ] [bug](cli/bug/bug.md)
+- [x] [bug](cli/bug/bug.md)
 
 ## Desktop
 

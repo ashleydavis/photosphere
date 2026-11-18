@@ -1352,14 +1352,13 @@ test "bug command lines parse like commander" {
     try std.testing.expectEqual(@as(?bool, false), yesOnly.outcome.bug.verbose);
     try std.testing.expectEqual(@as(?bool, true), yesOnly.outcome.bug.yes);
 
-    // Commander stores --no-browser as the browser option, so bugReportCommand's noBrowser is never set.
     const noBrowser = try parse(allocator, &.{ "bug", "--no-browser" });
-    try std.testing.expect(noBrowser.outcome.bug.noBrowser == null);
+    try std.testing.expectEqual(@as(?bool, false), noBrowser.outcome.bug.browser);
 
     const defaults = try parse(allocator, &.{"bug"});
     try std.testing.expectEqual(@as(?bool, false), defaults.outcome.bug.verbose);
     try std.testing.expectEqual(@as(?bool, false), defaults.outcome.bug.yes);
-    try std.testing.expect(defaults.outcome.bug.noBrowser == null);
+    try std.testing.expectEqual(@as(?bool, true), defaults.outcome.bug.browser);
     try expectCommanderError(allocator, &.{ "bug", "extra" }, "commander.excessArguments", "error: too many arguments for 'bug'. Expected 0 arguments but got 1.\n");
     try expectCommanderError(allocator, &.{ "bug", "--db", "d" }, "commander.unknownOption", "error: unknown option '--db'\n");
 }
