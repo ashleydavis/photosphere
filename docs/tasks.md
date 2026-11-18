@@ -114,7 +114,7 @@ Priority and cancelling work as [Tasks](https://github.com/ashleydavis/ziggy/blo
 
 ### The CLI
 
-The CLI runs the same node-api task handlers on Ziggy's `TaskPool` (`ziggy.task_pool`), which `initContext` (`apps/cli-zig/src/lib/init-cmd.zig`) makes with a task timeout from `--timeout`. A command makes a `TaskQueue` and waits in `awaitTask` or `awaitAllTasks`. See [Threads](threads.md#the-zig-cli) for how the pool runs and times out its tasks.
+The CLI runs the same node-api task handlers on a Ziggy `WorkerPool`, which `initContext` (`apps/cli-zig/src/lib/init-cmd.zig`) makes with a task timeout from `--timeout`. A command makes a `TaskQueue` and waits in `awaitTask` or `awaitAllTasks`. See [Threads](threads.md#the-zig-cli) for how the pool runs and times out its tasks.
 
 ## The frontend (TypeScript)
 
