@@ -85,12 +85,14 @@ Upcoming version: 0.0.9
 #### add-view-edit-delete
 
 - Not run. Both keychain tests add and remove secrets with fixed names in the real OS keychain of the machine running them, so they were not run automatically.
+- Linux: both keychain tests passed against the real OS keychain, and every test secret was removed at the end. Both test files were laid out as Prep, Test and Check first, with every command, expectation and step order kept.
 
 ### Origin
 
 #### consolidate-unrelated-remote
 
 - Passed. Step 2 printed `Failed to acquire write lock after 3 attempts`, apparently from a lock left by the step 1 sync that fails as expected, but it still pushed the file and exited 0.
+- Linux: passed again, with the same `[WARN] Failed to acquire write lock after 3 attempts` in step 2. The lock was held "since 3s ago", taken by the step 1 sync that failed.
 
 ### Info
 
@@ -98,6 +100,8 @@ Upcoming version: 0.0.9
 
 - Failed at Test step 1: the EXIF date (27 May 2025) of `test/test.jpg` was expected and only the file modified date was shown. Step 2 shows `Photo date: 2025-05-27`, so the fixture carries it.
 - Failed at Test step 3: a non-zero exit and a "not found" message were expected for `test/no-such-file.jpg`. It exited 0 and printed `Info for 0 item(s)`.
+- Linux: failed again at Test step 1. `psi info test/test.jpg --yes` showed `Type: image/jpeg` and `Dimensions: 2560 × 1920` but no EXIF date (27 May 2025): only `Modified: 8/5/2026, 9:38:12 AM`. No errors in the errors log.
+- Linux: passed after `psi info` was changed to show the date a file was taken, read from its EXIF, and to report a path that does not exist as `Error: File not found` with exit code 1. Step 1 showed `Photo date: 5/27/2025, 9:54:16 AM`, and step 3 exited 1. No errors in the errors logs.
 
 ### Bug
 

@@ -25,6 +25,7 @@ const computeHash = node_api.hash.computeHash;
 const toLocaleString = node_api.verify_worker.toLocaleString;
 const mime = node_api.mime.mime;
 const getFileInfo = tools.getFileInfo;
+const pathExists = node_utils.fs.pathExists;
 const AssetInfo = tools.types.AssetInfo;
 const js_value = bdb.js_value;
 const BsonValue = serialization.bson.BsonValue;
@@ -207,6 +208,17 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
     }
 
     var results: std.ArrayList(FileAnalysis) = .empty;
+
+    //
+    // A path that does not exist stops the command with exit code 1, as `psi hash` does, so a
+    // mistyped name is never reported as an empty success.
+    //
+    for (pathInputs.items) |input| {
+        if (!pathExists(io, input)) {
+            log.err(try pc.red(allocator, try std.fmt.allocPrint(allocator, "File not found: {s}", .{input})));
+            exit(io, log, 1);
+        }
+    }
 
     if (pathInputs.items.len > 0) {
         writeProgress(log, "Searching for files...");
@@ -394,16 +406,28 @@ fn displayFileInfo(log: ILog, allocator: std.mem.Allocator, analysis: FileAnalys
         fileInfo.contentType.?
     else
         (try (try mime()).getType(allocator, analysis.path)) orelse "application/octet-stream";
-    log.info(try std.fmt.allocPrint(allocator, "   Type: {s}", .{mimeType}));
+    try displayField(log, allocator, "Type", mimeType);
     if (analysis.hash) |hash| {
         if (hash.len > 0) {
-            log.info(try std.fmt.allocPrint(allocator, "   Hash: {s}", .{hash}));
+            try displayField(log, allocator, "Hash", hash);
         }
     }
-    log.info(try std.fmt.allocPrint(allocator, "   Size: {s}", .{try format.formatBytes(allocator, @floatFromInt(fileInfo.length), format.defaultFormatBytesOptions)}));
-    log.info(try std.fmt.allocPrint(allocator, "   Modified: {s}", .{try toLocaleString(allocator, fileInfo.lastModified)}));
+    try displayField(log, allocator, "Size", try format.formatBytes(allocator, @floatFromInt(fileInfo.length), format.defaultFormatBytesOptions));
+    try displayField(log, allocator, "Modified", try toLocaleString(allocator, fileInfo.lastModified));
     if (analysis.assetInfo) |assetInfo| {
-        log.info(try std.fmt.allocPrint(allocator, "   Dimensions: {s} \u{00D7} {s}", .{
+
+        //
+        // The date the photo or video was taken, from its EXIF or format tags, which getFileInfo reads
+        // into createdAt. It is shown as well as the modified time because a copied file has a new modified
+        // time but keeps the date it was taken. A file with no date, or one that does not parse (NaN),
+        // shows no line.
+        //
+        if (assetInfo.createdAt) |createdAt| {
+            if (!std.math.isNan(createdAt)) {
+                try displayField(log, allocator, "Photo date", try toLocaleString(allocator, @intFromFloat(createdAt)));
+            }
+        }
+        try displayField(log, allocator, "Dimensions", try std.fmt.allocPrint(allocator, "{s} \u{00D7} {s}", .{
             try js_value.toString(allocator, .{ .number = assetInfo.dimensions.width }),
             try js_value.toString(allocator, .{ .number = assetInfo.dimensions.height }),
         }));
@@ -416,33 +440,44 @@ fn displayFileInfo(log: ILog, allocator: std.mem.Allocator, analysis: FileAnalys
 }
 
 //
+// Prints one "label: value" line of an info block, indented under the block's heading, with the
+// value starting in the same column on every line so the block reads as a table. The column fits
+// the longest label, "Original file:" and "Original path:", with one space after it.
+//
+fn displayField(log: ILog, allocator: std.mem.Allocator, label: []const u8, value: []const u8) !void {
+    const labelWithColon = try std.mem.concat(allocator, u8, &.{ label, ":" });
+    std.debug.assert(labelWithColon.len < 15);
+    log.info(try std.fmt.allocPrint(allocator, "   {s: <15}{s}", .{ labelWithColon, value }));
+}
+
+//
 // Displays an asset found in the database.
 //
 fn displayAssetInfo(log: ILog, allocator: std.mem.Allocator, asset: IAsset) !void {
-    log.info(try std.fmt.allocPrint(allocator, "   Asset ID: {s}", .{try js_value.toString(allocator, field(asset, "_id"))}));
-    log.info(try std.fmt.allocPrint(allocator, "   Original file: {s}", .{try js_value.toString(allocator, field(asset, "origFileName"))}));
+    try displayField(log, allocator, "Asset ID", try js_value.toString(allocator, field(asset, "_id")));
+    try displayField(log, allocator, "Original file", try js_value.toString(allocator, field(asset, "origFileName")));
     if (isTruthy(field(asset, "origPath"))) {
-        log.info(try std.fmt.allocPrint(allocator, "   Original path: {s}", .{try js_value.toString(allocator, field(asset, "origPath"))}));
+        try displayField(log, allocator, "Original path", try js_value.toString(allocator, field(asset, "origPath")));
     }
-    log.info(try std.fmt.allocPrint(allocator, "   Type: {s}", .{try js_value.toString(allocator, field(asset, "contentType"))}));
-    log.info(try std.fmt.allocPrint(allocator, "   Hash: {s}", .{try js_value.toString(allocator, field(asset, "hash"))}));
-    log.info(try std.fmt.allocPrint(allocator, "   Dimensions: {s} \u{00D7} {s}", .{ try js_value.toString(allocator, field(asset, "width")), try js_value.toString(allocator, field(asset, "height")) }));
-    log.info(try std.fmt.allocPrint(allocator, "   File date: {s}", .{try js_value.toString(allocator, field(asset, "fileDate"))}));
+    try displayField(log, allocator, "Type", try js_value.toString(allocator, field(asset, "contentType")));
+    try displayField(log, allocator, "Hash", try js_value.toString(allocator, field(asset, "hash")));
+    try displayField(log, allocator, "Dimensions", try std.fmt.allocPrint(allocator, "{s} \u{00D7} {s}", .{ try js_value.toString(allocator, field(asset, "width")), try js_value.toString(allocator, field(asset, "height")) }));
+    try displayField(log, allocator, "File date", try js_value.toString(allocator, field(asset, "fileDate")));
     if (isTruthy(field(asset, "photoDate"))) {
-        log.info(try std.fmt.allocPrint(allocator, "   Photo date: {s}", .{try js_value.toString(allocator, field(asset, "photoDate"))}));
+        try displayField(log, allocator, "Photo date", try js_value.toString(allocator, field(asset, "photoDate")));
     }
-    log.info(try std.fmt.allocPrint(allocator, "   Upload date: {s}", .{try js_value.toString(allocator, field(asset, "uploadDate"))}));
+    try displayField(log, allocator, "Upload date", try js_value.toString(allocator, field(asset, "uploadDate")));
     if (field(asset, "duration") != .undefined) {
-        log.info(try std.fmt.allocPrint(allocator, "   Duration: {s}s", .{try js_value.toString(allocator, field(asset, "duration"))}));
+        try displayField(log, allocator, "Duration", try std.fmt.allocPrint(allocator, "{s}s", .{try js_value.toString(allocator, field(asset, "duration"))}));
     }
     if (isTruthy(field(asset, "location"))) {
-        log.info(try std.fmt.allocPrint(allocator, "   Location: {s}", .{try js_value.toString(allocator, field(asset, "location"))}));
+        try displayField(log, allocator, "Location", try js_value.toString(allocator, field(asset, "location")));
     }
     const coordinates = field(asset, "coordinates");
     if (isTruthy(coordinates)) {
         const lat = if (coordinates == .document) (coordinates.document.get("lat") orelse BsonValue.undefined) else BsonValue.undefined;
         const lng = if (coordinates == .document) (coordinates.document.get("lng") orelse BsonValue.undefined) else BsonValue.undefined;
-        log.info(try std.fmt.allocPrint(allocator, "   Coordinates: {s}, {s}", .{ try js_value.toString(allocator, lat), try js_value.toString(allocator, lng) }));
+        try displayField(log, allocator, "Coordinates", try std.fmt.allocPrint(allocator, "{s}, {s}", .{ try js_value.toString(allocator, lat), try js_value.toString(allocator, lng) }));
     }
     const labels = field(asset, "labels");
     if (labels == .array and labels.array.len > 0) {
@@ -455,9 +490,9 @@ fn displayAssetInfo(log: ILog, allocator: std.mem.Allocator, asset: IAsset) !voi
                 try joined.appendSlice(allocator, try js_value.toString(allocator, label));
             }
         }
-        log.info(try std.fmt.allocPrint(allocator, "   Labels: {s}", .{joined.items}));
+        try displayField(log, allocator, "Labels", joined.items);
     }
     if (isTruthy(field(asset, "description"))) {
-        log.info(try std.fmt.allocPrint(allocator, "   Description: {s}", .{try js_value.toString(allocator, field(asset, "description"))}));
+        try displayField(log, allocator, "Description", try js_value.toString(allocator, field(asset, "description")));
     }
 }

@@ -39,13 +39,18 @@ test_view_media_files() {
     invoke_command "Show info for test files" "$(get_zig_cli_command) info $TEST_FILES_DIR/ --yes" 0 "info_output"
 
     # Check that info output doesn't contain "Type: undefined" which indicates a bug
-    expect_output_string "$info_output" "Type: undefined" "Info output should not contain 'Type: undefined'" "false"
+    expect_output_string "$info_output" "Type: *undefined" "Info output should not contain 'Type: undefined'" "false"
 
     # Check that each test file has the correct MIME type
-    expect_output_string "$info_output" "Type: image/jpeg" "Info output should contain JPEG MIME type for test.jpg"
-    expect_output_string "$info_output" "Type: image/png" "Info output should contain PNG MIME type for test.png"
-    expect_output_string "$info_output" "Type: video/mp4" "Info output should contain MP4 MIME type for test.mp4"
-    expect_output_string "$info_output" "Type: image/webp" "Info output should contain WebP MIME type for test.webp"
+    expect_output_string "$info_output" "Type: *image/jpeg" "Info output should contain JPEG MIME type for test.jpg"
+    expect_output_string "$info_output" "Type: *image/png" "Info output should contain PNG MIME type for test.png"
+    expect_output_string "$info_output" "Type: *video/mp4" "Info output should contain MP4 MIME type for test.mp4"
+    expect_output_string "$info_output" "Type: *image/webp" "Info output should contain WebP MIME type for test.webp"
+
+    # A path that does not exist stops info with exit code 1, naming the path.
+    local missing_output
+    invoke_command "Show info for a file that does not exist" "$(get_zig_cli_command) info $TEST_FILES_DIR/no-such-file.jpg --yes" 1 "missing_output"
+    expect_output_string "$missing_output" "File not found: $TEST_FILES_DIR/no-such-file.jpg" "Info output should name the file it could not find"
     test_passed
 }
 

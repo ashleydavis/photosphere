@@ -519,30 +519,30 @@ const info_v6_report =
     \\Info for 3 item(s):
     \\
     \\📁 Hash: 426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c
-    \\   Asset ID: 89171cd9-a652-4047-b869-1154bf2c95a1
+    \\   Asset ID:      89171cd9-a652-4047-b869-1154bf2c95a1
     \\   Original file: test.jpg
     \\   Original path: ../../test
-    \\   Type: image/jpeg
-    \\   Hash: 426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c
-    \\   Dimensions: 2560 × 1920
-    \\   File date: 2024-01-01T00:00:00.000Z
-    \\   Photo date: 2025-05-27T09:54:16.000Z
-    \\   Upload date: 2025-08-21T09:57:01.494Z
-    \\   Coordinates: -29.019044444444443, 152.18946666666668
-    \\   Labels: .., .., test
+    \\   Type:          image/jpeg
+    \\   Hash:          426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c
+    \\   Dimensions:    2560 × 1920
+    \\   File date:     2024-01-01T00:00:00.000Z
+    \\   Photo date:    2025-05-27T09:54:16.000Z
+    \\   Upload date:   2025-08-21T09:57:01.494Z
+    \\   Coordinates:   -29.019044444444443, 152.18946666666668
+    \\   Labels:        .., .., test
     \\
     \\📁 89171cd9-a652-4047-b869-1154bf2c95a1
-    \\   Asset ID: 89171cd9-a652-4047-b869-1154bf2c95a1
+    \\   Asset ID:      89171cd9-a652-4047-b869-1154bf2c95a1
     \\   Original file: test.jpg
     \\   Original path: ../../test
-    \\   Type: image/jpeg
-    \\   Hash: 426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c
-    \\   Dimensions: 2560 × 1920
-    \\   File date: 2024-01-01T00:00:00.000Z
-    \\   Photo date: 2025-05-27T09:54:16.000Z
-    \\   Upload date: 2025-08-21T09:57:01.494Z
-    \\   Coordinates: -29.019044444444443, 152.18946666666668
-    \\   Labels: .., .., test
+    \\   Type:          image/jpeg
+    \\   Hash:          426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c
+    \\   Dimensions:    2560 × 1920
+    \\   File date:     2024-01-01T00:00:00.000Z
+    \\   Photo date:    2025-05-27T09:54:16.000Z
+    \\   Upload date:   2025-08-21T09:57:01.494Z
+    \\   Coordinates:   -29.019044444444443, 152.18946666666668
+    \\   Labels:        .., .., test
     \\
     \\📁 Asset ID: 00000000-0000-0000-0000-000000000000
     \\   Error: Asset not found in database
@@ -562,11 +562,11 @@ const info_png_report =
     \\Info for 1 item(s):
     \\
     \\📁 <file>
-    \\   Type: image/png
-    \\   Hash: 3d9d6f073e60a13e6706bec322b47615f76b594b17bd64495614996b995908d9
-    \\   Size: 1.29 KiB
-    \\   Modified: <modified>
-    \\   Dimensions: 100 × 90
+    \\   Type:          image/png
+    \\   Hash:          3d9d6f073e60a13e6706bec322b47615f76b594b17bd64495614996b995908d9
+    \\   Size:          1.29 KiB
+    \\   Modified:      <modified>
+    \\   Dimensions:    100 × 90
     \\
     \\
     \\Displayed info for 1 item(s).
@@ -575,10 +575,10 @@ const info_png_report =
 ;
 
 //
-// Replaces the text after "   Modified: " up to the end of its line with <modified>.
+// Replaces the text after "   Modified:      " up to the end of its line with <modified>.
 //
 fn normalizeModified(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
-    const marker = "   Modified: ";
+    const marker = "   Modified:      ";
     const start = (std.mem.indexOf(u8, text, marker) orelse return text) + marker.len;
     const end = std.mem.indexOfScalarPos(u8, text, start, '\n') orelse text.len;
     return std.mem.concat(allocator, u8, &.{ text[0..start], "<modified>", text[end..] });
@@ -597,12 +597,20 @@ test "info prints the report" {
     try expectResult(try runZig(allocator, environment, &.{ "info", lookups[0], lookups[1], lookups[2], "--db", db, "--yes" }), info_v6_report, "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "inf", lookups[0], lookups[1], lookups[2], "--db", db, "--yes" }), info_v6_report, "", 0);
 
-    // A file path is hashed and analyzed; a path that does not exist shows nothing.
+    // A file path is hashed and analyzed.
     const file = try node_path.join(allocator, &.{ root, "test.png" });
     try std.Io.Dir.cwd().copyFile("../../test/test.png", std.Io.Dir.cwd(), file, std.testing.io, .{});
     const expected = try std.mem.replaceOwned(u8, allocator, info_png_report, "<file>", file);
-    const result = try runZig(allocator, environment, &.{ "info", file, try std.fs.path.join(allocator, &.{ root, "missing.jpg" }), "--yes" });
+    const result = try runZig(allocator, environment, &.{ "info", file, "--yes" });
     try expectResult(.{ .stdout = try normalizeModified(allocator, result.stdout), .stderr = result.stderr, .exitCode = result.exitCode }, expected, "", 0);
+
+    // A path that does not exist stops the command with exit code 1 before anything is reported, even with a
+    // file that does exist beside it.
+    const missing = try std.fs.path.join(allocator, &.{ root, "missing.jpg" });
+    const missingResult = try runZig(allocator, environment, &.{ "info", file, missing, "--yes" });
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "File not found: {s}\n", .{missing}), missingResult.stderr);
+    try std.testing.expect(std.mem.indexOf(u8, missingResult.stdout, "Info for") == null);
+    try std.testing.expectEqual(@as(u8, 1), missingResult.exitCode);
 }
 
 //
@@ -641,11 +649,31 @@ test "info reads the dimensions of a photo and a video with the tools built into
 
     // The dimensions of the fixtures: test.jpg's as test/dbs/v6 records them, test.mp4's as an installed ffprobe reads them.
     const photoBlock = try infoBlock(result.stdout, photo);
-    try std.testing.expect(std.mem.indexOf(u8, photoBlock, "\n   Type: image/jpeg\n") != null);
-    try std.testing.expect(std.mem.endsWith(u8, photoBlock, "\n   Dimensions: 2560 × 1920"));
+    try std.testing.expect(std.mem.indexOf(u8, photoBlock, "\n   Type:          image/jpeg\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, photoBlock, "\n   Dimensions:    2560 × 1920"));
     const videoBlock = try infoBlock(result.stdout, video);
-    try std.testing.expect(std.mem.indexOf(u8, videoBlock, "\n   Type: video/mp4\n") != null);
-    try std.testing.expect(std.mem.endsWith(u8, videoBlock, "\n   Dimensions: 1280 × 720"));
+    try std.testing.expect(std.mem.indexOf(u8, videoBlock, "\n   Type:          video/mp4\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, videoBlock, "\n   Dimensions:    1280 × 720"));
+}
+
+test "info shows the date a photo was taken, read from its EXIF" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-info-photo-date");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    // test.jpg's EXIF DateTimeOriginal is "2025:05:27 09:54:16". The copy has a new modified time, so the date can
+    // only come from the EXIF.
+    const photo = try node_path.join(allocator, &.{ root, "test.jpg" });
+    try std.Io.Dir.cwd().copyFile("../../test/test.jpg", std.Io.Dir.cwd(), photo, std.testing.io, .{});
+
+    const result = try runZig(allocator, environment, &.{ "info", photo, "--yes" });
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+    const photoBlock = try infoBlock(result.stdout, photo);
+    try std.testing.expect(std.mem.indexOf(u8, photoBlock, "\n   Photo date:    5/27/2025, 9:54:16 AM\n") != null);
 }
 
 //

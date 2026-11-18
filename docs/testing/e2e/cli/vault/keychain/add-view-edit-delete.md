@@ -5,37 +5,18 @@
 Test that the OS keychain backend supports the same `secrets` subcommands as
 the plaintext backend.
 
-## Prerequisites
+## Prep
 
-From the repo root, build the CLI and put it on the PATH:
+From the repo root, build the CLI, put it on the PATH, switch to the keychain backend with an isolated config, and clear any leftover test secrets from previous runs. The keychain is OS-global, so secret names collide across test runs: this test cleans up at the start and at the end (step 5).
 
 ```bash
 zig build
 export PATH="$PWD/zig-out/bin:$PATH"
-```
-
-Each step opts the CLI into the OS-keychain vault by setting
-`PHOTOSPHERE_VAULT_TYPE=keychain`. The keychain is OS-global, so secret
-names collide across test runs. Clean up at the start and end (step 7) of
-this walkthrough.
-
-## Steps
-
-### 1. Switch to the keychain backend with an isolated config
-
-```bash
 rm -rf /tmp/psi-cli-vault-keychain-add-view-edit-delete
 mkdir -p /tmp/psi-cli-vault-keychain-add-view-edit-delete/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-keychain-add-view-edit-delete/config
 export PHOTOSPHERE_STATE_DIR=/tmp/psi-cli-vault-keychain-add-view-edit-delete/config
 export PHOTOSPHERE_VAULT_TYPE=keychain
-```
-
----
-
-### 2. Clear any leftover test secrets from previous runs
-
-```bash
 for name in keychain-test-secret view-keychain edit-keychain renamed-keychain keep-keychain delete-keychain; do
     psi secrets remove --name "$name" --yes 2>/dev/null || true
 done
@@ -44,9 +25,9 @@ done
 Expected:
 - No errors that would prevent later steps from running.
 
----
+## Test
 
-### 3. Add a secret
+### 1. Add a secret
 
 ```bash
 psi secrets add --yes --name keychain-test-secret --type plain --value hello123
@@ -57,7 +38,7 @@ Expected:
 
 ---
 
-### 4. List secrets and confirm it appears
+### 2. List secrets and confirm it appears
 
 ```bash
 psi secrets list
@@ -68,7 +49,7 @@ Expected:
 
 ---
 
-### 5. View the secret
+### 3. View the secret
 
 ```bash
 psi secrets view --name keychain-test-secret --yes
@@ -79,7 +60,7 @@ Expected:
 
 ---
 
-### 6. Edit the secret value
+### 4. Edit the secret value
 
 ```bash
 psi secrets edit --name keychain-test-secret --yes --value updated123
@@ -89,9 +70,9 @@ psi secrets view --name keychain-test-secret --yes
 Expected:
 - Second command's output contains `updated123`.
 
----
+## Check
 
-### 7. Delete the secret and confirm it is gone
+### 5. Delete the secret and confirm it is gone
 
 ```bash
 psi secrets remove --name keychain-test-secret --yes
