@@ -40,6 +40,8 @@ export interface ISplashStyle {
     overflow: string;
     opacity: string;
     display: string;
+    top: string;
+    left: string;
     width: string;
     height: string;
     objectFit: string;
@@ -141,9 +143,15 @@ export function installSplashScreen(documentLike: IDocumentLike | Document, opti
     const portrait = documentInterface.createElement("img");
     portrait.setAttribute("src", "/ziggy-splash-portrait.png");
     portrait.setAttribute("alt", "");
+    // The image covers the whole window, not only the page: on Android the page is kept clear of the system bars, and the native
+    // app sets --ziggy-window-inset-<side> to how far the window reaches past the page on that side, so the art sits where the
+    // native splash picture, which covers the whole window, has it. Elsewhere they are unset and the image covers the page.
     portrait.style.display = "block";
-    portrait.style.width = "100%";
-    portrait.style.height = "100%";
+    portrait.style.position = "absolute";
+    portrait.style.top = "calc(-1 * var(--ziggy-window-inset-top, 0px))";
+    portrait.style.left = "calc(-1 * var(--ziggy-window-inset-left, 0px))";
+    portrait.style.width = "calc(100% + var(--ziggy-window-inset-left, 0px) + var(--ziggy-window-inset-right, 0px))";
+    portrait.style.height = "calc(100% + var(--ziggy-window-inset-top, 0px) + var(--ziggy-window-inset-bottom, 0px))";
     portrait.style.objectFit = "cover";
     portrait.style.objectPosition = "center";
     picture.appendChild(landscape);
