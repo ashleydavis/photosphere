@@ -4,14 +4,6 @@ import { sleep } from "./sleep";
 import { WrappedError } from "./wrapped-error";
 
 //
-// Returns a promise that rejects after the given number of milliseconds.
-//
-export async function rejectAfter<ReturnT>(ms: number): Promise<ReturnT> {
-    await sleep(ms);
-    throw new Error(`Operation timed out after ${ms}ms`);
-}
-
-//
 // Attempts an operation once, rejecting if it doesn't complete within timeoutMS.
 //
 export async function retryOnce<ReturnT>(operation: () => Promise<ReturnT>, timeoutMS: number): Promise<ReturnT> {

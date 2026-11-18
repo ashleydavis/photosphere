@@ -1525,12 +1525,6 @@ cmd_restart() {
 # config.ini says. It is also the answer to a partition that has filled up, which is what happened to
 # all five pool AVDs at 6G.
 #
-# What the wipe costs: it removes /data/local/tmp/psphere-apk.sha, the stamp android_ensure_apk in
-# apps/smoke-tests/lib/android.sh compares against, so the first `test:and` after a restart reinstalls
-# the APK on every emulator. That is once per restart rather than once per run, so the saving commit
-# a01f52f2 made by not reinstalling an unchanged APK at the top of every run is untouched from the
-# second run onwards.
-#
 cmd_pool_restart() {
     stop_pool_emulators
     cmd_pool_up --wipe

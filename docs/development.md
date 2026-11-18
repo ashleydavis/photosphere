@@ -4,47 +4,22 @@ How to set up, run, and work on Photosphere, and where to find the detailed guid
 
 Photosphere is a Bun-workspaces monorepo holding the Photosphere App for desktop and mobile, the `psi` CLI, and the shared React UI (`packages/user-interface`) the app shows.
 
-The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, Android and iOS. It is built on [Ziggy](https://github.com/ashleydavis/ziggy), an application framework in its own repository that shows the shared UI in each platform's web view and runs everything else in Zig. The TypeScript CLI and packages that have a Zig port are replaced by the Zig ones. Everything that is replaced is marked "(deprecated)" in the project layout below. Start with [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md), [Photosphere on Ziggy](photosphere-on-ziggy.md) and the [Photosphere App README](../apps/photosphere/README.md).
+The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, Android and iOS. It is built on [Ziggy](https://github.com/ashleydavis/ziggy), an application framework in its own repository that shows the shared UI in each platform's web view and runs everything else in Zig. The TypeScript packages that have a Zig port are replaced by the Zig ones. Everything that is replaced is marked "(deprecated)" in the project layout below. Start with [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md), [Photosphere on Ziggy](photosphere-on-ziggy.md) and the [Photosphere App README](../apps/photosphere/README.md).
 
 ## Project layout
 
 - photosphere/
     - apps/
-        - android-frontend (deprecated) - Capacitor Android app
-        - bdb-cli (deprecated) - BSON database CLI tool (for testing and debugging)
-        - cli (deprecated) - Main CLI tool (psi)
         - cli-zig - Zig port of the main CLI tool (psi)
-        - desktop (deprecated) - Electron desktop application
-        - desktop-frontend (deprecated) - React UI for the Electron app
-        - dev-frontend (deprecated) - Development web frontend
-        - dev-server (deprecated) - WebSocket development server
-        - ios-frontend (deprecated) - Capacitor iOS app
-        - mk-cli (deprecated) - Merkle tree CLI tool (for testing and debugging)
         - photosphere - Photosphere App: the Ziggy native apps for each platform and the scripts that build and run them
         - photosphere-frontend - The frontend of the Photosphere App
         - photosphere-smoke-tests - Smoke tests for the Photosphere App on every platform
-        - smoke-tests (deprecated) - Host-driven UI smoke tests for the mobile apps
     - packages/
         - api (deprecated) - Core API for database operations
-        - bdb (deprecated) - BSON database implementation
         - config (deprecated) - Shared configuration values such as the application version
-        - encryption (deprecated) - Encryption primitives (AES-256-CBC + RSA hybrid, key management, streaming)
-        - fuzzy-match (deprecated) - Fuzzy string matching based on Levenshtein edit distance
-        - lan-share-core (deprecated) - Local-network sharing of database configs and secrets between devices: the core
-        - lan-share-network (deprecated) - Local-network sharing of database configs and secrets between devices: discovery and transport
-        - merkle-tree (deprecated) - Merkle tree data structure
-        - mobile-frontend (deprecated) - Shared mobile TypeScript (queue backend, JsEngine plugin, platform provider)
-        - mobile-worker (deprecated) - Embedded mobile worker runtime and its bundle
-        - node-api (deprecated) - Node.js API for database operations
-        - node-utils (deprecated) - Node.js utility functions
-        - rest-api (deprecated) - REST API server (used by the desktop app to serve local photos)
-        - serialization (deprecated) - Serialization utilities
-        - storage (deprecated) - Storage abstraction layer
         - task-queue (deprecated) - Task queue system
-        - tools (deprecated) - Tool management and media processing (ffmpeg, ffprobe, ImageMagick)
         - user-interface - Shared React UI components
         - utils (deprecated) - General utility functions
-        - vault (deprecated) - Cross-platform secrets management with multiple vault backends
     - packages-zig/ - The Zig packages, built and tested by the `build.zig` at the root of the repository
         - api-zig - Zig port of api
         - bdb-zig - Zig port of bdb

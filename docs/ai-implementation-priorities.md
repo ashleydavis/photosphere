@@ -20,7 +20,7 @@ Build these six things, in this order. Stop after each one and ship it.
 - Acceleration: CoreML on Mac, CUDA/DirectML on Windows/Linux, CPU fallback. ONNX Runtime gives you all three from one model.
 
 **Implement in Photosphere**:
-1. Add `onnxruntime-node` to a new `packages/ml` so the same runtime is shared by the CLI exe and Electron.
+1. Add ONNX Runtime to a new package so the same runtime is shared by the CLI and the Photosphere App.
 2. Download SigLIP 2 base ONNX weights on first use into the user data dir. Do not bundle them into the CLI exe (keeps the single-exe small).
 3. Store one embedding per photo as a new binary asset type `embedding/<assetId>` (float16 binary, ~1.5KB each) under `assetStorage`, alongside the existing `asset/`, `thumb/`, `display/` types. Merkle-tracked the same way. Works on `fs:` and `s3:` collections unchanged.
 4. Build the search index in RAM at app launch by streaming all embedding files. 50k photos at 768 dims fp16 is ~75MB, fine for desktop.
@@ -34,10 +34,9 @@ Build these six things, in this order. Stop after each one and ship it.
 - The existing `metadata` collection shape is unchanged except for the new `embeddingVersion` field on `IAsset`.
 
 **Bundling**:
-- `onnxruntime-node` (native addon) bundles in the Electron installer. In the Bun single-exe it requires `.node` extraction on first run, or a swap to `onnxruntime-web` (WASM) which bundles cleanly but is CPU-only and slower.
 - SigLIP 2 weights (~400MB) download on first use into the user data dir. Not bundled.
-- Optional: ship a quantized SigLIP 2 baseline (~100MB int8) inside the Electron installer for a zero-setup search experience. CLI still downloads on first use to keep the single exe small.
-- Offline: yes, after the one-time weight download. The bundled baseline option makes Electron offline from first launch.
+- Optional: ship a quantized SigLIP 2 baseline (~100MB int8) inside the Photosphere App for a zero-setup search experience. CLI still downloads on first use to keep the single exe small.
+- Offline: yes, after the one-time weight download. The bundled baseline option makes the Photosphere App offline from first launch.
 
 **Prove it works** (~2 to 4 hours):
 1. Add a standalone Bun script `scratch/clip-poc.ts`. Pull SigLIP 2 base ONNX from Hugging Face and load it with `onnxruntime-node`.
@@ -50,15 +49,13 @@ Build these six things, in this order. Stop after each one and ship it.
 **Ship when**: typing a natural-language query in the desktop UI returns relevant photos in under 500ms from a 50k-photo library.
 
 **Audit & sources**:
-- `psi index <db-path>` command — [FABRICATED-AS-EXISTING]. The CLI binary is `psi` (verified from `apps/cli/package.json` build scripts) but the `index` sub-command does not exist yet; this is a proposal.
+- `psi index <db-path>` command — [FABRICATED-AS-EXISTING]. The CLI binary is `psi` but the `index` sub-command does not exist yet; this is a proposal.
 - SigLIP 2 base ONNX weights "~400MB" — [FABRICATED — wrong number]. Actual full fp32 base model ONNX is ~1.5 GB; quantized variants are smaller. Source: [onnx-community/siglip2-base-patch16-224-ONNX/model.onnx](https://huggingface.co/onnx-community/siglip2-base-patch16-224-ONNX/blob/main/onnx/model.onnx).
-- "Optional baseline (~100MB int8 quantized) inside the Electron installer" — [UNVERIFIED]. Quantized SigLIP 2 variants exist but I have not measured the specific int8 base size.
+- "Optional baseline (~100MB int8 quantized) inside the Photosphere App" — [UNVERIFIED]. Quantized SigLIP 2 variants exist but I have not measured the specific int8 base size.
 - "SigLIP 2 stronger than OpenAI CLIP" — [UNVERIFIED]. SigLIP 2 multilinguality is documented in [SigLIP 2 HF blog](https://huggingface.co/blog/siglip2); the "stronger than" comparison is my characterisation with no benchmark cited.
 - "Fallback: OpenCLIP ViT-B/32 if SigLIP 2 ONNX export is a pain" — [SUPERSEDED]. SigLIP 2 ONNX exports do exist ([onnx-community/siglip2-base-patch16-224-ONNX](https://huggingface.co/onnx-community/siglip2-base-patch16-224-ONNX)), so the fallback rationale is unnecessary.
 - "ONNX Runtime gives you CoreML/CUDA/DirectML from one model" — [PARTIALLY VERIFIED]. ONNX Runtime supports these execution providers in general; per-model and per-operator coverage varies and I did not verify per-model.
 - `onnxruntime-node` native addon — [VERIFIED]: [onnxruntime-node on npm](https://www.npmjs.com/package/onnxruntime-node).
-- "Bun single-exe requires `.node` extraction on first run" — [PARTIALLY FABRICATED]. Bun supports embedded `.node` files when directly required ([Bun executables docs](https://bun.com/docs/bundler/executables)); `onnxruntime-node` specifically has had `bun --compile` compatibility issues ([oven-sh/bun#18079](https://github.com/oven-sh/bun/issues/18079)).
-- `onnxruntime-web` WASM alternative — [VERIFIED]: [onnxruntime-web on npm](https://www.npmjs.com/package/onnxruntime-web).
 - "Pull SigLIP 2 base ONNX from Hugging Face" in the POC — [VERIFIED]: hosted at [onnx-community/siglip2-base-patch16-224-ONNX](https://huggingface.co/onnx-community/siglip2-base-patch16-224-ONNX).
 - "~500ms latency on 50k-photo library" Ship-when target, "2-4 hours" POC estimate — [ESTIMATE]. My guesses, no measurement basis.
 - "75MB RAM for 50k photos at 768 dims fp16" — math, verified: 50000 × 768 × 2 = 76.8 MB.
@@ -83,7 +80,7 @@ Build these six things, in this order. Stop after each one and ship it.
 3. Run HDBSCAN in the CLI as a one-shot job. Set `clusterId` on each face record and seed a new bdb collection `face-clusters` with the cluster table.
 4. Cluster names, merges, splits, and "not me" feedback all mutate the `face-clusters` (and sometimes `faces`) collection via `updateOne` + `database.commit` under the existing write lock.
 5. Add a CLI command (`psi recognize <db-path>`) and a background-task handler for incremental face detection on import.
-6. Electron UI reads the `face-clusters` and `faces` collections through the existing `node-api` wrapper around bdb, so `fs:` and `s3:` collections both work without extra plumbing.
+6. The Photosphere App reads the `face-clusters` and `faces` collections through the existing `node-api-zig` wrapper around `bdb-zig`, so `fs:` and `s3:` collections both work without extra plumbing.
 
 **BSON database**:
 - New bdb collection `faces` (one record per detected face): `{ _id (face id), assetId, bbox: { x, y, width, height }, confidence, embedding: Binary (512-dim float32 ArcFace), clusterId? }`. Sort index on `clusterId` for fast "photos of person X" lookups, sort index on `assetId` for "all faces in this photo".
@@ -92,7 +89,7 @@ Build these six things, in this order. Stop after each one and ship it.
 - Both new collections are merkle-tracked through bdb's existing shard files under `.db/bson/` so they sync and replicate alongside the asset binaries.
 
 **Bundling**:
-- Reuses the ONNX runtime from #1; same native-addon caveats apply (Electron clean, Bun single-exe needs `.node` extraction or `onnxruntime-web`).
+- Reuses the ONNX runtime from #1.
 - SCRFD (~17MB) and InsightFace buffalo_l (~250MB) download on first use into the user data dir. Not bundled.
 - HDBSCAN port and clustering code are pure JS, bundle cleanly into both.
 - Offline: yes, after the one-time weight downloads.
@@ -126,7 +123,7 @@ Build these six things, in this order. Stop after each one and ship it.
 **What**: parse EXIF GPS, reverse-geocode to country/city/suburb/POI names, cluster photos into "trips" by time+location.
 
 **Pick**:
-- Reverse geocoder: **offline GeoNames `cities1000`** (~10MB) bundled in the CLI exe and Electron installer, looked up via an in-process kd-tree. Zero external deps, zero network, results cached per rounded coordinate in a bdb `geocode-cache` collection.
+- Reverse geocoder: **offline GeoNames `cities1000`** (~10MB) bundled in the CLI and the Photosphere App, looked up via an in-process kd-tree. Zero external deps, zero network, results cached per rounded coordinate in a bdb `geocode-cache` collection.
 - Trip clustering: DBSCAN on (timestamp, lat, lon).
 - UI: map view, "trips" auto-album, "near here" search.
 
@@ -138,7 +135,7 @@ Build these six things, in this order. Stop after each one and ship it.
 3. Cache resolved place names in a new bdb collection `geocode-cache`, keyed by rounded coords (6dp), so the same coordinate never gets re-resolved.
 4. Run trip clustering (DBSCAN on timestamp + coords) as a CLI command and background task. Persist results in a new bdb collection `trips` (trip id, asset ids, name, date range, centroid).
 5. Write new `IAsset` fields `country` / `city` / `placeName` into the `metadata` collection so the existing text search picks them up for free, and #1's CLIP text encoder benefits too.
-6. Electron map view and trip list both read the `metadata` and `trips` collections via the existing `node-api` bdb wrapper. No new query path needed.
+6. The Photosphere App's map view and trip list both read the `metadata` and `trips` collections via the existing `node-api-zig` wrapper around `bdb-zig`. No new query path needed.
 
 **BSON database**:
 - Populate the existing `IAsset.coordinates` and `IAsset.location` fields during ingest.
@@ -147,7 +144,7 @@ Build these six things, in this order. Stop after each one and ship it.
 - New bdb collection `geocode-cache`: `{ _id (rounded "lat,lng" key), country, city, placeName }`. Acts as a write-through cache so the kd-tree lookup is bypassed on a cache hit.
 
 **Bundling**:
-- GeoNames `cities1000` (~10MB) embedded as a binary asset in both the CLI single-exe and the Electron installer.
+- GeoNames `cities1000` (~10MB) embedded as a binary asset in both the CLI and the Photosphere App.
 - kd-tree reverse geocoder and DBSCAN clusterer are pure JS, no native addons.
 - No model weights, no first-use downloads.
 - Offline: yes, from first launch. No network calls at any point.
@@ -188,7 +185,7 @@ This is how you cover species recognition without shipping a separate iNaturalis
 2. Write captions into a new `IAsset.aiCaption` field and tags into the existing `IAsset.labels` array (with an `ai:` prefix) on the `metadata` collection. No new collection required.
 3. Re-embed the caption with #1's text encoder. Either merge it with the image embedding at rank time, or store it as a second binary asset type `text-embedding/<assetId>` (same shape as `embedding/<assetId>` from #1).
 4. Add a CLI command (`psi caption <db-path>`) and a background-task handler for incremental captioning on import. The same command does backfill.
-5. Optional Ollama path: detect a running Ollama on `127.0.0.1:11434` at startup, expose a setting in Electron to route through Llama 3.2 Vision via Ollama's local HTTP. Photosphere stays a client of Ollama, no Photosphere-hosted server.
+5. Optional Ollama path: detect a running Ollama on `127.0.0.1:11434` at startup, expose a setting in the Photosphere App to route through Llama 3.2 Vision via Ollama's local HTTP. Photosphere stays a client of Ollama, no Photosphere-hosted server.
 6. New tags slot into the existing tag system under an `ai:` namespace so manual tags stay distinguishable and editable separately.
 
 **BSON database**:
@@ -240,7 +237,7 @@ This is how you cover species recognition without shipping a separate iNaturalis
 2. Compute pHash in the CLI during the same ingest pass as #1 and write it into a new `IAsset.pHash` field on the `metadata` collection. Add a sort index on `pHash` for fast near-duplicate lookups.
 3. Near-duplicate pass: brute-force cosine over the CLIP embeddings already on disk from #1. Chunk by N to keep memory bounded on `s3:` collections where reads are slower.
 4. Output groups into a new bdb collection `duplicate-groups`: each record carries member asset ids, suggested best-of, and reason (`exact` / `near` / `burst`).
-5. CLI command (`psi find-duplicates <db-path>`) for backfill. Electron "Duplicates" page reads the `duplicate-groups` collection and uses the existing delete pipeline for bulk actions.
+5. CLI command (`psi find-duplicates <db-path>`) for backfill. The Photosphere App's "Duplicates" page reads the `duplicate-groups` collection and uses the existing delete pipeline for bulk actions.
 6. No extra model. Best-of-burst uses Laplacian variance computed inline from the thumbnails Photosphere already generates.
 
 **BSON database**:
@@ -268,8 +265,8 @@ This is how you cover species recognition without shipping a separate iNaturalis
 - "pHash Hamming distance ≤ 5" and "CLIP cosine ≥ 0.9" thresholds — [UNVERIFIED]. These are rule-of-thumb numbers commonly cited but I did not source them.
 - Laplacian variance for sharpness — [VERIFIED] as a standard sharpness measure (Pech-Pacheco et al. 2000); I did not cite a specific URL.
 - "16 chars hex for 64-bit pHash" — math, verified: 64 / 4 = 16.
-- "Best-of-burst uses Laplacian variance computed inline from the thumbnails Photosphere already generates" — thumbnails do exist (see `packages/node-api/src/lib/media-file-database.ts`); the Laplacian-on-thumbnail approach is my proposal.
-- "Output groups into a new bdb collection `duplicate-groups`" — bdb supports new collections ([packages/bdb/README.md](../packages/bdb/README.md)), but the `duplicate-groups` collection itself is a proposal.
+- "Best-of-burst uses Laplacian variance computed inline from the thumbnails Photosphere already generates" — thumbnails do exist (see `packages-zig/node-api-zig/src/lib/media-file-database.zig`); the Laplacian-on-thumbnail approach is my proposal.
+- "Output groups into a new bdb collection `duplicate-groups`" — bdb supports new collections (`packages-zig/bdb-zig`), but the `duplicate-groups` collection itself is a proposal.
 - "1-2 hours" POC estimate, "under a minute" Ship-when target — [ESTIMATE]. My guesses.
 - *Invented design identifiers (proposals)*: `IAsset.pHash` field, `duplicate-groups` bdb collection, `psi find-duplicates` sub-command.
 
@@ -277,7 +274,7 @@ This is how you cover species recognition without shipping a separate iNaturalis
 
 ## 6. MCP tool surface (SIXTH. Multiplies everything above.)
 
-**What**: expose the search, tagging, and metadata operations as MCP tools so any LLM client (Claude Desktop, Claude Code, etc.) becomes a chat interface to the library. You already have `packages/mcp-tools` and `apps/cli/src/cmd/mcp.ts` in flight, so this is finishing existing work, not new work.
+**What**: expose the search, tagging, and metadata operations as MCP tools so any LLM client (Claude Desktop, Claude Code, etc.) becomes a chat interface to the library. You already have an MCP server (`packages-zig/mcp-zig`), run over stdio by `psi mcp` (`apps/cli-zig/src/cmd/mcp.zig`) and by the Photosphere App on desktop, so this is finishing existing work, not new work.
 
 **Pick** (minimum useful tool set):
 - `search(query, limit)` (drives #1)
@@ -288,29 +285,28 @@ This is how you cover species recognition without shipping a separate iNaturalis
 - `find_similar(id)`, `find_duplicates()`
 
 **Implement in Photosphere**:
-1. Host the MCP server inside the existing CLI (`apps/cli/src/cmd/mcp.ts`). The single-exe CLI is the natural home: portable, no Electron required, runs over stdio.
-2. Tools are direct function calls into `packages/user-interface` and `packages/storage`. No HTTP, no REST layer to invent.
+1. Add the tools beside the existing ones in `apps/cli-zig/src/lib/mcp/tools/`, served by `psi mcp` over stdio.
+2. Tools are direct function calls into `packages-zig/node-api-zig` and `packages-zig/storage-zig`. No HTTP, no REST layer to invent.
 3. Implement the minimum tool set (search, search_by_person, search_by_location, search_by_date, get_photo, get_thumbnail, tag, find_similar, find_duplicates) on top of features #1 through #5.
 4. `get_photo` and `get_thumbnail` stream bytes from `IStorage`, so `fs:` and `s3:` collections both work transparently. Return base64 or a temp file path depending on what the MCP client needs.
-5. Mutations (`tag`, `add_to_album`, `rate`) write through the same storage paths the Electron UI uses, so changes show up live in an open desktop session.
-6. Electron exposes MCP by spawning the CLI as a child process, or by importing `packages/mcp-tools` directly. Same code either way.
+5. Mutations (`tag`, `add_to_album`, `rate`) write through the same storage paths the Photosphere App uses, so changes show up live in an open desktop session.
+6. The Photosphere App runs the same MCP server from `packages-zig/mcp-zig`.
 7. Document adding `psi mcp --db <path>` to Claude Desktop's `mcp.json` so install is one config snippet.
 
 **BSON database**:
-- MCP tools call into `packages/node-api`, which already wraps bdb behind the existing read/write helpers. No tool talks to bdb directly so the write lock and merkle tree are always honoured.
+- MCP tools call into `packages-zig/node-api-zig`, which already wraps bdb behind the existing read/write helpers. No tool talks to bdb directly so the write lock and merkle tree are always honoured.
 - `search(query, limit)` ranks against the in-memory CLIP index, then hydrates the top-N hits with `metadataCollection.getOne()`.
 - `search_by_person(name)` resolves the name against the `face-clusters` collection, then fans out to the `faces` collection to collect asset ids.
 - `search_by_location(place)` and `search_by_date(range)` query the `metadata` collection using the new `country` / `city` / `placeName` / `photoDate` fields and the existing sort indexes.
-- Mutations (`tag`, `add_to_album`, `rate`) go through `metadataCollection.updateOne` + `database.commit` inside the existing write-lock-aware paths, so changes show up live in a connected Electron session.
+- Mutations (`tag`, `add_to_album`, `rate`) go through `metadataCollection.updateOne` + `database.commit` inside the existing write-lock-aware paths, so changes show up live in a connected Photosphere App session.
 
 **Bundling**:
-- MCP SDK is pure TS, bundles cleanly into the CLI single-exe.
-- Electron either spawns the CLI as a child process (no extra bundling) or imports `packages/mcp-tools` directly (already in the shared workspace).
+- The MCP server is `packages-zig/mcp-zig`, built into the `psi` CLI and the Photosphere App.
 - No external assets, no model weights, no first-use downloads for MCP itself.
 - Offline: yes. MCP runs over stdio between the local Claude client and the local Photosphere CLI; no network involved. Note: the Claude client itself (e.g. Claude Desktop) typically requires network to reach the Claude API, but that is outside Photosphere.
 
 **Prove it works** (~1 to 2 hours):
-1. In the existing `apps/cli/src/cmd/mcp.ts`, register two trivial tools: `count_photos()` and `list_recent_photos(limit)`. Both read straight from a small test Photosphere library via the existing storage layer.
+1. In the existing `apps/cli-zig/src/lib/mcp/tools/`, register two trivial tools: `count_photos()` and `list_recent_photos(limit)`. Both read straight from a small test Photosphere library via the existing storage layer.
 2. Add an entry to Claude Desktop's `mcp.json` pointing at `psi mcp --db <path-to-test-library>`.
 3. Open Claude Desktop. Ask "how many photos are in my library?" and "list the 5 most recent photos."
 4. Confirm: the tools are invoked, results come back, and (for `list_recent_photos`) thumbnails or paths render in the chat.
@@ -319,11 +315,11 @@ This is how you cover species recognition without shipping a separate iNaturalis
 **Ship when**: in Claude Desktop a user can ask "find the best 10 photos from my Tokyo trip with Alice in them and add them to a new album called Tokyo Highlights" and it works end-to-end.
 
 **Audit & sources**:
-- "You already have `packages/mcp-tools` and `apps/cli/src/cmd/mcp.ts` in flight" — [VERIFIED]: `packages/mcp-tools/` and `apps/cli/src/cmd/mcp.ts` both exist in the repo. I have not read the contents of either to verify how complete they are.
+- "You already have an MCP server (`packages-zig/mcp-zig`)" — [VERIFIED]: `packages-zig/mcp-zig/` and `apps/cli-zig/src/cmd/mcp.zig` both exist in the repo.
 - "MCP runs over stdio" — [VERIFIED]. Standard MCP transport: [Model Context Protocol spec](https://modelcontextprotocol.io/specification).
-- `psi mcp --db <path>` command — [FABRICATED-AS-EXISTING]. The CLI binary is `psi` but the `mcp` sub-command's exact CLI surface is a proposal; the file `apps/cli/src/cmd/mcp.ts` exists but I have not verified its current command-line interface.
-- "Tools are direct function calls into `packages/user-interface` and `packages/storage`" — [VERIFIED] that these packages exist; the MCP tool wiring is a proposal.
-- "Tools call into `packages/node-api`, which already wraps bdb behind the existing read/write helpers" — [VERIFIED]: `packages/node-api/src/lib/media-file-database.ts` instantiates `BsonDatabase` and exposes write helpers.
+- `psi mcp --db <path>` command — [FABRICATED-AS-EXISTING]. The CLI binary is `psi` but the `mcp` sub-command's exact CLI surface is a proposal; the file `apps/cli-zig/src/cmd/mcp.zig` exists but I have not verified its current command-line interface.
+- "Tools are direct function calls into `packages-zig/node-api-zig` and `packages-zig/storage-zig`" — [VERIFIED] that these packages exist; the MCP tool wiring is a proposal.
+- "Tools call into `packages-zig/node-api-zig`, which already wraps bdb behind the existing read/write helpers" — [VERIFIED]: `packages-zig/node-api-zig/src/lib/media-file-database.zig` holds the `BsonDatabase`.
 - "Claude Desktop's `mcp.json`" — [VERIFIED] as Claude Desktop's MCP server config file convention. Source: [Claude Desktop MCP docs](https://modelcontextprotocol.io/quickstart/user).
 - "1-2 hours" POC estimate — [ESTIMATE]. My guess.
 - *Invented design identifiers (proposals)*: The exact tool set (`search`, `search_by_person`, etc.) is a proposal. `count_photos()` and `list_recent_photos()` test tools are proposed POC scaffolding.
@@ -343,17 +339,17 @@ Defer until users ask:
 
 ## Per-surface implications
 
-**Electron desktop**: home of everything above. All models run here.
+**Photosphere App on desktop**: home of everything above. All models run here.
 
 **CLI**: the model runner. Build the ingest pipeline (steps 1, 2, 4, 5) as CLI commands so they can be run as batch backfill jobs (`psi index <library>`, `psi reindex --model siglip2`). The desktop app shells out to or shares code with the CLI for live ingest. The CLI is also where the MCP server (step 6) lives.
 
-**Mobile (Capacitor, future)**: do not run models on mobile in v1. Mobile calls back to the desktop server over LAN for search and tagging. Add on-device OCR (Apple Vision / ML Kit) and on-device face detection only when capture-time features (scan business card, "who is this?" at the moment of taking the photo) become a priority.
+**Photosphere App on mobile**: do not run models on mobile in v1. Mobile calls back to the desktop server over LAN for search and tagging. Add on-device OCR (Apple Vision / ML Kit) and on-device face detection only when capture-time features (scan business card, "who is this?" at the moment of taking the photo) become a priority.
 
 ---
 
 ## Database & storage layout
 
-Photosphere already has a BSON-backed metadata database (`packages/bdb`, mounted at `.db/bson/` under `assetStorage`) and a binary asset store (`IStorage`, with existing asset types `asset/`, `thumb/`, `display/`). Every feature above plugs into both. After all six features the composite layout looks like this:
+Photosphere already has a BSON-backed metadata database (`packages-zig/bdb-zig`, mounted at `.db/bson/` under `assetStorage`) and a binary asset store (`IStorage`, with existing asset types `asset/`, `thumb/`, `display/`). Every feature above plugs into both. After all six features the composite layout looks like this:
 
 ```
 collection root (assetStorage)
@@ -380,7 +376,7 @@ collection root (assetStorage)
 
 **Why bdb for the new structured data rather than flat JSON files**:
 - Sharding and sort indexes already exist; "photos in Tokyo" or "photos of Alice" stay fast as the library grows.
-- Mutations are write-lock-aware via the same paths the Electron UI and MCP server already use, so cluster renames and tag edits cannot race each other.
+- Mutations are write-lock-aware via the same paths the Photosphere App and MCP server already use, so cluster renames and tag edits cannot race each other.
 - bdb shards live under `.db/bson/` and are tracked by the same merkle tree that tracks `asset/`, `thumb/`, and `display/`, so sync and replication "just work" for the new collections.
 
 **Why binary asset types (not BSON Binary) for image and text embeddings**:
@@ -405,45 +401,14 @@ finally {
 ```
 
 **Audit & sources**:
-- "`packages/bdb`, mounted at `.db/bson/` under `assetStorage`" — [VERIFIED]: `new BsonDatabase(assetStorage, ".db/bson", ...)` at [packages/node-api/src/lib/media-file-database.ts:252](../packages/node-api/src/lib/media-file-database.ts).
-- Existing asset types `asset/`, `thumb/`, `display/` — [VERIFIED]: see `assetType` parameter handling in [packages/node-api/src/lib/media-file-database.ts:372](../packages/node-api/src/lib/media-file-database.ts) (`const assetPath = ${assetType}/${assetId}`).
+- "`packages-zig/bdb-zig`, mounted at `.db/bson/` under `assetStorage`" — [VERIFIED]: `packages-zig/node-api-zig/src/lib/media-file-database.zig` holds the BSON database stored under `.db/bson`.
+- Existing asset types `asset/`, `thumb/`, `display/` — [VERIFIED]: see `assetType` parameter handling in `packages-zig/node-api-zig/src/lib/media-file-database.zig`.
 - "bdb shards live under `.db/bson/` and are tracked by the same merkle tree that tracks `asset/`, `thumb/`, and `display/`" — [VERIFIED]: merkle tree is updated via `addItem(merkleTree, { name: assetPath, ... })` in the same file, and bdb shards are written to `assetStorage` under the same root.
-- "Sharding and sort indexes already exist" — [VERIFIED]: [packages/bdb/README.md](../packages/bdb/README.md) documents `ensureSortIndex`.
-- Write-lock-and-commit pattern code block — [VERIFIED] as the pattern documented in [packages/bdb/README.md](../packages/bdb/README.md).
+- "Sharding and sort indexes already exist" — [VERIFIED]: `packages-zig/bdb-zig/src/lib/sort-index.zig`.
+- Write-lock-and-commit pattern code block — [UNVERIFIED] against `packages-zig/bdb-zig`. The code block is TypeScript and shows the pattern only.
 - "Face embeddings stored inline as BSON `Binary`" — [PARTIALLY VERIFIED]. BSON supports Binary fields; bdb's specific Binary handling at scale is not verified.
 - "Embeddings ~1.5KB and ~10x inflation if inlined" — math, verified for a 768-dim float16 vector; "~10x" is a rough comparison against typical IAsset document size that I did not measure.
 - *Invented design identifiers (proposals)*: all six new bdb collections (`faces`, `face-clusters`, `geocode-cache`, `trips`, `duplicate-groups`), new asset types `embedding/` and `text-embedding/`, and all new `IAsset` fields listed above.
-
----
-
-## Bundling & distribution
-
-What can ship inside the Bun single-exe CLI and the Electron installer, and what cannot.
-
-**Bundles cleanly in both**
-- Pure JS/TS dependencies: MCP SDK, kd-tree reverse geocoder, pHash, DBSCAN/HDBSCAN ports, EXIF parsing.
-- Small data: GeoNames `cities1000` (~10MB) embedded as a binary asset for offline reverse geocoding.
-- Runtime-written data (new bdb collections `faces`, `face-clusters`, `geocode-cache`, `trips`, `duplicate-groups` under `.db/bson/`, plus new binary asset types `embedding/` and `text-embedding/` under `assetStorage`): created on demand, no bundling concern.
-
-**Bundles in Electron, rough in Bun single-exe**
-- `onnxruntime-node` is a native Node addon (`.node` binary per platform). Electron-builder handles native addons fine. `bun build --compile` does not cleanly embed `.node` files into a true single exe; the workaround is to extract the `.node` to a temp dir on first run.
-- Clean alternative for the CLI: use `onnxruntime-web` (WASM). Bundles into the single exe with no native side files. Trade-off: slower on CPU, no CoreML or CUDA acceleration. Reasonable for batch backfill in the CLI. Electron keeps native ONNX for live indexing.
-- `sharp` (if used for face cropping or preprocessing) has the same native-addon situation as `onnxruntime-node`.
-
-**Not bundled by design**
-- Model weights: SigLIP 2 (~400MB), SCRFD (~17MB), InsightFace buffalo_l (~250MB), Florence-2 (~250MB). Total over 900MB. Downloaded on first use into the user data dir so the CLI exe stays lean and the Electron installer download stays reasonable.
-- Optional: ship one baseline model (e.g. SigLIP 2 int8 quantized, ~100MB) inside the Electron installer for a zero-setup search experience. The CLI still downloads on first use to keep the single exe small.
-- Ollama (the optional #4 upgrade path): user installs Ollama separately. Photosphere probes `127.0.0.1:11434` at startup and disables the option if absent.
-
-**Decision rule**: if a dependency must work in the Bun single-exe with zero side files and zero post-install download, it must be pure JS/TS or WASM. ONNX is the only forcing function. Pick one of:
-1. `onnxruntime-web` (WASM) in the CLI, `onnxruntime-node` in Electron. Portability first.
-2. `onnxruntime-node` in both, with `.node` extraction on first run for the CLI. Speed first.
-
-**Audit & sources**:
-- "SigLIP 2 (~400MB), SCRFD (~17MB), InsightFace buffalo_l (~250MB), Florence-2 (~250MB). Total over 900MB." — [FABRICATED — all four numbers are wrong]. Correct numbers (see per-section audits above): SigLIP 2 base fp32 ~1.5 GB; SCRFD/det_10g is bundled inside buffalo_l, not separate; buffalo_l total ~341 MB; Florence-2 base depends on quantization but typically several hundred MB. The "over 900MB" total is therefore meaningless — actual total depends on choices and is likely larger.
-- "`bun build --compile` does not cleanly embed `.node` files" — [PARTIALLY FABRICATED]. Bun does support embedded `.node` files when directly required: [Bun executables docs](https://bun.com/docs/bundler/executables). `onnxruntime-node` specifically has had `bun --compile` compatibility issues: [oven-sh/bun#18079](https://github.com/oven-sh/bun/issues/18079).
-- "`onnxruntime-web` (WASM). Bundles into the single exe with no native side files. Trade-off: slower on CPU, no CoreML or CUDA acceleration" — [PARTIALLY VERIFIED]. `onnxruntime-web` is real ([npm](https://www.npmjs.com/package/onnxruntime-web)) and is WASM-based. The specific bundling behaviour in Bun's `--compile` and the relative-speed claim are not benchmarked here.
-- "`sharp` ... has the same native-addon situation as `onnxruntime-node`" — [UNVERIFIED]. `sharp` is a known native addon ([npm](https://www.npmjs.com/package/sharp)) but I have not tested it with `bun --compile`.
 
 ---
 
@@ -462,8 +427,8 @@ Every recommendation in this doc runs locally. Photosphere never sends user phot
 - #4 Caption + tag generation (Florence-2 weights). The optional Ollama upgrade path is also fully local: Ollama runs the model on the user's own machine over `127.0.0.1`.
 
 **Eliminating the first-use download** (optional):
-- Ship the model weights inside the Electron installer (adds installer size but enables true offline-from-install).
-- The Bun single-exe CLI is best left lean: bundling ~900MB of weights into a portable exe defeats the point. CLI users on air-gapped machines can sideload weights into the user data dir manually.
+- Ship the model weights inside the Photosphere App (adds app size but enables true offline-from-install).
+- The `psi` CLI is best left lean: bundling ~900MB of weights into a portable exe defeats the point. CLI users on air-gapped machines can sideload weights into the user data dir manually.
 
 **External calls Photosphere does NOT make**: no telemetry, no remote AI APIs, no cloud OCR, no remote geocoding (Nominatim was *proposed and then* deliberately replaced with bundled GeoNames within this doc — see audit). The only outbound traffic is the model-weight download in features #1, #2, and #4, and only on first use.
 

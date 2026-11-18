@@ -4,12 +4,8 @@ import {
     AUTO_IMPORT_ENABLED_KEY,
     AUTO_IMPORT_SOURCES_KEY,
     DEFAULT_DATABASE_PATH_KEY,
-    buildInitialAutoImportSettings,
-    findDefaultDatabasePath,
-    IDefaultableDatabase,
     getDefaultDatabasePath,
     loadAutoImportSettings,
-    markDefaultDatabase,
     saveAutoImportSettings,
     setDefaultDatabasePath,
 } from "../../lib/auto-import-config";
@@ -92,13 +88,6 @@ describe("auto-import settings in the config store", () => {
 
         expect(settings.enabled).toBe(true);
     });
-
-    test("initial settings switch automatic import on with the given places", () => {
-        const settings = buildInitialAutoImportSettings([{ type: "folder", path: "/photos", recurse: true }]);
-
-        expect(settings.enabled).toBe(true);
-        expect(settings.sources).toEqual([{ type: "folder", path: "/photos", recurse: true }]);
-    });
 });
 
 describe("the default database", () => {
@@ -132,60 +121,5 @@ describe("the default database", () => {
         await setDefaultDatabasePath(config, "/second");
 
         expect(await getDefaultDatabasePath(config)).toBe("/second");
-    });
-});
-
-describe("marking the default in the databases list", () => {
-
-    const entries: IDefaultableDatabase[] = [
-        { path: "/one" },
-        { path: "/two" },
-        { path: "/three" },
-    ];
-
-    test("exactly one entry is marked", () => {
-        const marked = markDefaultDatabase(entries, "/two");
-
-        expect(marked.map(entry => entry.isDefault)).toEqual([false, true, false]);
-    });
-
-    test("marking a second one clears the first", () => {
-        const marked = markDefaultDatabase(markDefaultDatabase(entries, "/two"), "/three");
-
-        expect(marked.map(entry => entry.isDefault)).toEqual([false, false, true]);
-        expect(marked.filter(entry => entry.isDefault)).toHaveLength(1);
-    });
-
-    test("no entry is marked when there is no default", () => {
-        const marked = markDefaultDatabase(entries, undefined);
-
-        expect(marked.every(entry => entry.isDefault === false)).toBe(true);
-    });
-
-    test("a default that names no entry marks nothing", () => {
-        const marked = markDefaultDatabase(entries, "/somewhere-else");
-
-        expect(marked.every(entry => entry.isDefault === false)).toBe(true);
-    });
-
-    test("the other fields of each entry are kept", () => {
-        const named = [
-            { name: "One", path: "/one", isDefault: false },
-            { name: "Two", path: "/two", isDefault: false },
-        ];
-
-        const marked = markDefaultDatabase(named, "/two");
-
-        expect(marked[1].name).toBe("Two");
-        expect(marked[1].path).toBe("/two");
-        expect(marked[1].isDefault).toBe(true);
-    });
-
-    test("the marked entry can be found again", () => {
-        expect(findDefaultDatabasePath(markDefaultDatabase(entries, "/two"))).toBe("/two");
-    });
-
-    test("finding the default in a list with none marked gives undefined", () => {
-        expect(findDefaultDatabasePath(entries)).toBeUndefined();
     });
 });

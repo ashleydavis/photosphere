@@ -11,7 +11,7 @@ print_test_header "$TEST_NUMBER" "WATCH AND SYNC"
 # more: dropping local originals is not something a desktop CLI user wants, and a one-shot sync must
 # never silently delete someone's local files. The eviction code path is unchanged and is still what
 # the app turns on as a setting; what it no longer has is a CLI switch, so what it has here is its
-# unit tests (packages/node-api/src/test/lib/evict-originals.worker.test.ts) rather than this suite.
+# unit tests (packages-zig/node-api-zig/src/test/evict-originals.worker.test.zig) rather than this suite.
 
 TEST_DIR="$(get_test_dir "$TEST_NUMBER")"
 TEST_DB_DIR="$TEST_DIR/test-db"

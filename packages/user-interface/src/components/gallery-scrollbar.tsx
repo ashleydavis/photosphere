@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { IGalleryLayout } from "../lib/create-layout";
-import { IGalleryRow } from "../lib/gallery-item";
 import useResizeObserver from "@react-hook/resize-observer";
 import { useTheme } from "@mui/joy";
 

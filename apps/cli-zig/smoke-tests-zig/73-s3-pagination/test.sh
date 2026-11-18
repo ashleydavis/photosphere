@@ -2,7 +2,7 @@
 DESCRIPTION="S3 listings page past the first 1000 keys"
 
 # A single ListObjectsV2 returns at most 1000 keys and sets a continuation token for the rest.
-# CloudStorage.listFiles and listDirs (packages/storage/src/lib/cloud-storage.ts lines 114-224) follow
+# CloudStorage.listFiles and listDirs (packages-zig/storage-zig/src/lib/cloud-storage.zig) follow
 # that token; nothing has ever tested that they do, and the failure mode is silent: a listing that
 # stops at the first page reports 1000 of 1100 objects and looks like a complete answer.
 #

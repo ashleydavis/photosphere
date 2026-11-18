@@ -144,7 +144,7 @@ Once a local database is connected to a remote it is a partial replica of it, wh
 
 Dropping them is a setting the app turns on, not something the CLI offers: a one-shot command must never silently delete someone's local files, and it is not a use case on the desktop machines where the CLI is used. Only the original and the transcoded display copy go; the thumbnail and the micro thumbnail stay, which is what keeps the gallery browsable with no network at all. An original the origin does not hold with a matching hash is never dropped, whatever else is going on.
 
-Which originals go is decided by a retention policy. They are implemented, exported and unit tested in `packages/api/src/lib/retention-policy.ts`:
+Which originals go is decided by a retention policy. They are implemented, exported and unit tested in `packages-zig/api-zig/src/lib/retention-policy.zig`:
 
 | Policy | What it keeps |
 |---|---|
@@ -212,7 +212,7 @@ Losing it costs nothing but the history: an unreadable record reads as empty, an
 | Eviction | Yes | Yes | No (the task exists but nothing on mobile queues it) |
 | Consolidation | Yes | Yes | No |
 
-The engine is platform-neutral and lives in `packages/api`, with the Node-side parts in `packages/node-api`. The only platform-specific part is the media source: `FolderMediaSource` covers folders on a filesystem and `DeviceMediaSource` covers the device photo library. The scanner itself talks only to `IMediaSource` and knows about neither.
+The engine is platform-neutral and lives in `packages-zig/api-zig`, with the filesystem parts in `packages-zig/node-api-zig`. The only platform-specific part is the media source: `FolderMediaSource` covers folders on a filesystem and `DeviceMediaSource` covers the device photo library. The scanner itself talks only to `IMediaSource` and knows about neither.
 
 On the desktop the settings live on the configuration dialog and the settings page: a toggle, the folders being read, and whether the source file is deleted after import. Switching the toggle on creates a private photo database under the application data directory, lists it as "My Photos" and marks it as the one automatic import writes to. The main process starts and stops the task as the settings change, so nothing needs restarting.
 
@@ -228,7 +228,7 @@ Syncing works the same way and for the same reason, in a loop of its own beside 
 
 The settings live in the `auto_import` section of `config.toml`, in the app's storage sandbox beside `databases.toml`. A file there is readable by anything that runs while the app is off screen, which is what lets a service that has just woken find out whether automatic import is switched on and what it should be reading. The [configuration file](https://github.com/ashleydavis/photosphere/wiki/Configuration-File) page in the wiki has the keys and their defaults.
 
-The native side does not parse that file. It asks the `plan-auto-import` worker task, which reads the settings, decides whether a pass should run, and hands back the tasks the pass consists of, already built: `create-default-database` the first time, and `import-assets` every time. `create-default-database` makes the database, records it as the one automatic import writes to, and adds it to the database list, and the desktop app queues that same task, so the default database comes to exist one way rather than one way per platform. Native code forwards each one to the engine pool unchanged and never assembles a payload of its own, so what a pass does is decided once, in TypeScript, and cannot drift between the two platforms.
+The native side does not parse that file. It asks the `plan-auto-import` worker task, which reads the settings, decides whether a pass should run, and hands back the tasks the pass consists of, already built: `create-default-database` the first time, and `import-assets` every time. `create-default-database` makes the database, records it as the one automatic import writes to, and adds it to the database list, and the desktop app queues that same task, so the default database comes to exist one way rather than one way per platform. Native code forwards each one to the engine pool unchanged and never assembles a payload of its own, so what a pass does is decided once, in the Zig worker, and cannot drift between the two platforms.
 
 What differs between them is only what keeps the loop alive:
 
@@ -265,7 +265,7 @@ Unit tests sit beside the code under `src/test/`. The end-to-end behaviour is co
 | `86-multi-device` | Two databases connected to one remote each end up with the other's photos. |
 | `87-import-record` | What a database imported is remembered across restarts, manual and automatic imports are badged apart, the record is written outside the database in this machine's cache directory, two databases on one machine each get their own, and no `imports.dat` appears inside a database directory after sync, consolidation or replication. |
 
-And by Electron smoke tests, which drive the real app:
+And by Photosphere App smoke tests, which drive the real app:
 
 | Test | What it proves |
 |---|---|
@@ -276,16 +276,15 @@ And by a mobile smoke test, which drives the real app on an Android emulator:
 
 | Test | What it proves |
 |---|---|
-| `47-auto-import` | A photo put into the device photo library from outside the app is imported with nothing else done: the app makes its own default database, walks the library, and imports it. A second photo put there while the app is running is noticed and imported too, the Import page shows the count, and the photo lands in the gallery without the database being reopened. |
+| `35-auto-import` | A photo put into the device photo library from outside the app is imported with nothing else done: the app makes its own default database, walks the library, and imports it. A second photo put there while the app is running is noticed and imported too, the Import page shows the count, and the photo lands in the gallery without the database being reopened. |
 | `48-auto-import-no-permission` | Switching the toggle on without the photo permission switches it back off, says why, and creates no database. The permission is refused from outside the app by revoking it and marking it user-fixed, which is what Android does when a user chooses "Don't allow" and means it, so the request is answered without a dialog a test cannot tap. |
 | `49-background-import` | A photo put into the device library while the app is backgrounded is imported, and so is one put there while the screen is off. Both are measured by counting originals in the database on disk through `run-as` rather than by anything the app says, because a backgrounded WebView may have its socket to the harness suspended, which is the exact moment the test cares about. It also checks the foreground service is running throughout and gone once the toggle is switched off. |
 
-Those are Android only. The iOS simulator has no supported way to remove a seeded photo, and a test that leaves one behind poisons every run after it. What test 49 covers is untestable on iOS for a second reason as well: a `BGProcessingTask` is scheduled by the system and the only way to force one is an lldb command against a running app, which this harness cannot issue on Xcode 14.2. That gap is written down in `apps/smoke-tests/tests/49-background-import/IOS-NOT-COVERED.md` rather than left as an absence nobody notices.
+Those are Android only. The iOS simulator has no supported way to remove a seeded photo, and a test that leaves one behind poisons every run after it. What test 49 covers is untestable on iOS for a second reason as well: a `BGProcessingTask` is scheduled by the system and the only way to force one is an lldb command against a running app, which this harness cannot issue on Xcode 14.2.
 
 Test 47 is the one that caught the engine-pool deadlock, and the one that would catch it again. It waits for the photo to arrive rather than for the task to start, because a deadlocked import looks exactly like a working one from outside: the setting is on, the task is running, and the counts sit at zero forever.
 
-Three things those two tests hold in place:
+What those two tests hold in place:
 
-- **The photo permission is requested through Capacitor's own permission API**, under an alias declared on the plugin. A result from `ActivityCompat.requestPermissions` reaches the Activity, and Capacitor forwards a result only to the plugin it believes made the request, so a request made directly is answered into nothing and the call waits forever.
 - **One `import-success` message announces an imported photo**, whichever kind of import made it. A second message for the same photo puts it in the gallery twice. The list also refuses an asset it already holds, which covers a photo taken in before the database has finished loading.
 - **Every arrival names its database, and the gallery ignores the ones that are not its own.** Automatic import writes to the default database, which is not necessarily the one on screen.

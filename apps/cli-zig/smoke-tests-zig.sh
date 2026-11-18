@@ -107,7 +107,7 @@ SMOKE_TESTS_START_TIME=$SECONDS
 # Exit code a test uses to say it did not run its body, so the runner reports it as skipped rather
 # than as a pass. A skip is counted and printed separately and never folded into the pass total,
 # because a suite that reports coverage it did not perform is worse than one that reports a failure.
-# 77 is the conventional skip code and is the same value apps/smoke-tests/lib/runner.sh uses, so the
+# 77 is the conventional skip code and is the same value apps/photosphere-smoke-tests/lib/common.sh uses, so the
 # two suites do not disagree about what it means.
 export TEST_SKIPPED_EXIT_CODE=77
 

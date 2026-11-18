@@ -161,7 +161,7 @@ There is no such thing here as a test that is only for an emulator. Every mobile
 - **A mobile can be showing a lock screen**, and an app launched behind one is refused its foreground service by the platform. A test that needs a service says so and stops rather than failing later for a reason that reads as a product fault.
 - **A mobile's data is not the harness's to destroy**, which is the next section.
 
-What is legitimately not covered on a real device is a whole platform's mechanism, not a device: an iOS `BGProcessingTask` cannot be triggered from this harness at all, on a simulator or a mobile. Those tests skip on iOS and each has an `IOS-NOT-COVERED.md` beside it saying what is left unproven and what covers it instead. That is a different thing from a test that only works on an emulator, and there are none of those.
+What is legitimately not covered on a real device is a whole platform's mechanism, not a device: an iOS `BGProcessingTask` cannot be triggered from this harness at all, on a simulator or a mobile. Those tests skip on iOS. That is a different thing from a test that only works on an emulator, and there are none of those.
 
 ### The mobile tests wipe the app's data, and will not do it to a real mobile
 
@@ -181,7 +181,7 @@ Anything reached by `adb connect` counts as a real device and is protected the s
 
 `bun run android` never wipes anything: it installs over the top and leaves the app's data alone, so it is the way to put a new build on a mobile whose database you want to keep. The fixture variants (`android:50`, `android:1`, `android:0`) also copy that one fixture database onto the device over any earlier copy and register it in the app's `databases.toml`. Nothing else is touched.
 
-Tests are dispatched in the order they are numbered, and nothing reorders or serialises them: there are no scheduling markers, so any test may run beside any other. The LAN-share tests are safe in company because discovery is disambiguated by the pairing code rather than by scheduling. See [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md).
+Tests are dispatched in the order they are numbered, and nothing reorders or serialises them: there are no scheduling markers, so any test may run beside any other. The LAN-share tests are safe in company because discovery is disambiguated by the pairing code rather than by scheduling. See [apps/photosphere-smoke-tests/README.md](../../apps/photosphere-smoke-tests/README.md).
 
 Every run ends with a timing block: where the wall clock went (build, install, loop, total), how many seconds of test work were done across how many workers, the packing efficiency (test work as a share of the emulators' available time, so a low number means they sat idle rather than that the tests are slow), and the ten slowest tests. That block is how to tell whether a change made the suite faster, and it is where to look for the test that is setting the length of a run.
 
@@ -237,7 +237,7 @@ The reason is process groups. Each CLI smoke test runs under `timeout`, which pu
 
 This only happens when a terminal is attached, so the git hook, CI and any piped run never see it and the same tests pass there. That asymmetry is what made it look like flakiness: four tests (`74-s3-failures` and `77-s3-large-file` calling `ffmpeg`, `78-dbs-share-cancel` and `79-secrets-share-cancel` running a spinning `psi dbs send`) timed out together on an interactive run and passed on every unattended one.
 
-On the `psi` side `--yes` now carries this meaning. `spinner(interactive)` in `apps/cli/src/lib/spinner.ts` hands back the animated spinner when someone is watching and plain log lines when nobody is, so a non-interactive run says the same things without the terminal ever being taken hold of. A command run without `--yes` behaves exactly as it always did.
+On the `psi` side `--yes` now carries this meaning. `spinner(interactive)` in `apps/cli-zig/src/lib/spinner.zig` hands back the animated spinner when someone is watching and plain log lines when nobody is, so a non-interactive run says the same things without the terminal ever being taken hold of. A command run without `--yes` behaves exactly as it always did.
 
 ## A command's output has to be complete when something captures it
 
@@ -245,9 +245,9 @@ A `psi` command that prints more than about 8 KB into a pipe used to lose everyt
 
 The cause is `process.stdout` after this process has a Worker, and the CLI creates a pool of them as soon as it opens a database. From that point anything written beyond what the far end accepts immediately is discarded as it is written, not queued: measured on the pinned Bun, `psi find-orphans` printing 3,000 orphans delivered 8,127 bytes of 220,890 and no summary. Waiting does not recover it, and neither does ending the stream or letting the process end on its own; all three deliver exactly the same 8,127 bytes. `console.log` and `fs.writeSync(1, ...)` lose it alike.
 
-So the CLI writes its own bytes and waits for them, which is what a blocking write to a terminal does anyway. `fs.writeSync` on a non-blocking descriptor raises EAGAIN when the far end is full instead of waiting, and can write fewer bytes than it was given; both are the caller's to deal with, and neither is dealt with by anything that writes a whole line and moves on. `writeOutputLine` / `writeErrorLine` in `apps/cli/src/lib/console-output.ts` finish a partial write and wait out a full pipe, and both the CLI logger and the worker logger call them for every line they print. An earlier version of this opened `/dev/stdout` for a file description of its own instead, which worked on Linux and did nothing on macOS, where `/dev/fd/1` is a dup that shares the flags rather than a fresh description. `89-piped-output` is the test that holds this: it prints into a reader that sleeps before taking a byte, so it reproduces the loss on an idle machine rather than waiting for a busy one, and asserts that every line and the summary after them arrived. It caught the macOS half, on macOS, which is the only place it could be caught.
+So the CLI writes its own bytes and waits for them, which is what a blocking write to a terminal does anyway. `fs.writeSync` on a non-blocking descriptor raises EAGAIN when the far end is full instead of waiting, and can write fewer bytes than it was given; both are the caller's to deal with, and neither is dealt with by anything that writes a whole line and moves on. An earlier version of this opened `/dev/stdout` for a file description of its own instead, which worked on Linux and did nothing on macOS, where `/dev/fd/1` is a dup that shares the flags rather than a fresh description. `89-piped-output` is the test that holds this: it prints into a reader that sleeps before taking a byte, so it reproduces the loss on an idle machine rather than waiting for a busy one, and asserts that every line and the summary after them arrived. It caught the macOS half, on macOS, which is the only place it could be caught.
 
-The other half is that a test must not read a truncated capture as a real answer. `parse_numeric` in `apps/cli/smoke-tests/lib/common.sh` used to answer 0 for a pattern that was not in the output, which is how a missing summary line became a count of zero. It now answers with nothing and says why, unless the caller passed a default explicitly. A test reading a value out of captured output must fail when the value is absent.
+The other half is that a test must not read a truncated capture as a real answer. `parse_numeric` in `apps/cli-zig/smoke-tests-zig/lib/common.sh` used to answer 0 for a pattern that was not in the output, which is how a missing summary line became a count of zero. It now answers with nothing and says why, unless the caller passed a default explicitly. A test reading a value out of captured output must fail when the value is absent.
 
 ## Every test gets its own directory
 
@@ -260,13 +260,13 @@ A test never asks for its directory. The runner allocates one and exports two va
 - `TEST_TMP_DIR` is the test harness's own variable, naming the directory this test keeps its fixtures, vault, config and scratch space in. The shell suites read it; nothing in the application does.
 - `PHOTOSPHERE_TMP_DIR` is an application setting, not a test one: it tells Photosphere where to put its temporary files, and any user can set it (it is listed on the wiki's Environment Variables page alongside `PHOTOSPHERE_LOG_DIR` and the rest). The runner points it at the test's directory so the app's own scratch files land there too. Without it every `psi` process on the machine shares one location, which is how `psi hash-cache clear` once deleted a directory out from under a suite running alongside (it cleared the whole of `/tmp/photosphere` back when one hash cache served the machine; it now clears one database's cache directory).
 
-The allocator is `scripts/lib/allocate-test-temp-dir.sh`, shared by every suite: the CLI suites (plain, encrypted, LAN-share, keychain), the Electron suite and the mobile suite. Its TypeScript counterpart for unit tests is `createTestTempDir(label)` in `packages/node-utils`.
+The allocator is `photosphere_test_temp_dir` in `scripts/lib/test-lib.sh`, shared by every suite: the CLI suite and the Photosphere App suite.
 
 **Nothing removes these directories.** They accumulate, one per test per run. That is deliberate: keeping them is what made several intermittent failures diagnosable, and the deletion code that would clean them up is the same shape as the code that caused the `/tmp/photosphere` incident in the first place. `bun run find-flakey-tests` prints the count at the end of every session, so growth shows up on the session that caused it rather than weeks later as an unexplained slowdown. Remove them yourself when the count gets high.
 
 ## Every suite cleans up its processes, and proves it
 
-A suite starts real processes: an Electron app under `xvfb-run`, an X server, a control bridge, a `psi` process per CLI test. Every one of those is stopped by the suite that started it, and every suite checks at the end that it left none of them running.
+A suite starts real processes: the Photosphere App under `xvfb-run` on Linux, an X server, a control bridge, a `psi` process per CLI test. Every one of those is stopped by the suite that started it, and every suite checks at the end that it left none of them running.
 
 Stopping is by process group, not by walking the process tree. A tree walk asks the kernel who a process's children are, so it only works while the parent is alive: the moment the parent dies its children are reparented to init and the walk finds nothing, which is exactly the state a leak leaves behind. A process group survives reparenting, so `kill -- -<pgid>` still reaches every member. `scripts/lib/process-control.sh` is the one implementation of this, shared by the desktop suite, the mobile suite, both CLI suites and the story player.
 
@@ -276,7 +276,7 @@ That job control really does this is checked at runtime rather than trusted, onc
 
 The leak check runs at the end of `apps/photosphere-smoke-tests/run.sh`. Each app a test launches records its process group in the file named by `PHOTOSPHERE_LAUNCHED_GROUPS`, which the runner exports before it starts anything; at the end the runner reports whatever is still alive in those groups and fails the run. **A leak check failure on a run whose tests all passed is a real failure, not noise.** It means the suite left something on the machine, and enough of those is what took the machine into an out-of-memory kill that took the Android emulator pool with it. Fix the cleanup that missed; do not delete the check.
 
-It is scoped to the groups the suite itself created, and that precision is load-bearing rather than tidiness. `bun run test:everything` runs several suites at once in one checkout, so anything looser (matching this checkout's path, say) makes every suite report the others' live processes as its own leak. Naming the groups also reaches processes that match no pattern at all: the `Xvfb` server and Electron's utility processes are in the group but mention this checkout nowhere.
+It is scoped to the groups the suite itself created, and that precision is load-bearing rather than tidiness. `bun run test:everything` runs several suites at once in one checkout, so anything looser (matching this checkout's path, say) makes every suite report the others' live processes as its own leak. Naming the groups also reaches processes that match no pattern at all: the `Xvfb` server is in the group but mentions this checkout nowhere.
 
 The CLI suite has no leak check. Nothing in it launches through `launch_in_process_group` (a test starts `psi` directly inside its batch subshell), so there is no group to scope to, and a check there could never fire. What keeps that suite from leaking is that its interrupt and exit traps kill each batch subshell's whole process tree rather than just the subshell.
 
@@ -342,7 +342,7 @@ With an isolated config dir you start with no databases registered, so create or
 
 Set state up from outside the app, before it launches. Do not add a command, an event or a seeding function to the app so a test can reach in and set state up: that is scaffolding shipped to users which serves none of them, and adding it needs the human's approval first (see the rule in `CLAUDE.md`).
 
-The two helpers to reach for, both defined per platform in `apps/smoke-tests/lib/android.sh` and `apps/smoke-tests/lib/ios.sh`:
+The two helpers to reach for, both defined per platform in `apps/photosphere-smoke-tests/lib/android.sh` and `apps/photosphere-smoke-tests/lib/ios.sh`:
 
 - `"${PLATFORM}_reset_app_state"` - wipes everything the app has stored on the device: its storage sandbox, the WebView's localStorage and the keychain. Call it before `start_app`, so the app starts from a known state and nothing can write state back underneath it. On Android this is `pm clear`; on iOS it empties the app's data container and resets the simulator keychain.
 - `"${PLATFORM}_seed_databases_config" '<databases json>' '<recent names json>' '<last database path>'` - writes the app's `databases.toml` into its settings directory with the configured databases, and the `databases` section of its `state.json` with the recents and the database to reopen on launch. The third argument is optional; omitting it leaves `last_opened_path` out of `state.json`, so the app starts on the welcome screen. Both files are rendered on the host with `jq`, from outside the app and before it starts.
@@ -354,6 +354,5 @@ The one exception is the news feed. `POST /seed-news` still goes through the app
 ## Structure
 
 - [e2e/](e2e/) - End-to-end manual test scripts covering full user workflows
-- [screenshots.md](screenshots.md) - Capturing desktop app screenshots via the test control server
 - [stories README](../../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player
 - `apps/photosphere-smoke-tests/<n>-<name>/` - Photosphere App smoke tests (`bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios`), platform-neutral and numbered. See [its README](../../apps/photosphere-smoke-tests/README.md)

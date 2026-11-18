@@ -216,13 +216,6 @@ export async function waitForElement(dataId: string, nth: number, timeoutMs: num
 const TOGGLE_INPUT_SELECTOR = 'input[type="radio"], input[type="checkbox"]';
 
 //
-// Reports whether an element is a radio or checkbox input.
-//
-export function isToggleInput(element: Element): boolean {
-    return element.matches(TOGGLE_INPUT_SELECTOR);
-}
-
-//
 // The element a click should actually land on. Joy puts the `data-id` on a wrapper `<span>` and the
 // real form control inside it, so clicking a Joy `<Radio>` by its `data-id` clicks the wrapper and
 // selects nothing: the test then asserts against a screen that never changed and passes.
@@ -518,7 +511,7 @@ export const TEST_OPEN_DATABASE_EVENT = "photosphere-test:open-database";
 // rather than configured: seeding it here drives the same path a real fetch would. Everything else a
 // test needs (the database list, the recents, the settings, the secrets) is established by the
 // harness before launch, by writing the app's files and clearing its stored data (see
-// apps/smoke-tests/lib).
+// apps/photosphere-smoke-tests/lib).
 //
 export const TEST_SEED_NEWS_EVENT = "photosphere-test:seed-news";
 

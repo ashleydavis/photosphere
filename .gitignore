@@ -9,12 +9,10 @@ apps/frontend/playwright-report
 aux/testbed/build
 packages/database/build
 deprecated/upload/build
-packages/exif-js/build
 packages/defs/build
 deprecated/upload/log
 .turbo
 deprecated/backup/build
-packages/storage/build
 deprecated/backup/backup
 deprecated/backup/log
 deprecated/database/log/
@@ -31,8 +29,6 @@ tsconfig.tsbuildinfo
 tools/upload/log.*
 .photosphere.json
 .photosphere
-packages/tools/build/
-packages/serialization/build/
 packages/adb/src/test/perf/results/
 # Where what-changed keeps its state: baseline.json, the tree it last saw pass, and cache/, which is
 # only a speed-up. Must stay ignored: it enumerates untracked files too, so an un-ignored baseline
@@ -42,7 +38,6 @@ packages/adb/src/test/perf/results/
 tmp/
 bundle/
 release/
-tmp-cli-desktop-lan-share/
 stories-tmp/
 stories-screenshots/
 ux-review/

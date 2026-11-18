@@ -8,7 +8,7 @@ import {
 //
 // What the mobile app should do about automatic import, worked out from its settings alone.
 //
-// This mirrors the desktop planner (packages/node-api/src/lib/auto-import-desktop.ts): the decisions
+// This mirrors the desktop planner (packages-zig/node-api-zig/src/lib/auto-import-desktop.zig): the decisions
 // live here as plain functions so they can be unit tested, and the caller is left with the parts
 // that need the app (creating the database, starting the task, asking for the permission).
 //
@@ -69,17 +69,6 @@ export function resolveAutoImportPauseMs(pauseMs: number | undefined): number {
 // support answer about one applies to the other.
 //
 export const DEFAULT_DATABASE_FOLDER_NAME = "photosphere-default";
-
-//
-// The name the default private database is listed under.
-//
-export const DEFAULT_DATABASE_DISPLAY_NAME = "My Photos";
-
-//
-// The source tag every automatic import task is queued under, so it can be cancelled as a group when
-// the setting is switched off.
-//
-export const AUTO_IMPORT_TASK_SOURCE = "auto-import";
 
 //
 // The whole device photo library, which is what is watched before the user chooses albums.

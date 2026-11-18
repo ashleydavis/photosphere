@@ -23,17 +23,6 @@ export interface ITestCommandBody extends ITestCommandPayload {
 }
 
 //
-// A test-command event from the core.
-//
-export interface ITestCommandEvent {
-    // Identifies the command so its answer reaches the connection that is waiting for it.
-    requestId: number;
-
-    // The command to perform.
-    command: ITestCommandBody;
-}
-
-//
 // What the page answers a command with, on the test-result channel.
 //
 export interface ITestCommandResult {

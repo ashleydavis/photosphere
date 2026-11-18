@@ -18,7 +18,7 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Add, Refresh, IosShare, Visibility, Download, Key } from '@mui/icons-material';
+import { Edit, Delete, Add, IosShare, Visibility, Download, Key } from '@mui/icons-material';
 import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../../context/platform-context';
 import { useApp } from '../../context/app-context';
 import { useIsMobile } from '../../lib/use-is-mobile';

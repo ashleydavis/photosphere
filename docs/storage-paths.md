@@ -2,7 +2,7 @@
 
 Every place that names a database or a storage location takes the same kind of path: the `--db` option on a CLI command, the **Path** and **Origin** fields in the app, a replication destination, and the `path` and `origin` recorded in `databases.toml`. This is what those paths may look like.
 
-The prefix decides which storage is used. `fs:` is the local filesystem, `s3:` is an S3 compatible bucket, and a path with no prefix at all is treated as a local filesystem path. See `createStorage` in `packages/storage/src/lib/storage-factory.ts`.
+The prefix decides which storage is used. `fs:` is the local filesystem, `s3:` is an S3 compatible bucket, and a path with no prefix at all is treated as a local filesystem path. See `createStorage` in `packages-zig/storage-zig/src/lib/storage-factory.zig`.
 
 ## Local filesystem
 
@@ -26,7 +26,7 @@ s3:my-bucket/photos         the "photos" prefix inside the bucket
 s3:my-bucket/a/b/c          a deeper prefix
 ```
 
-`s3:my-bucket:/photos` is **not** a valid path, and nothing should produce one. The bucket is taken as everything up to the first slash (`parseS3ListPath` in `packages/storage/src/lib/s3-path.ts`), so the colon form asks for a bucket literally named `my-bucket:`, and the server answers that no such bucket exists. The error names the bucket that does exist, which makes it read like a problem with the bucket rather than with the path.
+`s3:my-bucket:/photos` is **not** a valid path, and nothing should produce one. The bucket is taken as everything up to the first slash (`parseS3ListPath` in `packages-zig/storage-zig/src/lib/s3-path.zig`), so the colon form asks for a bucket literally named `my-bucket:`, and the server answers that no such bucket exists. The error names the bucket that does exist, which makes it read like a problem with the bucket rather than with the path.
 
 Several databases can share one bucket by using different prefixes. Each one sees only its own files.
 

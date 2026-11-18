@@ -6,14 +6,14 @@ Every stage of an automatic import on a mobile, ranked by what it costs, with a 
 
 **Every figure here is measured on a physical Pixel 6.** None is from an emulator. The emulator has misled this work once already: it reported hashing at 24.7% of an import where the mobile reports under 2%, because the emulator library was seeded photos with no videos and the mobile's library is real.
 
-The measurement is `apps/smoke-tests/tests/manual/90-perf-import/test.sh`, run by name:
+The measurement is `apps/photosphere-smoke-tests/manual/90-perf-import/test.sh`, run by name:
 
 ```
 PHOTOSPHERE_NO_LAN_BRIDGE=1 \
 PHOTOSPHERE_PERF_IMPORT_SECONDS=900 \
 PHOTOSPHERE_PER_TEST_TIMEOUT=3600 \
 PHOTOSPHERE_ANDROID_DEVICES="<serial>" \
-bun run test:and -- 90-perf-import
+PHOTOSPHERE_SMOKE_SCENARIO=90-perf-import bun run test:ziggy:and
 ```
 
 ## How a change is judged

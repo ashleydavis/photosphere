@@ -65,7 +65,7 @@ The photos are distinct on purpose. An earlier attempt seeded 24 identical copie
 
 ## The harness
 
-`apps/smoke-tests/tests/manual/90-perf-import/test.sh`, run by naming it. It is under `tests/manual/`, which the runner reaches only when a test is named, so an ordinary run never performs it.
+`apps/photosphere-smoke-tests/manual/90-perf-import/test.sh`, run by naming it. It is under `manual/`, which the runner reaches only when a test is named, so an ordinary run never performs it.
 
 It wipes the app's stored data (which is what makes the cold pass cold), grants the photo and notification permissions from outside the app, switches automatic import on through the settings card, and waits. Each pass gets a time box: a library small enough to finish inside it ends on its own, and one too big is stopped by switching automatic import off, which makes the run in flight report what it got through. Then it does it again against the hash cache the first pass left.
 
@@ -75,7 +75,7 @@ What it reads is the `Import timings:` line every import writes as it ends. That
 PHOTOSPHERE_PERF_IMPORT_SECONDS=1200 \
 PHOTOSPHERE_PER_TEST_TIMEOUT=3600 \
 PHOTOSPHERE_ANDROID_DEVICES="<serial>" \
-bun run test:and -- 90-perf-import
+PHOTOSPHERE_SMOKE_SCENARIO=90-perf-import bun run test:ziggy:and
 ```
 
 Two things to know before pointing it at a real mobile.

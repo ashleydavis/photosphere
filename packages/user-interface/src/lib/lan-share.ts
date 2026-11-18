@@ -10,44 +10,7 @@ export type {
     IDatabaseSharePayload,
     ISecretSharePayload,
     IConflictResolution,
-    ConflictResolver,
 } from "./lan-share-core";
-
-//
-// Represents a database configuration entry with vault key references,
-// used as input to resolveDatabaseSharePayload and output of importDatabasePayload.
-//
-export interface IShareDatabaseConfig {
-    // Human-readable display name.
-    name: string;
-
-    // Optional description of this database.
-    description: string;
-
-    // Absolute filesystem path (or S3 path) to the database directory.
-    path: string;
-
-    // Optional origin string from the database config.
-    origin?: string;
-
-    // Vault secret name for S3 credentials.
-    s3Key?: string;
-
-    // Vault secret name for the encryption key pair.
-    encryptionKey?: string;
-
-    // Vault secret name for the geocoding API key.
-    geocodingKey?: string;
-}
-
-//
-// Input data for the "receive-share" background task, which hosts a receiver
-// on the LAN and waits for a sender to deliver a share payload.
-//
-export interface IReceiveShareTaskData {
-    // The pairing code the receiver advertises (entered by the user off the sender).
-    code: string;
-}
 
 //
 // Result of the "receive-share" background task.
@@ -74,35 +37,11 @@ export interface IShareReceiverEndpoint {
 }
 
 //
-// Input data for the "find-receiver" background task, which listens for a
-// receiver's UDP broadcast for this share session.
-//
-export interface IFindReceiverTaskData {
-    // The pairing code for this share session.
-    code: string;
-}
-
-//
 // Result of the "find-receiver" background task.
 //
 export interface IFindReceiverTaskResult {
     // The discovered receiver endpoint, or null if discovery timed out or was cancelled.
     endpoint: IShareReceiverEndpoint | null;
-}
-
-//
-// Input data for the "send-payload" background task, which delivers a payload
-// to a previously discovered receiver over HTTPS.
-//
-export interface ISendPayloadTaskData {
-    // The share payload to deliver to the receiver.
-    payload: IDatabaseSharePayload | ISecretSharePayload;
-
-    // The pairing code used to verify the receiver.
-    code: string;
-
-    // The receiver endpoint discovered by the "find-receiver" task.
-    endpoint: IShareReceiverEndpoint;
 }
 
 //

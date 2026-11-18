@@ -1,6 +1,6 @@
 # Third-party notices
 
-The Photosphere App bundles third-party software on every platform (Windows, MacOS, Linux, Android and iOS). The Zig command line tool (`psi`) bundles the same ImageMagick and FFmpeg on Windows, MacOS and Linux. Both do so that image and video processing runs inside the program without anything installed on the machine. The old Electron desktop app, the old Capacitor mobile apps and the TypeScript command line tool use ImageMagick and ffmpeg installed on the host (the mobile apps carried their own builds, see below).
+The Photosphere App bundles third-party software on every platform (Windows, MacOS, Linux, Android and iOS). The Zig command line tool (`psi`) bundles the same ImageMagick and FFmpeg on Windows, MacOS and Linux. Both do so that image and video processing runs inside the program without anything installed on the machine.
 
 This file lists the bundled components and their licences. It must be kept up to date when the bundled versions change. The versions are in `third-party/*/vendor/*/VENDORED_VERSION`, and for zlib-ng, the AWS SDK for C, s2n-tls and aws-lc in the `build.zig.zon` of `third-party/zlib-ng` and `third-party/aws`.
 
@@ -44,7 +44,3 @@ Where Photosphere is distributed, and what that means for the LGPL:
 - Neither app store. The Android app is not on Google Play, and the iOS app is published only as an unsigned .ipa on GitHub releases, not through Apple's App Store or TestFlight. The App Store's terms of use add restrictions to what a user may do with an app, which the LGPL forbids adding, so distributing a build that contains FFmpeg through the App Store needs this question settled first.
 
 This is an engineering reading of the licence, not legal advice.
-
-## Old mobile apps (deprecated)
-
-The old Capacitor mobile apps bundle ImageMagick (prebuilt shared libraries on Android from [MolotovCherry/Android-ImageMagick7](https://github.com/MolotovCherry/Android-ImageMagick7), static libraries built from source on iOS) and ffmpeg through the community FFmpegKit forks `ffmpeg-kit-full-spm` (iOS) and `com.moizhassan.ffmpeg:ffmpeg-kit-16kb` (Android), under the same licences.

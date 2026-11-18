@@ -8,7 +8,7 @@ import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
 import type { ISyncBatchEvent } from "api/src/lib/sync-database.types";
-import { TaskStatus, TaskQueue, TaskPriority, getQueueBackend } from "task-queue";
+import { TaskStatus, TaskQueue, TaskPriority } from "task-queue";
 import type { IQueueBackend } from "task-queue";
 import { usePlatform } from "./platform-context";
 import { useApi } from "./api-context";

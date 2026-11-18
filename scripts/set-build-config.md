@@ -1,8 +1,8 @@
 # Setting the build config
 
-`set-build-config.sh` writes `packages/config/src/index.ts`, the file the app reads its version, commit hash, build date and nightly flag from. Those values are compiled into every frontend, so it runs before a build, never after one.
+`set-build-config.sh` writes `packages/config/src/index.ts`, the file the app reads its version from. The version is compiled into every frontend, so it runs before a build, never after one.
 
-It stamps the same values into the Zig config files, `packages-zig/config-zig/src/index.zig` and `apps/cli-zig/src/lib/config.zig`, so a Zig build reports the same version as the TypeScript one. Only the lines holding the version, commit hash, build date and nightly flag are rewritten, and the script fails if one of them is missing afterwards. It also refuses a version or commit with characters other than letters, digits and `. _ + -`, because they are written into Zig string literals.
+It stamps the version, commit hash, build date and nightly flag into the Zig config files, `packages-zig/config-zig/src/index.zig` and `apps/cli-zig/src/lib/config.zig`, so a Zig build reports the same version as the TypeScript one. Only the lines holding the version, commit hash, build date and nightly flag are rewritten, and the script fails if one of them is missing afterwards. It also refuses a version or commit with characters other than letters, digits and `. _ + -`, because they are written into Zig string literals.
 
 It writes the version into the `.version` of the root `app.zon` as well, which Ziggy writes in the app's log files. The checked-in value is `dev`.
 

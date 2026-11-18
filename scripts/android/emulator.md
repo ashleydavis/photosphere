@@ -1,6 +1,6 @@
 # LAN sharing in the Android emulator
 
-`scripts/android/emulator.sh` puts the Android emulator on a real network segment shared with your host, so you can use LAN sharing between the Electron app and the emulator. Without it, sharing to the emulator always fails with "No sender connected within 60 seconds".
+`scripts/android/emulator.sh` puts the Android emulator on a real network segment shared with your host, so you can use LAN sharing between the Photosphere App on the host and the emulator. Without it, sharing to the emulator always fails with "No sender connected within 60 seconds".
 
 ## Why it is needed
 
@@ -59,7 +59,7 @@ Why it needs no root: the bridge, the taps and the DHCP server are the only priv
 
 What a repair does to one emulator, in order: `systemctl --user stop` bounded at 30 seconds, escalating to SIGKILL through the unit and then, for a process that outlived its unit, to the pid recorded in the AVD's own `hardware-qemu.ini.lock`; `reset-failed`, so a crashed emulator's failed unit stops blocking the name; a wait for systemd to release that one unit; then a cold boot with `-wipe-data`, and a wait of up to 420 seconds for it to reach the bridge. That last stage is why `pool-down` cannot do this job: it stops emulators with `adb emu kill`, which needs an emulator adb can still see, and a crashed one is exactly the emulator adb has dropped.
 
-It repairs one emulator at a time, never in parallel, so a partly working pool never goes fully dark and the machine never carries five cold boots at once. Before it touches an emulator it takes that emulator's harness lock (`/tmp/photosphere-android-device-<serial>.lock`, the same lock `apps/smoke-tests/lib/runner.sh` holds for the length of a test) without waiting: an emulator a test is using is reported and skipped.
+It repairs one emulator at a time, never in parallel, so a partly working pool never goes fully dark and the machine never carries five cold boots at once. Before it touches an emulator it takes that emulator's harness lock (`/tmp/photosphere-android-device-<serial>.lock`, the same lock `apps/photosphere-smoke-tests/lib/android.sh` holds for the length of a test) without waiting: an emulator a test is using is reported and skipped.
 
 ### Reading what is wrong
 
@@ -125,8 +125,6 @@ Every emulator on the machine connects to one `netsimd`, the emulator's network 
 Each AVD's data partition is sized by `AVD_DATA_PARTITION_SIZE` at the top of `emulator.sh`, currently 12G. It was 6G, and all five pool AVDs reached that limit: each held a `userdata-qemu.img.qcow2` of exactly 6,442,909,696 bytes. A full data partition makes the package manager refuse an install with `INSTALL_FAILED_INSUFFICIENT_STORAGE`, and a suite that does not notice carries on testing whichever build was already on the device, which is why `bun run emu:and:pool:status` reports free space.
 
 Changing that number is not enough on its own. The partition is sized when `userdata-qemu.img` is first created, so an emulator that already has one keeps its old size whatever `config.ini` says. `bun run emu:and:pool:restart` is what makes the change take effect: it starts each pool emulator with `-wipe-data`, which recreates the data partition from the system image at the current size. That is also how a partition that has filled up gets cleared. `pool-up` on its own never wipes, because it is what brings the pool back after emulators have crashed and a recovery should not throw the installed app away.
-
-A wipe costs one reinstall per emulator. It removes `/data/local/tmp/psphere-apk.sha`, the stamp `android_ensure_apk` in `apps/smoke-tests/lib/android.sh` compares against, so the first `bun run test:and` after a restart installs the APK on all of them again. That is once per restart, not once per run, so the saving made by not reinstalling an unchanged APK at the top of every run is untouched from the second run onwards.
 
 The overlays are sparse qcow2 files that grow only as they are written, so doubling the size costs nothing until it is used. What doubles is the ceiling, and that is worth having room for: five emulators at 12G is 60G of worst case, against the 30G they used to be able to reach, on top of the base and single AVDs. The measurement taken when the size was raised: 57G in total under the AVD directory, on a filesystem with 258G free.
 
@@ -198,11 +196,11 @@ What `down` deliberately does not undo:
 
 With the segment up and the emulator running on it:
 
-1. Start the Electron app on the host and the Photosphere app in the emulator.
+1. Start the Photosphere App on the host and the Photosphere App in the emulator.
 2. In the emulator, open Receive Database and enter the 4 digit pairing code shown by the sender.
 3. On the host, pick a database and click Share, using that same code.
 
-The host and the guest are now on one segment, so the emulator's broadcast reaches the Electron app and the HTTPS transfer connects straight back to the guest's `192.168.55.x` address.
+The host and the guest are now on one segment, so the emulator's broadcast reaches the Photosphere App on the host and the HTTPS transfer connects straight back to the guest's `192.168.55.x` address.
 
 ## What it sets up
 

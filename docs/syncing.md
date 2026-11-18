@@ -18,7 +18,7 @@ What it moves is decided by comparing the two merkle trees name by name, rather 
 
 Everything in this section was measured on a Pixel 6 against a partial replica of a database of 8,231 photos and 24,260 files, over Wi-Fi to an S3 origin. The numbers and the log lines behind them are in [Prefetch, syncing and importing on a mobile, against a real library](performance/mobile-sync-at-scale.md).
 
-**A sync between a partial replica and its origin does nothing at all, and that is not the partial filter.** `copyFile` in `packages/node-api/src/lib/sync.ts` will copy thumbnails and root-level files into a partial target, and skip originals and display copies. But at this scale that code is never reached, because the early-out below fires first.
+**A sync between a partial replica and its origin does nothing at all, and that is not the partial filter.** `copyFile` in `packages-zig/node-api-zig/src/lib/sync.zig` will copy thumbnails and root-level files into a partial target, and skip originals and display copies. But at this scale that code is never reached, because the early-out below fires first.
 
 The early-out compares the two content hashes, and a content hash is of the merkle tree. A partial replica made by `psi replicate --partial` has the whole tree, so its content hash equals the origin's from the moment it is made. **Files it is missing do not change it.** Both sides therefore say they are identical, and every pass returns in about a seventh of a second having moved nothing.
 
@@ -212,7 +212,7 @@ Workers are not contended either. A sync pass queues one `sync-database` task an
 | Refuse over cellular | No connection type is reported | No connection type is reported | Yes |
 | Consolidate an unrelated remote | Yes | Yes | No |
 
-The sync engine itself is platform-neutral: `syncDatabases` in `packages/node-api/src/lib/sync.ts`, reached on every platform through the `sync-database` background task. What differs per platform is only what decides to run one.
+The sync engine itself is platform-neutral: `syncDatabases` in `packages-zig/node-api-zig/src/lib/sync.zig`, reached on every platform through the `sync-database` background task. What differs per platform is only what decides to run one.
 
 ## What the app shows while it is happening
 
@@ -227,9 +227,9 @@ Unit tests sit beside the code under `src/test/`.
 | Test | What it covers |
 |---|---|
 | `packages/api/src/test/lib/sync-gate.test.ts` | The rule that decides an automatic sync is permitted: the two settings, offline, and each connection type. |
-| `packages/node-api/src/test/lib/sync-database.worker.test.ts` | The `sync-database` task itself, which is what every platform queues. |
-| `packages/node-api/src/test/lib/sync-early-out.test.ts` | A sync doing nothing, cheaply, when both sides already hold the same content. |
-| `packages/node-api/src/test/lib/sync-metadata-edit.test.ts` | An edit reaching the origin. |
+| `packages-zig/node-api-zig/src/test/sync-database.worker.test.zig` | The `sync-database` task itself, which is what every platform queues. |
+| `packages-zig/node-api-zig/src/test/sync-early-out.test.zig` | A sync doing nothing, cheaply, when both sides already hold the same content. |
+| `packages-zig/node-api-zig/src/test/sync-metadata-edit.test.zig` | An edit reaching the origin. |
 
 End to end:
 
@@ -238,9 +238,8 @@ End to end:
 | `84-watch-sync-evict` (CLI) | Imports reach the origin once `psi sync` pushes them, and the local originals stay. |
 | `85-consolidate` (CLI) | Sync working after consolidation where it refused before. |
 | `86-multi-device` (CLI) | Two databases connected to one remote each end up with the other's photos. |
-| `bun run test:cli:sync` | Several processes syncing one database at once. |
-| `24-sync-settings` (Electron) | Each toggle recomputes whether syncing is permitted and pushes that to the main process, and both values persist to the `sync` section of `config.toml`. |
-| `36-consolidate-database` (Electron) | Consolidating through the UI leaves ordinary sync working. |
+| `24-sync-settings` (Photosphere App) | Each toggle recomputes whether syncing is permitted and pushes that to the host, and both values persist to the `sync` section of `config.toml`. |
+| `36-consolidate-database` (Photosphere App) | Consolidating through the UI leaves ordinary sync working. |
 | `45-s3-share-replica-sync` (mobile, Android) | An edit made on the mobile reaching an encrypted S3 origin, and the early-out firing when there is nothing to sync. |
 | `50-background-sync` (mobile, Android) | A photo imported while the app is backgrounded, and again while the screen is off, reaching an S3 origin without the app being opened. With **Enable syncing** switched off nothing reaches the origin while the app and its service are still running; switched back on, the same photo arrives. Everything is measured by reading the bucket, because a backgrounded WebView may have its socket to the harness suspended, which is the exact moment the test cares about. |
 | `56-large-asset-push` (mobile, Android) | A photo imported on the device reaching an encrypted S3 origin as an object, read back out of the bucket from the host and compared byte for byte. Its fixture is generated rather than committed and is larger than one upload part, so the multi-part path is the one exercised. This is the test that would have caught every upload from an encrypted database failing inside the SDK. |

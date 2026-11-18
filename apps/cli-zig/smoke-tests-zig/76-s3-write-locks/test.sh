@@ -2,7 +2,7 @@
 DESCRIPTION="Concurrent writers against one S3 database"
 
 # CloudStorage.acquireWriteLock / refreshWriteLock / releaseWriteLock
-# (packages/storage/src/lib/cloud-storage.ts lines 547-730) implement mutual exclusion on a store with
+# (packages-zig/storage-zig/src/lib/cloud-storage.zig) implement mutual exclusion on a store with
 # no native locking primitive. Nothing else exercises them under contention from real processes.
 #
 # Four CLI processes each import a distinct file into the same S3 database at the same time. The

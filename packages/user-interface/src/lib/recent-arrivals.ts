@@ -45,11 +45,3 @@ export function isRecentArrival(assetId: string, nowMs: number): boolean {
 
     return true;
 }
-
-//
-// Forgets every recorded arrival. For tests, and for switching databases, where the ids of one
-// database mean nothing in another.
-//
-export function clearRecentArrivals(): void {
-    arrivalTimes.clear();
-}

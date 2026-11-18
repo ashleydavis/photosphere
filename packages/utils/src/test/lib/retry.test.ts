@@ -1,4 +1,4 @@
-import { retry, rejectAfter, retryOnce } from "../../lib/retry";
+import { retry, retryOnce } from "../../lib/retry";
 import { WrappedError } from "../../lib/wrapped-error";
 import { sleep } from "../../lib/sleep";
 import { log } from "../../lib/log";
@@ -234,22 +234,6 @@ describe("retry", () => {
         const thrown = await retry(operation, 1).catch(err => err);
 
         expect(thrown).toBe(cause);
-    });
-});
-
-describe("rejectAfter", () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
-
-    test("should reject with timeout message", async () => {
-        await expect(rejectAfter(100)).rejects.toThrow("Operation timed out after 100ms");
-    });
-
-    test("should call sleep with the given duration", async () => {
-        await expect(rejectAfter(500)).rejects.toThrow();
-
-        expect(sleep).toHaveBeenCalledWith(500);
     });
 });
 

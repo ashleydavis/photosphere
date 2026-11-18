@@ -1,7 +1,6 @@
 import type { IStory } from "./types";
 
 import { stories as aboutPageStories } from "./pages/about.stories";
-import { stories as configurationPageStories } from "./pages/configuration.stories";
 import { stories as databasesPageStories } from "./pages/databases.stories";
 import { stories as databaseSummaryPageStories } from "./pages/database-summary.stories";
 import { stories as galleryPageStories } from "./pages/gallery.stories";
@@ -41,13 +40,11 @@ import { stories as collapsibleSectionStories } from "./components/collapsible-s
 import { stories as databaseSummaryDialogStories } from "./components/database-summary-dialog.stories";
 import { stories as emptyDatabaseStories } from "./components/empty-database.stories";
 import { stories as entityCardStories } from "./components/entity-card.stories";
-import { stories as filmStripStories } from "./components/film-strip.stories";
 import { stories as fullImageStories } from "./components/full-image.stories";
 import { stories as fullScreenSpinnerStories } from "./components/full-screen-spinner.stories";
 import { stories as galleryStories } from "./components/gallery.stories";
 import { stories as galleryImageStories } from "./components/gallery-image.stories";
 import { stories as galleryLayoutStories } from "./components/gallery-layout.stories";
-import { stories as galleryPreviewStories } from "./components/gallery-preview.stories";
 import { stories as galleryScrollbarStories } from "./components/gallery-scrollbar.stories";
 import { stories as jobsStories } from "./components/jobs.stories";
 import { stories as leftSidebarStories } from "./components/left-sidebar.stories";
@@ -67,7 +64,6 @@ import { stories as videoStories } from "./components/video.stories";
 //
 export const stories: IStory[] = [
     ...aboutPageStories,
-    ...configurationPageStories,
     ...databasesPageStories,
     ...databaseSummaryPageStories,
     ...galleryPageStories,
@@ -107,13 +103,11 @@ export const stories: IStory[] = [
     ...databaseSummaryDialogStories,
     ...emptyDatabaseStories,
     ...entityCardStories,
-    ...filmStripStories,
     ...fullImageStories,
     ...fullScreenSpinnerStories,
     ...galleryStories,
     ...galleryImageStories,
     ...galleryLayoutStories,
-    ...galleryPreviewStories,
     ...galleryScrollbarStories,
     ...jobsStories,
     ...leftSidebarStories,

@@ -6,7 +6,7 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { ArrowForward, CalendarMonth, Category, DateRange, Delete, Event, ExitToApp, Flag, Home, KeyboardArrowRight, Label, Map, MoreHoriz, Navigation, People, Place, Search, Star, StarBorder, History } from '@mui/icons-material';
+import { ArrowForward, CalendarMonth, Category, DateRange, Delete, ExitToApp, Flag, Home, KeyboardArrowRight, Map, MoreHoriz, Place, Search, Star, StarBorder, History } from '@mui/icons-material';
 import { useIsMobile } from '../lib/use-is-mobile';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
@@ -214,7 +214,7 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 // Renders the right sidebar for the app.
 //
 export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps) {
-    const { setOpenSearch, recentSearches, removeRecentSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
+    const { recentSearches, removeRecentSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { dbs } = useApp();
     const theme = useTheme();
 

@@ -1,5 +1,5 @@
 import React, { Component, ReactNode, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import { log } from "utils";
 import { nextStoryIndex } from "../lib/story-navigation";

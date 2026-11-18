@@ -33,7 +33,7 @@ import { SearchContextProvider } from "../../context/search-context";
 import { GalleryLayoutContextProvider } from "../../context/gallery-layout-context";
 import { SyncContextProvider } from "../../context/sync-context";
 import { useAssetServer } from "../../lib/use-asset-server";
-import type { IAsset, ISaveAssetItem } from "api";
+import type { ISaveAssetItem } from "api";
 
 //
 // A no-op synchronous callback. Use for event handler props in stories
@@ -254,27 +254,6 @@ export const sampleMicroBase64 = "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFx
 //
 export function mockGalleryItem(overrides?: Partial<IGalleryItem>): IGalleryItem {
     const base: IGalleryItem = {
-        _id: "mock-asset-1",
-        origFileName: "mock.jpg",
-        contentType: "image/jpeg",
-        width: 800,
-        height: 600,
-        hash: "mock-hash",
-        fileDate: "2024-01-01T00:00:00.000Z",
-        uploadDate: "2024-01-01T00:00:00.000Z",
-        photoDate: "2024-01-01T00:00:00.000Z",
-        micro: sampleMicroBase64,
-        color: [128, 128, 128],
-    };
-    return { ...base, ...overrides };
-}
-
-//
-// Returns a fake IAsset record with sensible defaults. Pass overrides to
-// customise specific fields.
-//
-export function mockAsset(overrides?: Partial<IAsset>): IAsset {
-    const base: IAsset = {
         _id: "mock-asset-1",
         origFileName: "mock.jpg",
         contentType: "image/jpeg",

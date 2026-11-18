@@ -51,9 +51,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 # `cap run` shells out to for the deploy) only reads the environment, so this must be exported or
 # `cap run` dies with ERR_SDK_NOT_FOUND even when Gradle builds fine.
 #
-# The default location differs by platform, so both are tried rather than only the Linux one. This
-# mirrors what apps/smoke-tests/lib/android.sh already does, so `test:and` and `test:and:unit` resolve
-# the SDK the same way instead of one working on a Mac and the other not.
+# The default location differs by platform, so both are tried rather than only the Linux one.
 #
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 if [ -z "$ANDROID_HOME" ]; then

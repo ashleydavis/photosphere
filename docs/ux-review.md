@@ -1,11 +1,11 @@
 # Running a UX Review
 
-How to run a UX review of the Photosphere desktop app and walk through the
+How to run a UX review of the Photosphere App and walk through the
 results.
 
 ## What it does
 
-- Looks at the desktop app as a brand-new user would.
+- Looks at the Photosphere App as a brand-new user would.
 - Takes screenshots of the main screens.
 - Writes up problems and suggestions.
 - Output goes to `ux-review/` (gitignored, never committed).
@@ -45,6 +45,6 @@ It stops after each item and waits for you to say "next".
 
 ## More detail
 
-- Screenshot tooling and how the capture works: [testing/screenshots.md](testing/screenshots.md)
+- The story player that captures the screenshots: `scripts/story-player.md`
 - The review process itself: `.claude/commands/ux/review/create.md`
 - The walkthrough process: `.claude/commands/ux/review/walkthrough.md`

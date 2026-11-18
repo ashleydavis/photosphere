@@ -77,34 +77,6 @@ export type IPlatformEvent =
     | IDevToolsStateEvent;
 
 //
-// S3 credentials for accessing an S3-compatible object store.
-//
-export interface IS3Credentials {
-    // AWS region (e.g. "us-east-1").
-    region: string;
-
-    // Access key ID for authentication.
-    accessKeyId: string;
-
-    // Secret access key for authentication.
-    secretAccessKey: string;
-
-    // Optional custom endpoint URL (for non-AWS S3-compatible services).
-    endpoint?: string;
-}
-
-//
-// An RSA key pair stored as PEM strings.
-//
-export interface IEncryptionKeyPair {
-    // PEM-encoded PKCS#8 private key.
-    privateKeyPem: string;
-
-    // PEM-encoded SPKI public key.
-    publicKeyPem: string;
-}
-
-//
 // A shared secret entry stored in the vault.
 //
 export interface ISharedSecretEntry {

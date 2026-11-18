@@ -221,13 +221,21 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                 >
                     <DialogTitle>Add Database</DialogTitle>
                     <DialogContent>
-                        <FormControl sx={{ mb: 1 }}>
+                        <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
                             <FormLabel>Name</FormLabel>
                             <Input
                                 data-id="database-name-input"
                                 value={form.name}
-                                onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                                onChange={event => {
+                                    setForm(prev => ({ ...prev, name: event.target.value }));
+                                    setNameError(undefined);
+                                }}
                             />
+                            {nameError && (
+                                <Typography level="body-sm" color="danger" sx={{ mt: 0.5 }}>
+                                    {nameError}
+                                </Typography>
+                            )}
                         </FormControl>
 
                         <FormControl sx={{ mb: 1 }}>

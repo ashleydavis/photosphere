@@ -1,6 +1,6 @@
 # AI Integration Options for Photosphere
 
-A survey of possible AI features for Photosphere across the Electron desktop app, CLI tool, and future mobile app. This document only catalogs **options and ideas**, not architecture or implementation. Sourced from current industry practice (Immich, PhotoPrism, Google Photos, Apple Photos), academic work, and open-source projects.
+A survey of possible AI features for Photosphere across the Photosphere App on desktop and mobile and the `psi` CLI. This document only catalogs **options and ideas**, not architecture or implementation. Sourced from current industry practice (Immich, PhotoPrism, Google Photos, Apple Photos), academic work, and open-source projects.
 
 > **Note**: This doc was audited 2026-05-24. The Sources section at the end of the doc lists URLs but they were not cited per-line when the doc was first written. Each major section below now ends with an "**Audit & sources**" block listing claims directly verified with URLs versus claims that rely on the (un-mapped) footer or remain unverified. Specific numeric claims (dates, percentages, "X+ species") should be treated as unverified unless explicitly linked.
 
@@ -83,11 +83,11 @@ The single biggest user-visible AI win. Embed every photo with a vision-language
 ### 2.3 Conversational Search (LLM over your photos)
 Beyond keyword and semantic search, plug a chat LLM in front of the index so users can ask: "what did we do on our 2024 Japan trip?", "show me all photos with both kids and a beach", "did I take any photos at Alice's wedding?". Google calls this "Ask Photos"; it combines metadata, embeddings and an LLM.
 
-Photosphere is already heading here via the in-progress **MCP server** (`packages/mcp-tools`, `apps/cli/src/cmd/mcp.ts`). With MCP, any LLM client (Claude Desktop, Claude Code, ChatGPT desktop, Cursor) becomes a chat interface to the photo library. This is arguably the *most leveraged* AI feature: instead of building a chat UI, you get every MCP-aware AI app for free.
+Photosphere is already heading here via its **MCP server** (`packages-zig/mcp-zig`, `apps/cli-zig/src/cmd/mcp.zig`), which the `psi mcp` command and the desktop app both run. With MCP, any LLM client (Claude Desktop, Claude Code, ChatGPT desktop, Cursor) becomes a chat interface to the photo library. This is arguably the *most leveraged* AI feature: instead of building a chat UI, you get every MCP-aware AI app for free.
 
 **Audit & sources**:
 - "Google calls this 'Ask Photos'; it combines metadata, embeddings and an LLM" — [VERIFIED that "Ask Photos" is a Google product]. The Sources footer links [TechCrunch on Google Photos AI features](https://techcrunch.com/2025/11/11/google-photos-adds-new-ai-features-for-editing-expands-ai-powered-search-to-over-100-countries/). The metadata-plus-embeddings-plus-LLM characterisation is my paraphrase, not a direct citation.
-- "Photosphere ... in-progress MCP server (`packages/mcp-tools`, `apps/cli/src/cmd/mcp.ts`)" — [VERIFIED]: both paths exist in this repository.
+- "Photosphere ... MCP server (`packages-zig/mcp-zig`, `apps/cli-zig/src/cmd/mcp.zig`)" — [VERIFIED]: both paths exist in this repository.
 
 ### 2.4 Advanced Filters Powered by AI
 - Filter by detected object class ("photos containing a dog and a bicycle").
@@ -263,7 +263,7 @@ This generalises further into a **photo-library agent**: the LLM can be given a 
 
 ## 9. Per-Surface Recommendations
 
-### 9.1 Electron Desktop App
+### 9.1 Photosphere App on desktop
 
 Strongest fit, because the desktop has compute (CPU, GPU, NPU on newer machines) and storage. Recommended priority order:
 
@@ -292,7 +292,7 @@ CLI is the natural home for *batch* AI work that the GUI shouldn't block on:
 - **Model management**: download, pin, switch, delete models. Show disk + RAM cost.
 - **MCP server entry point**: which already exists. The CLI is naturally where the MCP server is exposed since the agent needs no GUI.
 
-### 9.3 Mobile App (future)
+### 9.3 Photosphere App on mobile
 
 Mobile constraints are different: limited compute, limited battery, limited storage, but excellent on-device acceleration (Neural Engine on iOS, NNAPI / Gemini Nano / NPUs on Android). Apple Photos runs all of its face / scene / OCR locally.
 

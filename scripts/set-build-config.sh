@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Writes packages/config/src/index.ts, the file the app reads its version and build metadata from, and
-# stamps the same values into the two Zig config files (packages-zig/config-zig/src/index.zig and
+# Writes packages/config/src/index.ts, the file the app reads its version from, and
+# stamps the version, commit hash, build date and nightly flag into the two Zig config files (packages-zig/config-zig/src/index.zig and
 # apps/cli-zig/src/lib/config.zig), and the version into app.zon.
 # The version is compiled into every frontend at build time, so this runs before a build, not after.
 #
@@ -73,13 +73,6 @@ fi
 {
     echo '// Version is set by the CI build process. "dev" is used for local development.'
     echo 'export const version = "'"$VERSION"'";'
-    echo ""
-    echo "// Build metadata is set by the CI build process."
-    echo "export const buildMetadata = {"
-    echo '    commitHash: "'"$COMMIT_HASH"'",'
-    echo '    buildDate: "'"$BUILD_DATE"'",'
-    echo "    isNightly: $IS_NIGHTLY,"
-    echo "};"
 } > "$CONFIG_FILE"
 
 # Stamps a Zig config file in place: only the lines that carry the values are rewritten, so the rest of

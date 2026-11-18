@@ -2,14 +2,14 @@
 DESCRIPTION="Byte-exact export of an image and a video out of S3"
 
 # Exporting is the one operation that reads a whole asset back out of the bucket, and on S3 every read
-# goes through S3RangeReadableStream (packages/storage/src/lib/cloud-storage.ts line 379). A byte-exact
+# goes through S3RangeReadableStream (packages-zig/storage-zig/src/lib/s3-range-readable-stream.zig). A byte-exact
 # match between the exported file and the source is what proves that stream returned the entire object
 # rather than a truncated first chunk: a truncated export still writes a file, still exits zero, and
 # still looks like a successful export.
 #
 # A video is exported as well as an image because the two take different sizes through the same path.
 #
-# KNOWN GAP: the multipart upload path (`Upload` with a 100 MB partSize in writeStream) and the
+# KNOWN GAP: the multipart upload path (`Upload` in writeStream) and the
 # multi-chunk read path (the chunk ladder in S3RangeReadableStream starts at 100 MB) only engage on
 # objects larger than 100 MB. No fixture here is anywhere near that, so this test covers the
 # single-chunk path only.

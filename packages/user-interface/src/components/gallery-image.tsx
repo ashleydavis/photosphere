@@ -77,14 +77,6 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
 
     const isSelected = selectedItems.has(item._id);
 
-    let orientation = 1;
-    if (item.properties?.exif?.Orientation) {
-        orientation = item.properties.exif.Orientation?.[0];        
-    }
-    else if (item.properties?.metadata?.Orientation) {
-        orientation = item.properties.metadata.Orientation?.[0];
-    }
-
     const { longPressHandlers } = useLongPress({
         onLongPress: () => {
             enableSelecting(true);

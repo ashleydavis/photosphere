@@ -53,14 +53,6 @@ export function FullImage({ asset }: IImageProps) {
         };
     }, []);
 
-    let orientation = 1;
-    if (asset.properties?.exif?.Orientation) {
-        orientation = asset.properties.exif.Orientation?.[0];        
-    }
-    else if (asset.properties?.metadata?.Orientation) {
-        orientation = asset.properties.metadata.Orientation?.[0];
-    }
-
     return (
         <>
             {microDataURL

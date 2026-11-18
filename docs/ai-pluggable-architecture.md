@@ -3,7 +3,7 @@
 Companion to [ai-implementation-priorities.md](ai-implementation-priorities.md) and [ai-integration-options.md](ai-integration-options.md). Those docs decide *what* to build. This one describes the *shape* the AI integration should take so individual features stay loosely coupled, easy to add, and easy to remove.
 
 The architecture has two halves:
-- **Code is compile-time pluggable**. Every AI feature is a self-contained plugin module behind a small interface. The set of active plugins is a single registry file. All plugin code is bundled into the Bun single-exe CLI and the Electron installer; there is no dynamic loading from disk at runtime.
+- **Code is compile-time pluggable**. Every AI feature is a self-contained plugin module behind a small interface. The set of active plugins is a single registry file. All plugin code is bundled into the `psi` CLI and the Photosphere App; there is no dynamic loading from disk at runtime.
 - **Models are runtime pluggable**. Each plugin declares its model assets in a manifest. Photosphere downloads the assets from GitHub releases on first use, verifies SHA-256, and caches them in the user data dir. Each model has its own repository (with its own release history) so models can be versioned and shipped independently; small related models may share a "family" repo.
 
 > **Note**: This doc was audited 2026-05-24 after several claims turned out to be wrong on follow-up verification. Most of this doc is *proposal*, not external claim, but each section below ends with an "**Audit & sources**" block listing what is verified (with URLs), what is unverified or wrong, and which identifiers are invented design proposals.
@@ -16,7 +16,7 @@ The architecture has two halves:
 - Removing a feature is the reverse: delete one file, delete one line. Compiler tells you if anything still depends on it.
 - Features call capabilities ("give me an image embedder") instead of importing concrete model implementations. Swapping SigLIP 2 for OpenCLIP is a registry edit, not a feature rewrite.
 - Model weights ship out-of-band via GitHub releases, are downloaded on first use, and never bloat the CLI exe.
-- Same code path on CLI and Electron. Same cache directory shared between them.
+- Same code path on the CLI and the Photosphere App. Same cache directory shared between them.
 
 ## Non-goals
 
@@ -93,7 +93,7 @@ export type AiCapability =
     | "reverse-geocoding";
 
 // Pointer to a single GitHub release asset. Used to locate large model files that cannot
-// be bundled into the CLI exe or Electron installer.
+// be bundled into the CLI exe or the Photosphere App.
 export interface IGithubReleaseRef {
     // GitHub owner (user or org).
     owner: string;
@@ -118,7 +118,7 @@ export interface IPluginResource {
 }
 
 // Runtime services handed to a plugin during init. Hides the difference between CLI and
-// Electron hosts so plugin code never has to ask which one it is in.
+// Photosphere App hosts so plugin code never has to ask which one it is in.
 export interface IPluginContext {
     // Resolves a declared resource to a local file path, downloading on first use.
     resources: IResourceManager;
@@ -141,7 +141,7 @@ export interface IResourceManager {
 export interface IAiPlugin {
     // Unique identifier, kebab-case.
     readonly id: string;
-    // Human-readable name shown in the Electron settings UI.
+    // Human-readable name shown in the Photosphere App settings UI.
     readonly name: string;
     // Capabilities provided by this plugin.
     readonly capabilities: AiCapability[];
@@ -344,7 +344,7 @@ Hashes are part of the source tree. Bumping a model version is a code change tha
 - macOS: `~/Library/Application Support/photosphere/models/<resource-id>/<sha256-prefix>/<asset>`
 - Windows: `%APPDATA%\photosphere\models\<resource-id>\<sha256-prefix>\<asset>`
 
-The CLI and Electron share the same cache directory. Multiple Photosphere installs on the same machine share weights.
+The CLI and the Photosphere App share the same cache directory. Multiple Photosphere installs on the same machine share weights.
 
 **Cache key**:
 `<resource-id>/<sha256-prefix>`. Including the hash prefix lets old model versions coexist with new ones for the duration of an upgrade. Cleanup is a separate pass.
@@ -357,7 +357,7 @@ The CLI and Electron share the same cache directory. Multiple Photosphere instal
 5. On mismatch or network error, delete the temp file, exponential-backoff retry (max 3 attempts), then surface the error to the caller.
 
 **Progress reporting**:
-The download is exposed as a Photosphere background task using the existing background-tasks system (see `docs/tasks.md`). The Electron UI shows it as "Downloading model: SigLIP 2 (200MB of 400MB)" with cancel.
+The download is exposed as a Photosphere background task using the existing background-tasks system (see `docs/tasks.md`). The Photosphere App shows it as "Downloading model: SigLIP 2 (200MB of 400MB)" with cancel.
 
 **First-launch behaviour**:
 Plugin `init()` does *not* download resources. Resources are downloaded lazily on first capability use, so launching Photosphere does not require a network. The first time a feature calls `getCapability("image-embedding")` and invokes a method that needs the model, the resource manager downloads it.
@@ -369,7 +369,7 @@ If a resource is not cached and the network is unavailable, the capability call 
 Users on air-gapped machines can download the GitHub release assets on a connected machine and copy them into the cache directory. The resource manager treats them identically to its own downloads.
 
 **Audit & sources**:
-- Cache directory paths (`$XDG_DATA_HOME/photosphere/models/...` on Linux, `~/Library/Application Support/photosphere/...` on macOS, `%APPDATA%\photosphere\models\...` on Windows) — [UNVERIFIED]. These match each platform's standard convention, but I did NOT verify that Photosphere currently uses these paths. Before adopting, read `apps/cli` and `apps/desktop` to see how Photosphere currently resolves user data directories.
+- Cache directory paths (`$XDG_DATA_HOME/photosphere/models/...` on Linux, `~/Library/Application Support/photosphere/...` on macOS, `%APPDATA%\photosphere\models\...` on Windows) — [UNVERIFIED]. These match each platform's standard convention, but I did NOT verify that Photosphere currently uses these paths. Before adopting, read `apps/cli-zig` and `apps/photosphere` to see how Photosphere currently resolves user data directories.
 - `ResourceUnavailableError` typed error class — *invented design proposal*.
 - "Exponential-backoff retry (max 3 attempts)" — *invented design proposal*, not a standard or referenced policy.
 - "Atomic rename" pattern for crash-safe writes — [VERIFIED] as standard POSIX behaviour (`rename(2)` is atomic on the same filesystem); not a specific URL needed.
@@ -444,7 +444,7 @@ The architecture is built so the default `bun test` run never loads real model w
 - For each capability, one end-to-end test using a tiny real ONNX model (synthetic or aggressively quantized, kept under ~5MB so it can be committed as a test fixture inside the plugin package) to verify the full `init -> ensure -> use -> dispose` flow against an actual ONNX Runtime.
 - Skipped by default. Run with `PHOTOSPHERE_AI_TESTS=full bun test`. Keeps `bun test` fast on every commit.
 
-**Smoke tests** (Photosphere's existing CLI / Electron smoke harness):
+**Smoke tests** (Photosphere's existing CLI and Photosphere App smoke harnesses):
 - One smoke test per AI feature: `photosphere index <tmp-library>` on a 5-photo fixture exercises the full ONNX -> embedding -> bdb -> search path; `photosphere recognize`, `photosphere caption`, and `photosphere find-duplicates` each get the same treatment.
 - The smoke harness pre-seeds the model cache from committed fixture files before invoking the CLI, so the smoke run never hits the network.
 - These are the only tests that load real ONNX Runtime and exercise the file storage + bdb layers together, end-to-end.
@@ -459,7 +459,7 @@ The architecture is built so the default `bun test` run never loads real model w
 - `PHOTOSPHERE_AI_OFFLINE=1` and `PHOTOSPHERE_AI_TESTS=full` environment variables — *invented design proposals*. I made up the names.
 - The capability-conformance harness (`packages/ai/src/test/capability-conformance.ts`) — *invented design proposal*.
 - All test file paths (`plugins/<plugin-id>/src/test/<plugin-id>.test.ts`, etc.) — *invented design proposals*, follow the project's existing `src/test/` convention.
-- "Existing CLI / Electron smoke harness" — [VERIFIED] in spirit: [CLAUDE.md](../CLAUDE.md) documents `bun run test:cli` and `bun run test:electron`. The specific pre-seeding pattern is a proposal.
+- "Existing CLI and Photosphere App smoke harnesses" — [VERIFIED] in spirit: [CLAUDE.md](../CLAUDE.md) documents `bun run test:cli:zig` and `bun run test:ziggy`. The specific pre-seeding pattern is a proposal.
 - "Network access is denied at the runner level" — *invented design proposal*, not a current CI configuration I have verified.
 
 ---
@@ -501,12 +501,11 @@ plugins/                                     # Each plugin is its own workspace 
             registry.test.ts
 ```
 
-The CLI and Electron both depend on `plugins/registry` (which transitively pulls in `packages/ai` and every active plugin). Features (search, face recognition, captioning) live in `packages/user-interface` or feature-specific packages and depend on `packages/ai` only, through the capability interfaces, never on a concrete plugin package.
+Features (search, face recognition, captioning) live in `packages/user-interface` or feature-specific packages and depend on `packages/ai` only, through the capability interfaces, never on a concrete plugin package.
 
 **Audit & sources**:
 - The entire directory tree shown above (`packages/ai/`, `plugins/<plugin-id>/`, `plugins/registry/`) is an *invented design proposal*. None of these packages currently exist.
-- `packages/user-interface`, `packages/storage`, `packages/mcp-tools` references — [VERIFIED]: all three exist in the repo (`ls packages/` confirms). Their internal structure has not been audited here.
-- "matches how, e.g., `packages/mcp-tools` is structured" (cited earlier as an analogy) — [UNVERIFIED]. `packages/mcp-tools` exists but I have not opened it to verify the structural analogy.
+- `packages/user-interface` references — [VERIFIED]: it exists in the repo (`ls packages/` confirms). Its internal structure has not been audited here.
 
 ---
 
@@ -514,6 +513,6 @@ The CLI and Electron both depend on `plugins/registry` (which transitively pulls
 
 - One interface (`IAiPlugin`) in `packages/ai`, one workspace package per plugin under `plugins/`, one registry composition package at `plugins/registry`. That is the entire plugin system.
 - Code is compile-time pluggable: a new plugin is a new workspace package plus one import line in `plugins/registry/src/index.ts`.
-- Models ship via per-model GitHub repositories (one repo per model, or one per small-model family), released independently. Downloaded on first use, verified by SHA, cached in the user data dir, shared between CLI and Electron.
+- Models ship via per-model GitHub repositories (one repo per model, or one per small-model family), released independently. Downloaded on first use, verified by SHA, cached in the user data dir, shared between the CLI and the Photosphere App.
 - Feature code references capabilities, never concrete plugins, so swapping models is cheap.
 - No dynamic loading, no marketplace, no per-collection config. Resist scope creep.

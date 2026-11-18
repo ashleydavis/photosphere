@@ -2,7 +2,7 @@
 DESCRIPTION="S3 database using credentials from a vault secret"
 
 # Covers the vault branch of resolveStorageCredentials
-# (packages/node-api/src/lib/resolve-storage-credentials.ts lines 63-83), which is the credential path
+# (packages-zig/node-api-zig/src/lib/resolve-storage-credentials.zig), which is the credential path
 # the desktop and mobile apps actually use, and which no other test exercises: test 65 covers the
 # AWS_* environment-variable branch only.
 #

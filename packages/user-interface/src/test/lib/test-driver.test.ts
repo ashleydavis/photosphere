@@ -4,7 +4,6 @@
 
 import {
     doClick,
-    isToggleInput,
     clickTarget,
     waitForElement,
     isElementVisible,
@@ -233,41 +232,6 @@ describe("doClick", () => {
 // still disabled (Browse had not yet filled the path), the click was swallowed with no handler run
 // and nothing logged, and the test then timed out waiting for a database that was never created.
 //
-
-describe("isToggleInput", () => {
-
-    //
-    // The element carrying the given data-id in the document.
-    //
-    function element(dataId: string): HTMLElement {
-        return document.querySelector(`[data-id="${dataId}"]`) as HTMLElement;
-    }
-
-    test("is true for a radio input", () => {
-        document.body.innerHTML = `<input data-id="radio" type="radio" />`;
-        expect(isToggleInput(element("radio"))).toBe(true);
-    });
-
-    test("is true for a checkbox input", () => {
-        document.body.innerHTML = `<input data-id="checkbox" type="checkbox" />`;
-        expect(isToggleInput(element("checkbox"))).toBe(true);
-    });
-
-    test("is false for a text input", () => {
-        document.body.innerHTML = `<input data-id="text" type="text" />`;
-        expect(isToggleInput(element("text"))).toBe(false);
-    });
-
-    test("is false for a button", () => {
-        document.body.innerHTML = `<button data-id="button">go</button>`;
-        expect(isToggleInput(element("button"))).toBe(false);
-    });
-
-    test("is false for a div", () => {
-        document.body.innerHTML = `<div data-id="div">text</div>`;
-        expect(isToggleInput(element("div"))).toBe(false);
-    });
-});
 
 describe("clickTarget", () => {
 

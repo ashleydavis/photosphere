@@ -4,11 +4,11 @@ DESCRIPTION="Import and export a video larger than one S3 upload part"
 # Covers the two S3 code paths that only engage on objects larger than 100 MB, which nothing else
 # reaches because every checked-in fixture is a few megabytes:
 #
-#   - writeStream uploads through `Upload` with a 100 MB partSize
-#     (packages/storage/src/lib/cloud-storage.ts line 405), so a larger object is sent as several
+#   - writeStream uploads through `Upload` in parts of UPLOAD_PART_BYTES
+#     (packages-zig/storage-zig/src/lib/cloud-storage.zig), so a larger object is sent as several
 #     parts and completed as a multipart upload rather than one PUT.
 #   - readStream always goes through S3RangeReadableStream, whose chunk ladder starts at 100 MB
-#     (packages/storage/src/lib/s3-range-readable-stream.ts line 10), so reading it back takes
+#     (packages-zig/storage-zig/src/lib/s3-range-readable-stream.zig), so reading it back takes
 #     several ranged GETs that have to be stitched together in order.
 #
 # Videos above 100 MB are ordinary for real users, so these paths carry real data.

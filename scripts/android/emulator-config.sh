@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Names shared between the emulator lifecycle script (emulator.sh) and the smoke-test harness
-# (apps/smoke-tests/lib/android.sh).
+# (apps/photosphere-smoke-tests/lib/android.sh).
 #
 # These live here, in one file both sides source, because the harness has to recognise a pool
 # emulator to know it should leave a hand-testing one alone. A copy of the prefix in each place would
@@ -60,7 +60,7 @@ pinned_emulator_path() {
 
 #
 # Prints the path of the lock file held for the whole of one test while that test is using the device
-# with the given adb serial. The smoke-test harness takes it in apps/smoke-tests/lib/runner.sh, and
+# with the given adb serial. The smoke-test harness takes it in apps/photosphere-smoke-tests/lib/android.sh, and
 # the emulator repair path takes it non-blocking before it touches an emulator, which is what stops a
 # repair restarting a device out from under a running test.
 #

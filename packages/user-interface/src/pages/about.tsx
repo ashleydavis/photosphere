@@ -2,7 +2,6 @@ import React, { useRef, useState } from "react";
 import { version } from "config";
 import Box from "@mui/joy/Box";
 import Card from "@mui/joy/Card";
-import Chip from "@mui/joy/Chip";
 import Button from "@mui/joy/Button";
 import Input from "@mui/joy/Input";
 import Typography from "@mui/joy/Typography";

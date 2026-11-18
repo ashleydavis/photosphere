@@ -1,7 +1,6 @@
 // Imported from the module rather than the package barrel: the barrel reaches Node-only code
 // (serialization pulls in zlib), and this file is bundled for the browser as well.
 import {
-    DEFAULT_AUTO_IMPORT_SETTINGS,
     IAutoImportSettings,
     IAutoImportSource,
     IRawAutoImportSettings,
@@ -71,48 +70,4 @@ export async function getDefaultDatabasePath(config: IConfig): Promise<string | 
 //
 export async function setDefaultDatabasePath(config: IConfig, databasePath: string): Promise<void> {
     await config.set(DEFAULT_DATABASE_PATH_KEY, databasePath);
-}
-
-//
-// The settings a brand new installation starts from, with the given places to watch.
-//
-export function buildInitialAutoImportSettings(sources: IAutoImportSource[]): IAutoImportSettings {
-    return {
-        ...DEFAULT_AUTO_IMPORT_SETTINGS,
-        enabled: true,
-        sources,
-    };
-}
-
-//
-// An entry in the databases list, as far as marking a default is concerned.
-//
-export interface IDefaultableDatabase {
-    // The database's path, which is what the default is recorded as.
-    path: string;
-
-    // Whether this entry is the one automatic import writes to.
-    isDefault?: boolean;
-}
-
-//
-// Returns the entries with exactly one of them marked as the default.
-//
-// Exactly one is the whole rule: making a second database the default has to clear the first, or
-// the app has two places it believes photos are being backed up to and only one of them is really
-// receiving them.
-//
-export function markDefaultDatabase<EntryType extends IDefaultableDatabase>(entries: EntryType[], defaultPath: string | undefined): EntryType[] {
-    return entries.map(entry => ({
-        ...entry,
-        isDefault: defaultPath !== undefined && entry.path === defaultPath,
-    }));
-}
-
-//
-// The path of whichever entry is marked as the default, or undefined when none is.
-//
-export function findDefaultDatabasePath(entries: IDefaultableDatabase[]): string | undefined {
-    const defaultEntry = entries.find(entry => entry.isDefault === true);
-    return defaultEntry ? defaultEntry.path : undefined;
 }

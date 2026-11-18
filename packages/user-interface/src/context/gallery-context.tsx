@@ -348,7 +348,7 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // A simple way to force state to update.
     //
-    const [time, setTime] = useState<number>(0);
+    const [, setTime] = useState<number>(0);
 
     //
     // The way the gallery is sorted.

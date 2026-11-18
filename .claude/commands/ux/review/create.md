@@ -1,10 +1,10 @@
 ---
-description: Run a fresh UX review of the Photosphere desktop app from a new user's point of view. Captures screenshots, analyses them, and writes the review to ux-review/ (gitignored, not committed).
+description: Run a fresh UX review of the Photosphere App from a new user's point of view. Captures screenshots, analyses them, and writes the review to ux-review/ (gitignored, not committed).
 ---
 
-# Create a UX review of the desktop app
+# Create a UX review of the Photosphere App
 
-Run a full UX review of the Photosphere desktop app as if you were a brand-new
+Run a full UX review of the Photosphere App as if you were a brand-new
 user opening it for the first time. Capture screenshots, look for problems, and
 write up the findings.
 
@@ -13,7 +13,7 @@ write up the findings.
 - Put ALL output in the `ux-review/` directory at the repo root.
 - `ux-review/` is gitignored. Do NOT commit anything in it.
 - Write the review to `ux-review/review.md`.
-- Screenshots go in `ux-review/screenshots/` (the capture script does this).
+- Screenshots go in `ux-review/screenshots/` (the story player does this).
 
 ## Writing style for the review
 
@@ -29,26 +29,14 @@ write up the findings.
 Run this from the repo root:
 
 ```bash
-bun run screenshots
+bun run stories:ziggy -- --screenshots ux-review/screenshots
 ```
 
-- It bundles the app, launches it headless (via `xvfb-run` on Linux), opens the
-  50-asset test database, and walks through the main screens.
-- It writes PNGs to `ux-review/screenshots/`.
-- The script is `apps/desktop/screenshots/capture-ux.sh`. It drives the app
-  through the test control server (see `docs/testing/screenshots.md`).
-- If you need extra screens, add steps to that script, then re-run.
-
-How the capture works (for reference):
-
-- The app starts in test mode (`PHOTOSPHERE_TEST_MODE=1`), which starts a small
-  HTTP control server.
-- The script sends it commands: open a database, go to a page, click a thing,
-  take a screenshot.
-- A screenshot is taken by `POST /screenshot`, which calls Electron's
-  `webContents.capturePage()` and saves a PNG.
-- Gotcha: gallery thumbnails need `/long-press-click`, not `/click` (a plain
-  click is ignored).
+- It builds the Photosphere App, plays it through every UI story (every page,
+  modal, dialog and component) in light and then dark, and writes a PNG of
+  each to `ux-review/screenshots/`.
+- The stories that show real photos open the 50-asset test database.
+- `scripts/story-player.md` describes the player and its options.
 
 ### 2. Look at every screenshot
 
@@ -61,7 +49,7 @@ How the capture works (for reference):
   - Are empty states helpful or just blank?
 - When something looks wrong, check the code to confirm it is real (not just a
   capture glitch). Frontend code is in `packages/user-interface/src` and
-  `apps/desktop-frontend/src`.
+  `apps/photosphere-frontend/src`.
 
 ### 3. Known things to check (from past reviews)
 

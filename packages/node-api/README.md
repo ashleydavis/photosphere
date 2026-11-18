@@ -1,6 +1,6 @@
 # node-api
 
-Node.js API for interacting with the Photosphere media file database. Contains Node.js-specific implementations for file scanning, hashing, image and video processing, encryption, storage, and database operations.
+The `databases.toml` format and its conversions, which `apps/photosphere/scripts/write-fixture-databases-config.ts` uses, and the input data of the test-job task.
 
 ## Commands
 

@@ -4,13 +4,13 @@ How a file dropped on the window gets its real path to the page on each platform
 
 ## What the page needs
 
-Photosphere's import page handles a drop in an async function. For each File in `dataTransfer.files` it calls `platform.getPathForFile(file)`, which on Electron is `webUtils.getPathForFile`. The call returns the path at once. Dropped folders matter, because the import takes directories. The page only uses the path and never reads a dropped file's contents.
+Photosphere's import page handles a drop in an async function. For each File in `dataTransfer.files` it calls `platform.getPathForFile(file)`, which on a desktop calls `window.ziggy.getPathForFile`. The call returns the path at once. Dropped folders matter, because the import takes directories. The page only uses the path and never reads a dropped file's contents.
 
 ## How it works, on every desktop platform
 
 1. The native app reads the paths of a drop natively and records them with the core (`ziggy_files_dropped`). The core keeps the paths of the last drop.
 2. The inject script catches a drop of files before the page does, asks the core for the paths of the last drop (`get-dropped-paths`), and fires the drop again holding one File per path. The script makes each File with the item's name, and remembers its path.
-3. `window.ziggy.getPathForFile(file)` is synchronous and returns the remembered path, as Electron's does. The page runs unchanged. A folder is a File named for the folder. The Files are empty, which the page does not mind because it only uses the path.
+3. `window.ziggy.getPathForFile(file)` is synchronous and returns the remembered path. The page runs unchanged. A folder is a File named for the folder. The Files are empty, which the page does not mind because it only uses the path.
 
 The same inject script runs on every platform. Only how the native app reads the paths differs.
 

@@ -4,7 +4,7 @@ DESCRIPTION="A command's output survives being piped to a reader that is slow to
 # `process.exit` does not wait for output that has been written but has not left the process yet.
 # When the output is a terminal that never matters, and when it is a pipe it matters a great deal:
 # writes queue up, and exiting throws away whatever is still queued. Every `psi` command ends through
-# `exit()` in packages/node-utils/src/lib/termination.ts, so every command could lose the end of what
+# `exit()` in packages-zig/node-utils-zig/src/lib/termination.zig, so every command could lose the end of what
 # it printed, silently, with a zero exit code.
 #
 # It was found through 73-s3-pagination, which failed only when the machine was busy: `find-orphans`

@@ -27,7 +27,7 @@ Referenced, not copied: `scripts/lib/test-pool.sh`, `test-timeout.sh`, `test-con
 
 ## Running beside other suites
 
-Every scenario must survive running beside copies of itself and beside every other suite, including ones started from another worktree: a free port, a per-test temporary directory from `scripts/lib/allocate-test-temp-dir.sh`, every started process recorded when it is started and killed through `kill_process_tree`. `bun run test:parallel` proves it.
+Every scenario must survive running beside copies of itself and beside every other suite, including ones started from another worktree: a free port, a per-test temporary directory from `photosphere_test_temp_dir` in `scripts/lib/test-lib.sh`, every started process recorded when it is started and killed through `kill_process_tree`. `bun run test:parallel` proves it.
 
 ## Driving the app
 
