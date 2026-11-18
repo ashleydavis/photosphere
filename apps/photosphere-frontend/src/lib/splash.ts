@@ -14,6 +14,11 @@ export interface ISplashOptions {
 
     // How long the fade to transparent takes, in milliseconds.
     fadeDurationMilliseconds: number;
+
+    // Called as the overlay starts to fade, with how long the fade takes in milliseconds, or with 0 when the overlay is already gone.
+    // The app passes it on to window.ziggy.splashFading, so the native app fades what it covered with the splash colour (the menu
+    // bar on Linux and Windows) together with the overlay.
+    onFadeStart: (durationMilliseconds: number) => void;
 }
 
 //
@@ -161,15 +166,18 @@ export function installSplashScreen(documentLike: IDocumentLike | Document, opti
 
     function remove(): Promise<void> {
         if (removed) {
+            options.onFadeStart(0);
             return Promise.resolve();
         }
         return new Promise<void>(resolve => {
             const remaining = Math.max(0, options.minimumDisplayMilliseconds - (Date.now() - installedAt));
             documentInterface.defaultView.setTimeout(() => {
                 if (removed) {
+                    options.onFadeStart(0);
                     resolve();
                     return;
                 }
+                options.onFadeStart(options.fadeDurationMilliseconds);
                 fadeOut(documentInterface, overlay, options.fadeDurationMilliseconds, resolve);
             }, remaining);
         });

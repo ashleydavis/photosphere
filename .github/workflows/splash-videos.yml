@@ -1,0 +1,362 @@
+# Builds the Photosphere App on every platform, starts it and records the screen from before it opens until after its splash screen
+# has faded out, then uploads each video, kept for 3 days, to check the splash frame by frame. It is started by hand only. Each job
+# builds the app the way its release workflow's app-build job does: the third-party-libraries action restores each library the
+# library jobs stored, and builds any it finds none of. The recording is apps/photosphere/scripts/record-splash.sh (see
+# record-splash.md).
+name: Splash videos
+
+env:
+  BUN_VERSION: "1.3.14"
+  NODE_VERSION: "24.15.0"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  splash-video-linux:
+    timeout-minutes: 150
+    # ubuntu-24.04, as in ci.yml: on ubuntu-26.04 every start of a Ziggy Linux app waited 25 seconds for the desktop portal.
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
+
+      - name: Install the web view's runtime libraries, the display and the recorder (Linux)
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav xvfb ffmpeg
+          verify: Xvfb ffmpeg
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: linux-x64
+
+      - name: Set config
+        shell: bash
+        run: echo "VERSION=$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")" >> "$GITHUB_ENV"
+
+      - name: Build
+        shell: bash
+        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app"
+
+      - name: Record the splash
+        shell: bash
+        run: bash apps/photosphere/scripts/record-splash.sh --platform linux --app "$PWD/out/app/bin/photosphere" --output "$PWD/splash-videos/photosphere-linux.mp4"
+
+      - name: Upload the video
+        uses: actions/upload-artifact@v4
+        with:
+          name: splash-video-linux
+          path: splash-videos/photosphere-linux.mp4
+          retention-days: 3
+          if-no-files-found: error
+
+  splash-video-windows:
+    timeout-minutes: 150
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
+
+      - name: Install the recorder (Windows)
+        uses: ./.github/actions/install-ffmpeg-windows
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Fetch the WebView2 SDK and the WiX Toolset (Windows)
+        shell: bash
+        run: bun run --filter=ziggy setup
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: windows-x64
+
+      - name: Restore the third-party libraries for the MSVC ABI
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: windows-x64
+          build-args: -Dtarget=x86_64-windows-msvc
+
+      - name: Set config
+        shell: bash
+        run: echo "VERSION=$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")" >> "$GITHUB_ENV"
+
+      # The directory is given in the drive-letter form, because the build script hands it to zig.
+      - name: Build
+        shell: bash
+        run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")"
+
+      - name: Record the splash
+        shell: bash
+        run: bash apps/photosphere/scripts/record-splash.sh --platform windows --app "$(cygpath -m "$PWD/out/app")/photosphere/photosphere.exe" --output "$PWD/splash-videos/photosphere-windows.mp4"
+
+      - name: Upload the video
+        uses: actions/upload-artifact@v4
+        with:
+          name: splash-video-windows
+          path: splash-videos/photosphere-windows.mp4
+          retention-days: 3
+          if-no-files-found: error
+
+  splash-video-macos:
+    timeout-minutes: 120
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: macos-arm64
+          build-args: -Dtarget=aarch64-macos.11.0
+
+      - name: Set config
+        shell: bash
+        run: echo "VERSION=$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")" >> "$GITHUB_ENV"
+
+      - name: Build
+        shell: bash
+        run: bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+
+      - name: Record the splash
+        shell: bash
+        run: bash apps/photosphere/scripts/record-splash.sh --platform macos --app "$PWD/out/app/xcode/Build/Products/Release/Photosphere.app" --output "$PWD/splash-videos/photosphere-macos.mov"
+
+      - name: Upload the video
+        uses: actions/upload-artifact@v4
+        with:
+          name: splash-video-macos
+          path: splash-videos/photosphere-macos.mov
+          retention-days: 3
+          if-no-files-found: error
+
+  splash-video-ios:
+    timeout-minutes: 150
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Check the iOS toolchain (iOS)
+        run: bun run --filter=ziggy setup:ios
+
+      - name: Restore the third-party libraries for the runner
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: macos-arm64
+          build-args: -Dtarget=aarch64-macos.11.0
+
+      - name: Restore the third-party libraries for the iOS simulator
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
+
+      - name: Set config
+        shell: bash
+        run: echo "VERSION=$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")" >> "$GITHUB_ENV"
+
+      - name: Build the app for the iOS simulator
+        shell: bash
+        run: bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+
+      # A simulator takes longer to start an app than a desktop does, so the recording runs longer.
+      - name: Record the splash
+        shell: bash
+        run: bash apps/photosphere/scripts/record-splash.sh --platform ios --app "$PWD/out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app" --seconds 20 --output "$PWD/splash-videos/photosphere-ios.mp4"
+
+      - name: Upload the video
+        uses: actions/upload-artifact@v4
+        with:
+          name: splash-video-ios
+          path: splash-videos/photosphere-ios.mp4
+          retention-days: 3
+          if-no-files-found: error
+
+  splash-video-android:
+    timeout-minutes: 150
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Set up the Android C library
+        uses: ./.github/actions/android-libc
+
+      - name: Restore the third-party libraries for the runner
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: linux-x64
+
+      - name: Restore the third-party libraries for Android x86_64
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: android
+          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
+
+      - name: Restore the third-party libraries for Android arm64
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: android
+          build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
+
+      - name: Set config
+        shell: bash
+        run: echo "VERSION=$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")" >> "$GITHUB_ENV"
+
+      - name: Build (Android)
+        shell: bash
+        run: bun run --filter=ziggy build:android -- --output-dir "$PWD/out/app"
+
+      - name: Enable KVM (Android)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The script is one line, because this action runs each line of `script:` in a shell of its own.
+      - name: Record the splash on an emulator (Android)
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_SERIAL: emulator-5554
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disk-size: 4096M
+          script: bash apps/photosphere/scripts/record-splash.sh --platform android --app "$PWD/out/app/photosphere.apk" --package au.com.codecapers.photosphere.ziggy --seconds 20 --output "$PWD/splash-videos/photosphere-android.mp4"
+
+      - name: Upload the video
+        uses: actions/upload-artifact@v4
+        with:
+          name: splash-video-android
+          path: splash-videos/photosphere-android.mp4
+          retention-days: 3
+          if-no-files-found: error
