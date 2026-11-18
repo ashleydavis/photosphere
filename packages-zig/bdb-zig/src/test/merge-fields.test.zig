@@ -363,8 +363,8 @@ test "should handle fields with same timestamp" {
 
     const result = try mergeFields(allocator, value1, value2);
 
-    // When timestamps are equal, value2 wins (timestamp1 > timestamp2 check is false)
-    try std.testing.expect(get(result.value, "name").eql(stringValue("Jane")));
+    // With equal timestamps the value whose JSON sorts higher wins, and "John" sorts above "Jane".
+    try std.testing.expect(get(result.value, "name").eql(stringValue("John")));
     try std.testing.expectEqual(@as(f64, 1000), timestampOf(result.metadata.fields.?, "name"));
     try std.testing.expectEqual(@as(f64, 1000), result.metadata.timestamp);
 }

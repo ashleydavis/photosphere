@@ -186,6 +186,7 @@ pub fn mergeFields(allocator: std.mem.Allocator, value1: MergeValue, value2: Mer
 // Merges two values recursively based on their metadata timestamps.
 // If both sides have a timestamp, the one with the newer timestamp wins.
 // If one side has a timestamp and the other does not, the one with the timestamp side wins.
+// Equal timestamps go to the value whose JSON sorts higher, so the result does not depend on the order of the arguments.
 //
 pub fn mergeValues(allocator: std.mem.Allocator, value1: MergeValue, value2: MergeValue) anyerror!MergeValue {
 
@@ -204,7 +205,17 @@ pub fn mergeValues(allocator: std.mem.Allocator, value1: MergeValue, value2: Mer
 
         // Value 1 or value 2 is a primitive, other side can be anything.
         // The one with the newer timestamp wins.
-        return if (timestamp1 > timestamp2) value1 else value2;
+        if (timestamp1 != timestamp2) {
+            return if (timestamp1 > timestamp2) value1 else value2;
+        }
+
+        // Two edits made in the same millisecond, on two copies of the database. Each sync merges the incoming
+        // record as value 1 into the copy it already has as value 2, so letting either side win by its position
+        // would leave every copy keeping its own edit forever. The winner is the value whose JSON sorts higher,
+        // which every copy chooses the same way whichever way the sync runs.
+        const json1 = try js_value.jsonStringifyIndented(allocator, value1.value);
+        const json2 = try js_value.jsonStringifyIndented(allocator, value2.value);
+        return if (std.mem.order(u8, json1, json2) == .gt) value1 else value2;
     }
     else {
         // Both sides are objects. So merge them recursively.

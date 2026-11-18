@@ -64,7 +64,7 @@ test "should return value2 when it has newer timestamp and both are primitives" 
     try std.testing.expectEqual(@as(f64, 2000), result.metadata.timestamp);
 }
 
-test "should return value2 when timestamps are equal and both are primitives" {
+test "with equal timestamps the value whose JSON sorts higher wins" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -75,6 +75,20 @@ test "should return value2 when timestamps are equal and both are primitives" {
 
     try std.testing.expect(result.value.eql(stringValue("world")));
     try std.testing.expectEqual(@as(f64, 1000), result.metadata.timestamp);
+}
+
+test "with equal timestamps the same value wins whichever side it is on" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const first = plain(stringValue("3bd80331-2254-4f27-b900-7f1d207ec53c"), 1000);
+    const second = plain(stringValue("a4989637-cfdb-461b-ac77-16c1130d982a"), 1000);
+
+    const forwards = try mergeValues(allocator, first, second);
+    const backwards = try mergeValues(allocator, second, first);
+
+    try std.testing.expect(forwards.value.eql(stringValue("a4989637-cfdb-461b-ac77-16c1130d982a")));
+    try std.testing.expect(backwards.value.eql(stringValue("a4989637-cfdb-461b-ac77-16c1130d982a")));
 }
 
 test "should handle number primitives" {
@@ -317,8 +331,8 @@ test "should handle mixed primitive types with equal timestamps" {
 
     const result = try mergeValues(allocator, value1, value2);
 
-    // When timestamps are equal, value2 wins (timestamp1 > timestamp2 is false)
-    try std.testing.expect(result.value.eql(stringValue("forty-two")));
+    // With equal timestamps the value whose JSON sorts higher wins: 42 is written 42 and the string is written in quotes, which sort lower.
+    try std.testing.expect(result.value.eql(numberValue(42)));
     try std.testing.expectEqual(@as(f64, 1000), result.metadata.timestamp);
 }
 
