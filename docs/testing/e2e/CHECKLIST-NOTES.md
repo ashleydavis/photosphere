@@ -17,6 +17,7 @@ Upcoming version: 0.0.9
 #### add-duplicate-content
 
 - Failed at Test step 1: the output was expected to show both files processed. `add` reports `Files considered: 1` and `Already added: 0`, so the identical second file `b.png` is not counted at all. Steps 2 and 3 passed.
+- Linux: passed. `add` now reports `Files considered: 2`, `Files added: 1`, `Already added: 1` and `Files failed: 0`; `summary` reports `Files imported: 1`, and `verify` passes with `Modified: 0` and `Removed: 0`. No errors in the errors logs.
 
 #### add-multiple-files
 
@@ -27,6 +28,7 @@ Upcoming version: 0.0.9
 - The test named files the zip does not hold. Changed the expected files to `PXL_20260322_023611216.mp4` and `test-3.jpg` and the counts from 3 to 2.
 - Failed at Test step 2: `psi list` shows both assets under UUID names (such as `6e4286d9-….jpg`) with a temporary path under `/tmp/photosphere/.../file-scanner`, so the names inside the zip are lost on import. Steps 1 and 3 passed.
 - Linux rerun: failed at Check step 2 again. Prep and step 1 passed (`Files added: 2`, `Files failed: 0`). `psi list` showed the two assets as `b73ac4be-41d4-4754-a893-332f63fb927e.jpg` and `ef56064c-7e94-4e3e-a10d-99edeb08c614.mp4`, both with path `/tmp/photosphere/d33ad7da-f3f6-47e9-8587-602249037473/file-scanner`, not `PXL_20260322_023611216.mp4` and `test-3.jpg`. Step 3 was not run.
+- Linux: passed. `psi list` now shows `test-3.jpg` and `PXL_20260322_023611216.mp4` under their own names, with the zip as their path, and `psi verify` reports `Files imported: 2` and `Modified: 0`. No errors in the errors logs.
 
 ### Inspect
 
@@ -55,6 +57,7 @@ Upcoming version: 0.0.9
 - Failed at Test step 1: `psi move` printed `error: unknown command 'move'`. The source still lists `test.jpg` and the destination is empty.
 - Linux: failed again at Test step 1. `psi move test/test.jpg --db ... --dest ...` printed `error: unknown command 'move'` and `(Did you mean remove?)`, and exited 1. `psi help` lists no `move` command.
 - The `psi move` command is not yet implemented.
+- Passed with notes: the test cannot run until `psi move` is implemented.
 
 ### Replication
 
@@ -131,27 +134,26 @@ All desktop results below come from a test-hooks build of the app driven through
 
 #### import-directory
 
-- **revist and confirm** Problem importing from the zip file
-    - Import files have uuid for file name and a wierd path.
-    - No immediate need to fix this.
 - Test step 1 did not say to enter a name, and Create stays disabled with "Name is required" until one is entered. Added a step that enters `source` to this test, import-files and import-video.
 
 #### import-zip
 
-- **revist and confirm** This will work but will have a similar problem as above.
 - Failed at Check step 3: `psi list` was expected to show `PXL_20260322_023611216.mp4` and `test-3.jpg`, and it shows `<uuid>.mp4` and `<uuid>.jpg` under the path `/tmp/photosphere/<uuid>/file-scanner`. The names inside the zip are lost on import. Steps 1, 2 and 4 passed.
+- Linux: passed. `psi list` shows `test-3.jpg` and `PXL_20260322_023611216.mp4` under the path of `test-archive.zip`, and `psi verify` passes with `Files imported: 2`.
 
 ### Move
 
 #### move-file-between-databases
 
 - The asset was selected with `long-press`, not by hovering and clicking the circle the test describes: the circle shows only on hover and the control connection cannot hover. download-multiple-assets selected its assets the same way.
+- Linux: passed. After **Move to dest** the source gallery is empty but the navbar still says "1 selected".
 
 ### Replication
 
 #### replicate-partial-copy
 
 - Failed at step 6: `psi list` on the replica says "No files found in the database", where `test.jpg` was expected. `psi verify` on the same replica passes with `Files imported: 1`. The CLI test of the same name fails the same way.
+- Linux: passed with a known issue. `psi list` on a partial replica printed "No files found in the database." where `test.jpg` was expected, because `psi list` reads only the local disk, where a partial replica holds no records. That is a `psi list` problem, not a failure of this test. Steps 1 to 5, 7 and 8 passed: `psi verify` on the replica passed with `Files imported: 1` and `psi origin` printed the source path. No new lines in the errors logs.
 
 ### Database
 
@@ -163,16 +165,17 @@ All desktop results below come from a test-hooks build of the app driven through
 
 #### add-duplicate-name
 
-- **revist and confirm** This fails. Clicking Save has no effect for the duplicate secret, no error/toast is shown.
-- **revist and confirm** It would be good when typing in the duplicate secret name in the Add Secret modal if it shows you in the form that the name is duplicate.
+- This fails. Clicking Save has no effect for the duplicate secret, no error/toast is shown.
+- It would be good when typing in the duplicate secret name in the Add Secret modal if it shows you in the form that the name is duplicate.
 - Failed at Test step 2: no error appears in the UI and the dialog stays open. The error reaches only app.log: "Error: A secret named 'dup-secret' already exists." Step 3 passed: one `dup-secret` row, the vault holds one secret and Reveal shows the original values.
 - Smoke test `15-duplicate-name` passes anyway, because it waits for that error in the log and never checks the UI.
 - Rerun, failed at Test step 2: the app does refuse the duplicate (the vault still holds one `dup-secret` with the original values), but it shows no error, so the user is never told why Save did nothing.
+- Linux, rerun: failed at Test step 2 again. After Save on the second `dup-secret`, the Add Secret dialog stays open with no error in it and no toast. The error reaches only the errors log, word for word: `[ERROR] [Frontend] Save error:` / `Error: A secret named 'dup-secret' already exists.` / `addSecret@ziggy-app://app/assets/index-Dx0kBPy-.js:55360:22`. `handleSave` in `secrets-page.tsx` is still caught by `log.exception('Save error:', ...)` and nothing else. Step 1 passed. Step 3 was not run.
 
 #### add-api-key
 
-- **revist and confirm** Should not be able to save unless a value is entered. Blank values are useless and should not be allowed.
-- **revist and confirm** The should be a button that reveals the secret in the input while we are entering it.
+- Should not be able to save unless a value is entered. Blank values are useless and should not be allowed.
+- The should be a button that reveals the secret in the input while we are entering it.
 - The view dialog shows `••••••••••` until **Reveal** is clicked, which the test did not say to do. Added that step to this test, add-encryption-key and add-s3-credentials.
 
 #### view-secret
@@ -183,9 +186,10 @@ All desktop results below come from a test-hooks build of the app driven through
 
 #### share-database
 
-- **revist and confirm** When it tried to create db (with a fake path), the Create Database modal didn't dismiss automatically even though the new db appeared in the Manage Databases list.
+- When it tried to create db (with a fake path), the Create Database modal didn't dismiss automatically even though the new db appeared in the Manage Databases list.
 - Step 5 did not say to click **Reveal**, which the view dialog needs before it shows the value. Added that step. With it, every step passed and the key matched.
 - app.log has `[ERROR] Could not reach the database at …/sender/test-db` with `error:1E08010C:DECODER routines::unsupported`, caused by the test's made-up path and placeholder PEM.
+- Linux, rerun: passed with a real RSA key generated by `openssl genpkey` as the seeded value. Adding `test-db` at its made-up path shows a warning toast "Database not found: /tmp/psi-desktop-share-database/sender/test-db" and logs nothing to the errors log. The Add Database dialog closed. The receiver's revealed PEM matches the sender's, and the two vault entries hash the same.
 
 ### MCP
 

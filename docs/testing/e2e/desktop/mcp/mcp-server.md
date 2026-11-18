@@ -2,11 +2,8 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-> **Warning:** Desktop MCP support is not yet implemented. This walkthrough is
-> a placeholder so that the manual test exists once MCP support lands.
-
-Test that the desktop app can expose an MCP server and a compatible client can
-list its resources.
+Test that the desktop app exposes an MCP server and a compatible client can
+list its tools and call one.
 
 ## Prep
 

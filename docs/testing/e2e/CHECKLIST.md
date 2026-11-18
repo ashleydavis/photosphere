@@ -47,12 +47,12 @@ Run the story player and check every story cycles through without failures, then
 
 ### Import
 - [x] [add-and-verify](cli/import/add-and-verify.md)
-- [ ] [add-duplicate-content](cli/import/add-duplicate-content.md)
+- [x] [add-duplicate-content](cli/import/add-duplicate-content.md)
 - [x] [add-mp4](cli/import/add-mp4.md)
 - [x] [add-multiple-files](cli/import/add-multiple-files.md)
 - [x] [add-png](cli/import/add-png.md)
-- [ ] [add-same-file-twice](cli/import/add-same-file-twice.md)
-- [-] [add-zip](cli/import/add-zip.md)
+- [x] [add-same-file-twice](cli/import/add-same-file-twice.md)
+- [x] [add-zip](cli/import/add-zip.md)
 - [x] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
 - [x] [check-new-files](cli/import/check-new-files.md)
 
@@ -85,7 +85,7 @@ Run the story player and check every story cycles through without failures, then
 - [x] [sync-original-to-copy](cli/sync/sync-original-to-copy.md)
 
 ### Move
-- [-] [move-file-between-databases](cli/move/move-file-between-databases.md)
+- [x] [move-file-between-databases](cli/move/move-file-between-databases.md)
 
 ### Replication
 - [x] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
@@ -176,47 +176,47 @@ Run the story player and check every story cycles through without failures, then
 ## Desktop
 
 ### Import
-- [ ] [import-directory](desktop/import/import-directory.md)
-- [ ] [import-files](desktop/import/import-files.md)
-- [ ] [import-video](desktop/import/import-video.md)
-- [ ] [import-zip](desktop/import/import-zip.md)
+- [x] [import-directory](desktop/import/import-directory.md)
+- [x] [import-files](desktop/import/import-files.md)
+- [x] [import-video](desktop/import/import-video.md)
+- [x] [import-zip](desktop/import/import-zip.md)
 
 ### Move
-- [ ] [move-file-between-databases](desktop/move/move-file-between-databases.md)
+- [x] [move-file-between-databases](desktop/move/move-file-between-databases.md)
 
 ### Download
-- [ ] [download-multiple-assets](desktop/download/download-multiple-assets.md)
-- [ ] [download-single-asset](desktop/download/download-single-asset.md)
+- [x] [download-multiple-assets](desktop/download/download-multiple-assets.md)
+- [x] [download-single-asset](desktop/download/download-single-asset.md)
 
 ### Replication
 - [x] [replicate-full-copy](desktop/replication/replicate-full-copy.md)
-- [ ] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
+- [x] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
 
 ### Database
-- [ ] [edit-database-origin](desktop/database/edit-database-origin.md)
-- [ ] [load-50-asset-fixture](desktop/database/load-50-asset-fixture.md)
-- [ ] [open-existing-database](desktop/database/open-existing-database.md)
-- [ ] [remove-recent-database](desktop/database/remove-recent-database.md)
-- [ ] [view-database-details](desktop/database/view-database-details.md)
-- [ ] [view-database-secret](desktop/database/view-database-secret.md)
+- [x] [edit-database-origin](desktop/database/edit-database-origin.md)
+- [x] [load-50-asset-fixture](desktop/database/load-50-asset-fixture.md)
+- [x] [open-existing-database](desktop/database/open-existing-database.md)
+- [x] [remove-recent-database](desktop/database/remove-recent-database.md)
+- [x] [view-database-details](desktop/database/view-database-details.md)
+- [x] [view-database-secret](desktop/database/view-database-secret.md)
 
 ### Secrets
-- [ ] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
-- [ ] [add-api-key](desktop/secrets/add-api-key.md)
-- [ ] [add-encryption-key](desktop/secrets/add-encryption-key.md)
-- [ ] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
-- [ ] [rename-secret](desktop/secrets/rename-secret.md)
-- [ ] [view-secret](desktop/secrets/view-secret.md)
+- [-] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
+- [x] [add-api-key](desktop/secrets/add-api-key.md)
+- [x] [add-encryption-key](desktop/secrets/add-encryption-key.md)
+- [x] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
+- [x] [rename-secret](desktop/secrets/rename-secret.md)
+- [x] [view-secret](desktop/secrets/view-secret.md)
 
 ### LAN Share
-- [ ] [share-database](desktop/lan-share/share-database.md)
-- [ ] [share-secret](desktop/lan-share/share-secret.md)
+- [x] [share-database](desktop/lan-share/share-database.md)
+- [x] [share-secret](desktop/lan-share/share-secret.md)
 
 ### News
-- [ ] [news-notifications](desktop/news/news-notifications.md)
+- [x] [news-notifications](desktop/news/news-notifications.md)
 
 ### MCP
-- [ ] [mcp-server](desktop/mcp/mcp-server.md)
+- [x] [mcp-server](desktop/mcp/mcp-server.md)
 
 ## Mobile
 

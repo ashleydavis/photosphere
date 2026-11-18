@@ -39,7 +39,7 @@ A mobile test starts by wiping the app on the emulator or simulator with `bun ru
 - `- [x]` passed
 - `- [-]` failed
 
-Only the checklist holds the marks. Notes about a run go in [CHECKLIST-NOTES.md](CHECKLIST-NOTES.md), under the same section, group and test headings as the checklist. A note marked **revist and confirm** is for the human to confirm on the next run of that test; nothing else removes it.
+Only the checklist holds the marks. Notes about a run go in [CHECKLIST-NOTES.md](CHECKLIST-NOTES.md), under the same section, group and test headings as the checklist. A note marked **revist and confirm** is checked by the agent on the next run of that test: it loses the marker when the problem is still there and is deleted when there is no evidence of it.
 
 When a test's expectation contradicts its fixture, or names a button or page the app does not have, the test is wrong: the test file is fixed, the fix is recorded in the notes and the test is run again. When the app does something different from what the test expects, the test fails.
 
