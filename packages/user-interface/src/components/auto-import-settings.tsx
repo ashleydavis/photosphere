@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Card from "@mui/material/Card";
 import IconButton from "@mui/material/IconButton";
 import Switch from "@mui/material/Switch";
 import Typography from "@mui/material/Typography";
@@ -15,6 +14,14 @@ import { getDefaultDatabasePath, loadAutoImportSettings, saveAutoImportSettings 
 import { buildCleanupSourcesTaskData, describeCleanupResult, ICleanupSourcesTaskResult } from "../lib/source-cleanup-request";
 import { TaskQueue, TaskStatus } from "task-queue";
 import { RandomUuidGenerator } from "utils";
+import { DialogSection } from "./dialog-section";
+
+//
+// The look of the explanations in the card, muted so the settings themselves stand out.
+//
+const mutedTextSx = {
+    color: 'var(--color-text-muted)',
+};
 
 //
 // The source tag the cleanup task is queued under.
@@ -162,104 +169,196 @@ export function AutoImportSettings() {
     }
 
     return (
-        <Card
-            elevation={0}
+        <Box
             sx={{
                 display: 'flex',
                 flexDirection: 'column',
-                borderRadius: '12px',
-                p: 1.5,
-                gap: 1.5,
-                bgcolor: 'action.hover',
+                gap: 'var(--settings-section-gap)',
             }}
             data-id="auto-import-card"
             >
-            <Box
-                data-id="auto-import-toggle"
-                sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }}
-                onClick={() => {
-                    const enabled = !settings.enabled;
-                    applySettings({ ...settings, enabled })
-                        .then(() => log.event(`Automatic import ${enabled ? "enabled" : "disabled"}`))
-                        .catch(error => log.exception("Failed to change the automatic import setting", error as Error));
-                }}
-                >
-                <CloudUpload sx={{ color: 'text.secondary' }} />
-                <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Automatic import</Typography>
-                <Switch readOnly checked={settings.enabled} sx={{ pointerEvents: 'none' }} />
-            </Box>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Watches the folders below and imports new photos as they appear. The first time this
-                is switched on, a private photo database is created for you.
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }} data-id="auto-import-background-description">
-                {platform.backgroundImportDescription}
-            </Typography>
-
-            <Typography variant="subtitle2">Folders watched</Typography>
-            {folderSources.length === 0
-                && <Typography variant="body2" sx={{ color: 'text.secondary' }} data-id="auto-import-no-folders">
-                    None yet. This machine's own photo folders are used until you add one.
-                </Typography>
-            }
-            {folderSources.map(source => (
+            <DialogSection heading="">
                 <Box
-                    key={source.path}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-                    data-id={`auto-import-folder-${source.path}`}
+                    data-id="auto-import-toggle"
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--space-3)',
+                        minHeight: 'calc(var(--space-8) + var(--space-6))',
+                        padding: 'var(--space-2) var(--space-3)',
+                        cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                        const enabled = !settings.enabled;
+                        applySettings({ ...settings, enabled })
+                            .then(() => log.event(`Automatic import ${enabled ? "enabled" : "disabled"}`))
+                            .catch(error => log.exception("Failed to change the automatic import setting", error as Error));
+                    }}
                     >
-                    <Typography variant="body2" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>
-                        {source.path}
-                    </Typography>
-                    <IconButton
-                        size="small"
-                        color="error"
-                        data-id="auto-import-remove-folder"
-                        onClick={() => {
-                            removeFolder(source.path)
-                                .catch(error => log.exception("Failed to stop watching a folder", error as Error));
+                    <CloudUpload
+                        sx={{
+                            color: 'var(--color-accent)',
+                            fontSize: 'var(--icon-lg)',
+                        }}
+                        />
+                    <Box
+                        component="span"
+                        sx={{
+                            flexGrow: 1,
                         }}
                         >
-                        <Delete />
-                    </IconButton>
+                        Automatic import
+                    </Box>
+                    <Switch
+                        readOnly
+                        checked={settings.enabled}
+                        sx={{
+                            pointerEvents: 'none',
+                        }}
+                        />
                 </Box>
-            ))}
-            <Button
-                size="small"
-                variant="outlined"
-                startIcon={<Add />}
-                data-id="auto-import-add-folder"
-                onClick={() => {
-                    addFolder().catch(error => log.exception("Failed to add a folder to watch", error as Error));
-                }}
-                >
-                Add a folder
-            </Button>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-2)',
+                        padding: 'var(--space-3)',
+                    }}
+                    >
+                    <Typography variant="body2" sx={mutedTextSx}>
+                        Watches the folders below and imports new photos as they appear. The first time this
+                        is switched on, a private photo database is created for you.
+                    </Typography>
+                    <Typography variant="body2" sx={mutedTextSx} data-id="auto-import-background-description">
+                        {platform.backgroundImportDescription}
+                    </Typography>
+                </Box>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-2)',
+                        padding: 'var(--space-3)',
+                    }}
+                    >
+                    <Box
+                        component="span"
+                        sx={{
+                            fontSize: 'var(--text-sm)',
+                            fontWeight: 'var(--weight-bold)',
+                        }}
+                        >
+                        Folders watched
+                    </Box>
+                    {folderSources.length === 0
+                        && <Typography variant="body2" sx={mutedTextSx} data-id="auto-import-no-folders">
+                            None yet. This machine's own photo folders are used until you add one.
+                        </Typography>
+                    }
+                    {folderSources.map(source => (
+                        <Box
+                            key={source.path}
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 'var(--space-3)',
+                                padding: 'var(--space-1) var(--space-1) var(--space-1) var(--space-3)',
+                                borderRadius: 'var(--radius-md)',
+                                backgroundColor: 'var(--color-raised)',
+                            }}
+                            data-id={`auto-import-folder-${source.path}`}
+                            >
+                            <Box
+                                component="i"
+                                className="fa-solid fa-folder"
+                                aria-hidden={true}
+                                sx={{
+                                    color: 'var(--color-accent)',
+                                    fontSize: 'var(--icon-md)',
+                                }}
+                                />
+                            <Box
+                                component="code"
+                                sx={{
+                                    flexGrow: 1,
+                                    minWidth: 0,
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 'var(--text-sm)',
+                                    wordBreak: 'break-all',
+                                }}
+                                >
+                                {source.path}
+                            </Box>
+                            <IconButton
+                                size="small"
+                                data-id="auto-import-remove-folder"
+                                onClick={() => {
+                                    removeFolder(source.path)
+                                        .catch(error => log.exception("Failed to stop watching a folder", error as Error));
+                                }}
+                                >
+                                <Delete
+                                    sx={{
+                                        fontSize: 'var(--icon-md)',
+                                    }}
+                                    />
+                            </IconButton>
+                        </Box>
+                    ))}
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<Add />}
+                        data-id="auto-import-add-folder"
+                        sx={{
+                            alignSelf: 'flex-start',
+                        }}
+                        onClick={() => {
+                            addFolder().catch(error => log.exception("Failed to add a folder to watch", error as Error));
+                        }}
+                        >
+                        Add a folder
+                    </Button>
+                </Box>
+            </DialogSection>
 
-            <Typography variant="subtitle2">Free up space on this device</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Deletes photos from this device that your database already holds. Your database
-                becomes the only copy of them, so only do this if you also keep a remote copy.
-            </Typography>
-            <Button
-                size="small"
-                variant="outlined"
-                color={cleanupCounted === undefined ? "inherit" : "error"}
-                loading={cleanupRunning}
-                data-id="auto-import-cleanup-button"
-                onClick={() => {
-                    runCleanup().catch(error => log.exception("Failed to clean up source files", error as Error));
-                }}
-                >
-                {cleanupCounted === undefined
-                    ? "Find photos already in my database"
-                    : `Delete ${cleanupCounted} photo(s) from this device`}
-            </Button>
-            {cleanupMessage
-                && <Typography variant="body2" sx={{ color: 'text.secondary' }} data-id="auto-import-cleanup-message">
-                    {cleanupMessage}
-                </Typography>
-            }
-        </Card>
+            <DialogSection heading="Free up space on this device">
+                <Box
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-3)',
+                        padding: 'var(--space-3)',
+                    }}
+                    >
+                    <Typography variant="body2" sx={mutedTextSx}>
+                        Deletes photos from this device that your database already holds. Your database
+                        becomes the only copy of them, so only do this if you also keep a remote copy.
+                    </Typography>
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        color={cleanupCounted === undefined ? "inherit" : "error"}
+                        loading={cleanupRunning}
+                        data-id="auto-import-cleanup-button"
+                        sx={{
+                            alignSelf: cleanupCounted === undefined ? 'flex-start' : 'flex-end',
+                        }}
+                        onClick={() => {
+                            runCleanup().catch(error => log.exception("Failed to clean up source files", error as Error));
+                        }}
+                        >
+                        {cleanupCounted === undefined
+                            ? "Find photos already in my database"
+                            : `Delete ${cleanupCounted} photo(s) from this device`}
+                    </Button>
+                    {cleanupMessage
+                        && <Typography variant="body2" sx={mutedTextSx} data-id="auto-import-cleanup-message">
+                            {cleanupMessage}
+                        </Typography>
+                    }
+                </Box>
+            </DialogSection>
+        </Box>
     );
 }

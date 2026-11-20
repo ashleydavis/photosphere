@@ -14,6 +14,8 @@ import Typography from '@mui/material/Typography';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { CreateSecretDialog } from './create-secret-dialog';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import KeyIcon from '@mui/icons-material/Key';
+import { DialogIconBadge } from './dialog-icon-badge';
 
 export interface ISelectSecretModalProps {
     // Whether the modal is visible.
@@ -86,20 +88,59 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                 maxWidth={700}
                 onKeyDown={createDialogKeyHandler(handleSelect, selectedName === undefined)}
                 >
-                <DialogTitle>Select {secretType}</DialogTitle>
+                <DialogTitle>
+                    <DialogIconBadge icon={<KeyIcon />} danger={false} />
+                    Select {secretType}
+                </DialogTitle>
                 <DialogContent>
                     {secrets.length === 0
                         ? (
-                            <Typography variant="body2">
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    padding: 'var(--space-4)',
+                                    color: 'var(--color-text-muted)',
+                                    textAlign: 'center',
+                                }}
+                                >
                                 No {secretType} secrets configured yet.
                             </Typography>
                         )
                         : (
-                            <Table size="small">
+                            <Table
+                                size="small"
+                                sx={{
+                                    '& .MuiTableCell-root': {
+                                        padding: 'var(--space-2) var(--space-3)',
+                                        borderBottom: 'var(--list-divider-width) solid var(--color-border)',
+                                        color: 'var(--color-text)',
+                                        fontSize: 'var(--text-md)',
+                                    },
+                                    '& .MuiTableCell-head': {
+                                        color: 'var(--color-text-muted)',
+                                        fontSize: 'var(--text-sm)',
+                                        fontWeight: 'var(--weight-bold)',
+                                    },
+                                    '& .MuiTableRow-hover:hover, & .MuiTableBody-root .MuiTableRow-root:hover': {
+                                        backgroundColor: 'var(--color-hover)',
+                                    },
+                                    '& .MuiTableRow-root.Mui-selected, & .MuiTableRow-root.Mui-selected:hover': {
+                                        backgroundColor: 'var(--color-nav-current-bg)',
+                                    },
+                                    '& .MuiTableRow-root.Mui-selected .MuiTableCell-root': {
+                                        color: 'var(--color-nav-current-text)',
+                                    },
+                                }}
+                                >
                                 <TableHead>
                                     <TableRow>
                                         <TableCell>Name</TableCell>
-                                        <TableCell sx={{ width: '80px' }}></TableCell>
+                                        <TableCell
+                                            sx={{
+                                                width: 'calc(var(--space-8) * 3)',
+                                            }}
+                                            >
+                                        </TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -108,14 +149,16 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                                             key={secret.name}
                                             onClick={() => setSelectedName(secret.name)}
                                             selected={secret.name === selectedName}
-                                            sx={{ cursor: 'pointer' }}
+                                            sx={{
+                                                cursor: 'pointer',
+                                            }}
                                         >
                                             <TableCell>{secret.name}</TableCell>
                                             <TableCell>
                                                 <Button
                                                     data-id="secret-select-button"
                                                     size="small"
-                                                    variant="text"
+                                                    variant="outlined"
                                                     onClick={() => {
                                                         setSelectedName(secret.name);
                                                         onSelect(secret);
@@ -132,7 +175,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                     }
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="text" onClick={onClose}>Cancel</Button>
+                    <Button variant="outlined" onClick={onClose}>Cancel</Button>
                     <Button
                         variant="outlined"
                         onClick={() => setCreateDialogOpen(true)}

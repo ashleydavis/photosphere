@@ -9,7 +9,6 @@ import TableBody from '@mui/material/TableBody';
 import TableRow from '@mui/material/TableRow';
 import TableCell from '@mui/material/TableCell';
 import IconButton from '@mui/material/IconButton';
-import Dialog from '@mui/material/Dialog';
 import { ResponsiveDialog } from '../../components/responsive-dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -30,6 +29,9 @@ import { ReceiveSecretDialog } from '../../components/receive-secret-dialog';
 import { ViewSecretDialog } from '../../components/view-secret-dialog';
 import { applyValueJson, buildValueJson, emptyFormState, type ISecretFormState } from '../../lib/secrets-form';
 import { createDialogKeyHandler } from '../../lib/dialog-keys';
+import { DialogIconBadge } from '../../components/dialog-icon-badge';
+import Chip from '@mui/material/Chip';
+import { LIST_TABLE_SX } from '../../lib/list-table-styles';
 
 //
 // The supported secret type identifiers.
@@ -228,7 +230,7 @@ export function SecretsPage() {
         if (form.type === 's3-credentials') {
             return (
                 <>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Endpoint (optional)</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -237,7 +239,7 @@ export function SecretsPage() {
                             onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Region</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -246,7 +248,7 @@ export function SecretsPage() {
                             onChange={event => setForm(prev => ({ ...prev, s3Region: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Access Key ID</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -255,7 +257,7 @@ export function SecretsPage() {
                             onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Secret Access Key</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -271,7 +273,7 @@ export function SecretsPage() {
         if (form.type === 'encryption-key') {
             return (
                 <>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Private Key PEM</FormLabel>
                         <OutlinedInput
                             data-id="secret-private-key-input"
@@ -279,23 +281,35 @@ export function SecretsPage() {
                             minRows={4}
                             value={form.privateKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}
-                            sx={{ '& textarea': { WebkitTextSecurity: 'disc' } }}
+                            sx={{
+                                '& textarea': {
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 'var(--text-xs)',
+                                    WebkitTextSecurity: 'disc',
+                                },
+                            }}
                         />
                     </FormControl>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Public Key PEM</FormLabel>
                         <OutlinedInput
                             multiline
                             minRows={4}
                             value={form.publicKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, publicKeyPem: event.target.value }))}
+                            sx={{
+                                '& textarea': {
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 'var(--text-xs)',
+                                },
+                            }}
                         />
                     </FormControl>
                 </>
             );
         }
         return (
-            <FormControl fullWidth sx={{ mb: 1 }}>
+            <FormControl fullWidth>
                 <FormLabel>API Key</FormLabel>
                 <OutlinedInput
                     size="small"
@@ -341,8 +355,26 @@ export function SecretsPage() {
         ];
     }
 
+    // A mobile has less room round the page's edges, as the style guide's list pages have.
+    let pagePadding = 'var(--space-6) var(--space-6) var(--space-8)';
+    if (isMobile) {
+        pagePadding = 'var(--space-4) var(--space-4) var(--space-8)';
+    }
+
+    // The add and edit dialog's title badge: a key to add a secret, a pen to edit one.
+    let formDialogIcon = <Key />;
+    if (editingSecret) {
+        formDialogIcon = <Edit />;
+    }
+
     return (
-        <Box sx={{ p: isMobile ? 2 : 3 }}>
+        <Box
+            sx={{
+                maxWidth: 'calc(var(--space-8) * 30)',
+                mx: 'auto',
+                padding: pagePadding,
+            }}
+            >
             <MobilePageHeader
                 title="Manage Secrets"
                 subtitle={secrets.length === 1 ? '1 secret' : `${secrets.length} secrets`}
@@ -367,16 +399,50 @@ export function SecretsPage() {
             {secrets.length === 0
                 && <Box
                     sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 'var(--space-2)',
                         textAlign: 'center',
-                        py: 6,
-                        px: 2,
-                        borderRadius: 3,
-                        backgroundColor: 'action.hover',
+                        padding: 'var(--space-8) var(--space-4)',
+                        background: 'var(--color-panel)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-md)',
+                        boxShadow: 'var(--shadow-raised)',
                     }}
                     >
-                    <Key sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-                    <Typography variant="subtitle1" sx={{ mb: 0.5 }}>No secrets yet</Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    <Box
+                        aria-hidden={true}
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 'calc(var(--space-8) * 2)',
+                            height: 'calc(var(--space-8) * 2)',
+                            borderRadius: 'var(--radius-full)',
+                            background: 'var(--empty-icon-bg)',
+                            color: 'var(--color-empty-icon)',
+                            fontSize: 'var(--space-8)',
+                        }}
+                        >
+                        <Key fontSize="inherit" />
+                    </Box>
+                    <Typography
+                        variant="subtitle1"
+                        sx={{
+                            fontSize: 'var(--text-lg)',
+                            fontWeight: 'var(--weight-bold)',
+                        }}
+                        >
+                        No secrets yet
+                    </Typography>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'var(--color-text-muted)',
+                            fontSize: 'var(--text-sm)',
+                        }}
+                        >
                         Add a secret, or receive one from another device.
                     </Typography>
                 </Box>
@@ -395,64 +461,144 @@ export function SecretsPage() {
                             icon={<Key />}
                             onClick={() => { log.info('View secret dialog opened'); setViewingSecret(secret); }}
                             actions={secretActions(secret)}
+                            monoTitle={true}
+                            subtitleChip={true}
                             />
                     ))}
                 </Box>
             }
 
             {secrets.length > 0 && !isMobile
-                && <Table size="small">
-                <TableHead>
-                    <TableRow>
-                        <TableCell>Name</TableCell>
-                        <TableCell>Type</TableCell>
-                        <TableCell sx={{ width: '140px', whiteSpace: 'nowrap' }}>Actions</TableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {secrets.map(secret => (
-                        <TableRow key={secret.name}>
-                            <TableCell data-id={`secret-row-name-${secret.name}`}>{secret.name}</TableCell>
-                            <TableCell>{secret.type}</TableCell>
-                            <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                <IconButton
-                                    data-id="view-secret-button"
-                                    size="small"
-                                    title="View secret"
-                                    onClick={() => { log.info('View secret dialog opened'); setViewingSecret(secret); }}
-                                >
-                                    <Visibility fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                    data-id="share-secret-button"
-                                    size="small"
-                                    title="Share secret"
-                                    onClick={() => setSharingSecret(secret)}
-                                >
-                                    <IosShare fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                    data-id="edit-secret-button"
-                                    size="small"
-                                    title="Edit secret"
-                                    onClick={() => openEditDialog(secret).catch(err => log.exception('Failed to open edit dialog:', err as Error))}
-                                >
-                                    <Edit fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                    data-id="delete-secret-button"
-                                    size="small"
-                                    color="error"
-                                    title="Delete secret"
-                                    onClick={() => promptDelete(secret)}
-                                >
-                                    <Delete fontSize="small" />
-                                </IconButton>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-                </Table>
+                && <Box
+                    sx={{
+                        background: 'var(--list-table-bg)',
+                        border: '1px solid var(--list-table-border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        boxShadow: 'var(--list-table-shadow)',
+                        overflow: 'hidden',
+                    }}
+                    >
+                    <Table sx={LIST_TABLE_SX}>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Name</TableCell>
+                                <TableCell>Type</TableCell>
+                                <TableCell
+                                    sx={{
+                                        width: 'calc(var(--space-8) * 6)',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                    >
+                                    Actions
+                                </TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {secrets.map(secret => (
+                                <TableRow key={secret.name}>
+                                    <TableCell>
+                                        <Box
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 'var(--space-3)',
+                                            }}
+                                            >
+                                            <Box
+                                                aria-hidden={true}
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flex: 'none',
+                                                    width: 'calc(var(--space-8) + var(--space-2))',
+                                                    height: 'calc(var(--space-8) + var(--space-2))',
+                                                    background: 'var(--color-chip-bg)',
+                                                    color: 'var(--color-accent)',
+                                                    border: '1px solid var(--color-chip-border)',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    fontSize: 'var(--icon-lg)',
+                                                }}
+                                                >
+                                                <Key fontSize="inherit" />
+                                            </Box>
+                                            <Box
+                                                data-id={`secret-row-name-${secret.name}`}
+                                                sx={{
+                                                    minWidth: 0,
+                                                    fontFamily: 'var(--font-mono)',
+                                                    fontWeight: 'var(--weight-bold)',
+                                                    overflowWrap: 'anywhere',
+                                                }}
+                                                >
+                                                {secret.name}
+                                            </Box>
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            size="small"
+                                            label={secret.type}
+                                            sx={{
+                                                minHeight: 'var(--space-6)',
+                                                fontSize: 'var(--text-xs)',
+                                                fontWeight: 'var(--weight-bold)',
+                                            }}
+                                            />
+                                    </TableCell>
+                                    <TableCell
+                                        sx={{
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                        >
+                                        <IconButton
+                                            data-id="view-secret-button"
+                                            size="small"
+                                            title="View secret"
+                                            onClick={() => { log.info('View secret dialog opened'); setViewingSecret(secret); }}
+                                        >
+                                            <Visibility fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="share-secret-button"
+                                            size="small"
+                                            title="Share secret"
+                                            onClick={() => setSharingSecret(secret)}
+                                        >
+                                            <IosShare fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="edit-secret-button"
+                                            size="small"
+                                            title="Edit secret"
+                                            onClick={() => openEditDialog(secret).catch(err => log.exception('Failed to open edit dialog:', err as Error))}
+                                        >
+                                            <Edit fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="delete-secret-button"
+                                            size="small"
+                                            title="Delete secret"
+                                            onClick={() => promptDelete(secret)}
+                                            sx={{
+                                                color: 'var(--color-danger-button-text)',
+                                                borderColor: 'var(--color-danger-button-border)',
+                                                backgroundColor: 'var(--color-danger-button-fill)',
+                                                '&:hover': {
+                                                    color: 'var(--color-danger-button-text)',
+                                                    backgroundColor: 'var(--color-danger-button-fill)',
+                                                    boxShadow: 'inset 0 0 0 1px var(--color-danger-button-border)',
+                                                },
+                                            }}
+                                        >
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Box>
             }
 
             {/* Add / Edit dialog */}
@@ -468,13 +614,23 @@ export function SecretsPage() {
                     aria-label="Close"
                     size="small"
                     onClick={() => setDialogOpen(false)}
-                    sx={{ position: 'absolute', top: 8, right: 8 }}
+                    sx={{
+                        position: 'absolute',
+                        top: 'var(--space-4)',
+                        right: 'var(--space-4)',
+                    }}
                 >
                     <Close fontSize="small" />
                 </IconButton>
-                <DialogTitle>{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
-                <DialogContent>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                <DialogTitle><DialogIconBadge icon={formDialogIcon} danger={false} />{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
+                <DialogContent
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-4)',
+                    }}
+                    >
+                    <FormControl fullWidth>
                         <FormLabel>Name</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -484,7 +640,7 @@ export function SecretsPage() {
                         />
                     </FormControl>
 
-                    <FormControl fullWidth sx={{ mb: 2 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Type</FormLabel>
                         <Select
                             size="small"
@@ -502,7 +658,7 @@ export function SecretsPage() {
                     {renderTypeFields()}
                 </DialogContent>
                 <DialogActions>
-                    <Button data-id="add-secret-cancel" variant="text" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button data-id="add-secret-cancel" variant="outlined" onClick={() => setDialogOpen(false)}>Cancel</Button>
                     <Button
                         data-id="add-secret-confirm"
                         variant="contained"
@@ -514,52 +670,68 @@ export function SecretsPage() {
             </ResponsiveDialog>
 
             {/* First delete confirmation */}
-            <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
-                    <DialogTitle>Delete Secret</DialogTitle>
+            <ResponsiveDialog
+                open={confirmDeleteOpen}
+                onClose={() => setConfirmDeleteOpen(false)}
+                minWidth={400}
+                maxWidth={520}
+                >
+                    <DialogTitle><DialogIconBadge icon={<Delete />} danger={true} />Delete Secret</DialogTitle>
                     <DialogContent>
                         <Typography>
                             Are you sure you want to delete <strong>{deletingSecret?.name}</strong>?
                         </Typography>
                     </DialogContent>
                     <DialogActions>
-                        <Button variant="text" onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
+                        <Button variant="outlined" onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
                         <Button
-                            variant="contained"
+                            variant="outlined"
                             color="error"
                             onClick={() => handleFirstConfirm().catch(err => log.exception('Delete confirm error:', err as Error))}
                         >
                             Delete
                         </Button>
                     </DialogActions>
-            </Dialog>
+            </ResponsiveDialog>
 
             {/* Second delete confirmation (secret is referenced by databases) */}
-            <Dialog open={confirmDeleteSecondOpen} onClose={() => setConfirmDeleteSecondOpen(false)}>
-                    <DialogTitle>Secret In Use</DialogTitle>
+            <ResponsiveDialog
+                open={confirmDeleteSecondOpen}
+                onClose={() => setConfirmDeleteSecondOpen(false)}
+                minWidth={400}
+                maxWidth={520}
+                >
+                    <DialogTitle><DialogIconBadge icon={<Delete />} danger={true} />Secret In Use</DialogTitle>
                     <DialogContent>
                         <Typography>
                             This secret is used by the following databases:
                         </Typography>
-                        <Box component="ul" sx={{ mt: 1, pl: 2 }}>
+                        <Box
+                            component="ul"
+                            sx={{
+                                margin: 'var(--space-2) 0',
+                                paddingLeft: 'var(--space-6)',
+                            }}
+                            >
                             {referencingDatabases.map(dbEntry => (
                                 <li key={dbEntry.name}>{dbEntry.name || dbEntry.path}</li>
                             ))}
                         </Box>
-                        <Typography sx={{ mt: 1 }}>
+                        <Typography>
                             Delete anyway?
                         </Typography>
                     </DialogContent>
                     <DialogActions>
-                        <Button variant="text" onClick={() => setConfirmDeleteSecondOpen(false)}>Cancel</Button>
+                        <Button variant="outlined" onClick={() => setConfirmDeleteSecondOpen(false)}>Cancel</Button>
                         <Button
-                            variant="contained"
+                            variant="outlined"
                             color="error"
                             onClick={() => executeDelete().catch(err => log.exception('Delete error:', err as Error))}
                         >
                             Delete
                         </Button>
                     </DialogActions>
-            </Dialog>
+            </ResponsiveDialog>
 
             {sharingSecret && (
                 <ShareSecretDialog

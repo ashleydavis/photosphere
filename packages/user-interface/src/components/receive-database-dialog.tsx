@@ -1,6 +1,10 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ResponsiveDialog } from './responsive-dialog';
+import Download from '@mui/icons-material/Download';
+import WifiTethering from '@mui/icons-material/WifiTethering';
+import { DialogIconBadge } from './dialog-icon-badge';
+import { PAIRING_CODE_INPUT_SX, PulsingSearch, StepDots, StepTransition, SuccessCheck, useStepForward } from './lan-share-parts';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
@@ -11,7 +15,6 @@ import FormLabel from '@mui/material/FormLabel';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
-import CircularProgress from '@mui/material/CircularProgress';
 import Checkbox from '@mui/material/Checkbox';
 import Box from '@mui/material/Box';
 import Select from '@mui/material/Select';
@@ -435,6 +438,23 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
         || (step === "conflict" && conflictResolutionInvalid)
         || step === "waiting";
 
+    // The step dots show both conflict steps as one step and the error step in the place of the
+    // success step, so the count stays the same whichever way the receive goes.
+    let stepIndex = 4;
+    if (step === "enter-code") {
+        stepIndex = 0;
+    }
+    else if (step === "waiting") {
+        stepIndex = 1;
+    }
+    else if (step === "review") {
+        stepIndex = 2;
+    }
+    else if (step === "conflict" || step === "db-name-conflict") {
+        stepIndex = 3;
+    }
+    const stepForward = useStepForward(step, stepIndex);
+
     return (
         <ResponsiveDialog
             open={open}
@@ -443,207 +463,254 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             maxWidth={600}
             onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
             >
-                <DialogTitle>Receive Database</DialogTitle>
+                <DialogTitle><DialogIconBadge icon={<Download />} danger={false} />Receive Database</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" sx={{ mb: 2 }} color="text.secondary">
-                        Click Share on a database on another device to send it here.
-                    </Typography>
+                    <StepDots index={stepIndex} count={5} />
+                    <Box
+                        sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "var(--space-4)",
+                        }}
+                        >
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: "var(--color-text-muted)",
+                            }}
+                            >
+                            Click Share on a database on another device to send it here.
+                        </Typography>
 
-                    {step === "enter-code" && (
-                        <FormControl fullWidth>
-                            <FormLabel>Enter the 4-digit pairing code shown on the sender</FormLabel>
-                            <OutlinedInput
-                                size="small"
-                                data-id="receive-database-code-input"
-                                value={enteredCode}
-                                onChange={event => setEnteredCode(event.target.value)}
-                                slotProps={{ input: { maxLength: 4 } }}
-                                placeholder="0000"
-                            />
-                        </FormControl>
-                    )}
-
-                    {step === "waiting" && (
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
-                            <CircularProgress size={24} />
-                            <Typography>Waiting for sender...</Typography>
-                        </Box>
-                    )}
-
-                    {step === "review" && payload && (
-                        <>
-                            <FormControl fullWidth sx={{ mb: 1 }}>
-                                <FormLabel>Name</FormLabel>
-                                <OutlinedInput
-                                    size="small"
-                                    data-id="receive-database-name-input"
-                                    value={editedName}
-                                    onChange={event => setEditedName(event.target.value)}
-                                />
-                            </FormControl>
-
-                            <FormControl fullWidth sx={{ mb: 1 }}>
-                                <FormLabel>Description</FormLabel>
-                                <OutlinedInput
-                                    size="small"
-                                    data-id="receive-database-description-input"
-                                    value={editedDescription}
-                                    onChange={event => setEditedDescription(event.target.value)}
-                                />
-                            </FormControl>
-
-                            <FormControl fullWidth sx={{ mb: 2 }}>
-                                <FormLabel>Path</FormLabel>
-                                <OutlinedInput
-                                    size="small"
-                                    data-id="receive-database-path-input"
-                                    value={editedPath}
-                                    onChange={event => setEditedPath(event.target.value)}
-                                />
-                            </FormControl>
-
-                            {payload.s3Credentials && (
-                                <FormControlLabel
-                                    label={`Import S3 credentials (${payload.s3Credentials.name})`}
-                                    control={
-                                        <Checkbox
-                                            data-id="receive-database-import-s3-checkbox"
-                                            checked={importS3}
-                                            onChange={event => setImportS3(event.target.checked)}
-                                        />
-                                    }
-                                    sx={{ display: "flex", mb: 1 }}
-                                />
+                        <StepTransition step={step} forward={stepForward}>
+                            {step === "enter-code" && (
+                                <FormControl fullWidth>
+                                    <FormLabel>Enter the 4-digit pairing code shown on the sender</FormLabel>
+                                    <OutlinedInput
+                                        size="small"
+                                        data-id="receive-database-code-input"
+                                        value={enteredCode}
+                                        onChange={event => setEnteredCode(event.target.value)}
+                                        slotProps={{ input: { maxLength: 4 } }}
+                                        placeholder="0000"
+                                        sx={PAIRING_CODE_INPUT_SX}
+                                    />
+                                </FormControl>
                             )}
 
-                            {payload.encryptionKey && (
-                                <FormControlLabel
-                                    label={`Import encryption key (${payload.encryptionKey.name})`}
-                                    control={
-                                        <Checkbox
-                                            data-id="receive-database-import-encryption-checkbox"
-                                            checked={importEncryption}
-                                            onChange={event => setImportEncryption(event.target.checked)}
-                                        />
-                                    }
-                                    sx={{ display: "flex", mb: 1 }}
-                                />
+                            {step === "waiting" && (
+                                <PulsingSearch icon={<WifiTethering />} message="Waiting for sender..." />
                             )}
 
-                            {payload.geocodingKey && (
-                                <FormControlLabel
-                                    label={`Import geocoding key (${payload.geocodingKey.name})`}
-                                    control={
-                                        <Checkbox
-                                            data-id="receive-database-import-geocoding-checkbox"
-                                            checked={importGeocoding}
-                                            onChange={event => setImportGeocoding(event.target.checked)}
+                            {step === "review" && payload && (
+                                <>
+                                    <FormControl fullWidth>
+                                        <FormLabel>Name</FormLabel>
+                                        <OutlinedInput
+                                            size="small"
+                                            data-id="receive-database-name-input"
+                                            value={editedName}
+                                            onChange={event => setEditedName(event.target.value)}
                                         />
-                                    }
-                                    sx={{ display: "flex", mb: 1 }}
-                                />
+                                    </FormControl>
+
+                                    <FormControl fullWidth>
+                                        <FormLabel>Description</FormLabel>
+                                        <OutlinedInput
+                                            size="small"
+                                            data-id="receive-database-description-input"
+                                            value={editedDescription}
+                                            onChange={event => setEditedDescription(event.target.value)}
+                                        />
+                                    </FormControl>
+
+                                    <FormControl fullWidth>
+                                        <FormLabel>Path</FormLabel>
+                                        <OutlinedInput
+                                            size="small"
+                                            data-id="receive-database-path-input"
+                                            value={editedPath}
+                                            onChange={event => setEditedPath(event.target.value)}
+                                        />
+                                    </FormControl>
+
+                                    {(payload.s3Credentials || payload.encryptionKey || payload.geocodingKey) && <Box
+                                        sx={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                        }}
+                                        >
+                                        {payload.s3Credentials && (
+                                            <FormControlLabel
+                                                label={`Import S3 credentials (${payload.s3Credentials.name})`}
+                                                control={
+                                                    <Checkbox
+                                                        data-id="receive-database-import-s3-checkbox"
+                                                        checked={importS3}
+                                                        onChange={event => setImportS3(event.target.checked)}
+                                                    />
+                                                }
+                                            />
+                                        )}
+
+                                        {payload.encryptionKey && (
+                                            <FormControlLabel
+                                                label={`Import encryption key (${payload.encryptionKey.name})`}
+                                                control={
+                                                    <Checkbox
+                                                        data-id="receive-database-import-encryption-checkbox"
+                                                        checked={importEncryption}
+                                                        onChange={event => setImportEncryption(event.target.checked)}
+                                                    />
+                                                }
+                                            />
+                                        )}
+
+                                        {payload.geocodingKey && (
+                                            <FormControlLabel
+                                                label={`Import geocoding key (${payload.geocodingKey.name})`}
+                                                control={
+                                                    <Checkbox
+                                                        data-id="receive-database-import-geocoding-checkbox"
+                                                        checked={importGeocoding}
+                                                        onChange={event => setImportGeocoding(event.target.checked)}
+                                                    />
+                                                }
+                                            />
+                                        )}
+                                    </Box>}
+                                </>
                             )}
-                        </>
-                    )}
 
-                    {step === "conflict" && (
-                        <>
-                            <Alert severity="warning" sx={{ mb: 2 }}>
-                                Some secrets already exist in your vault. Choose what to do with each one.
-                            </Alert>
+                            {step === "conflict" && (
+                                <>
+                                    <Alert severity="warning">
+                                        Some secrets already exist in your vault. Choose what to do with each one.
+                                    </Alert>
 
-                            {conflicts.map(conflict => (
-                                <Box key={conflict.secretName} sx={{ mb: 2, p: 1.5, border: "1px solid", borderColor: "grey.300", borderRadius: 1 }}>
-                                    <Typography variant="body2" sx={{ fontWeight: "bold", mb: 0.5 }}>
-                                        {conflict.secretName}
-                                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                            ({conflict.secretType})
-                                        </Typography>
-                                    </Typography>
+                                    {conflicts.map(conflict => (
+                                        <Box
+                                            key={conflict.secretName}
+                                            sx={{
+                                                display: "flex",
+                                                flexDirection: "column",
+                                                gap: "var(--space-2)",
+                                                padding: "var(--space-3)",
+                                                backgroundColor: "var(--color-settings-section-bg)",
+                                                border: "1px solid var(--color-settings-section-border)",
+                                                borderRadius: "var(--radius-settings-section)",
+                                            }}
+                                            >
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    fontWeight: "var(--weight-bold)",
+                                                }}
+                                                >
+                                                {conflict.secretName}
+                                                <Typography
+                                                    component="span"
+                                                    sx={{
+                                                        marginLeft: "var(--space-2)",
+                                                        color: "var(--color-text-muted)",
+                                                        fontSize: "var(--text-sm)",
+                                                        fontWeight: "var(--weight-normal)",
+                                                    }}
+                                                    >
+                                                    ({conflict.secretType})
+                                                </Typography>
+                                            </Typography>
+
+                                            <Select
+                                                size="small"
+                                                fullWidth
+                                                value={conflict.resolution.action}
+                                                onChange={event => setConflictAction(conflict.secretName, event.target.value as IConflictResolution["action"])}
+                                            >
+                                                <MenuItem value="reuse">Reuse existing — skip importing this secret</MenuItem>
+                                                <MenuItem value="replace">Replace existing — may break other databases using this secret</MenuItem>
+                                                <MenuItem value="rename">Save with a new name</MenuItem>
+                                            </Select>
+
+                                            {conflict.resolution.action === "rename" && (
+                                                <OutlinedInput
+                                                    size="small"
+                                                    fullWidth
+                                                    placeholder="New secret name"
+                                                    value={conflict.resolution.newName || ""}
+                                                    onChange={event => setConflictNewName(conflict.secretName, event.target.value)}
+                                                />
+                                            )}
+                                        </Box>
+                                    ))}
+                                </>
+                            )}
+
+                            {step === "db-name-conflict" && (
+                                <>
+                                    <Alert severity="warning">
+                                        A database named "{editedName.trim()}" already exists. Choose what to do.
+                                    </Alert>
 
                                     <Select
                                         size="small"
                                         fullWidth
-                                        value={conflict.resolution.action}
-                                        onChange={event => setConflictAction(conflict.secretName, event.target.value as IConflictResolution["action"])}
-                                        sx={{ mb: 1 }}
-                                    >
-                                        <MenuItem value="reuse">Reuse existing — skip importing this secret</MenuItem>
-                                        <MenuItem value="replace">Replace existing — may break other databases using this secret</MenuItem>
-                                        <MenuItem value="rename">Save with a new name</MenuItem>
-                                    </Select>
-
-                                    {conflict.resolution.action === "rename" && (
-                                        <OutlinedInput
-                                            size="small"
-                                            fullWidth
-                                            placeholder="New secret name"
-                                            value={conflict.resolution.newName || ""}
-                                            onChange={event => setConflictNewName(conflict.secretName, event.target.value)}
-                                        />
-                                    )}
-                                </Box>
-                            ))}
-                        </>
-                    )}
-
-                    {step === "db-name-conflict" && (
-                        <>
-                            <Alert severity="warning" sx={{ mb: 2 }}>
-                                A database named "{editedName.trim()}" already exists. Choose what to do.
-                            </Alert>
-
-                            <Select
-                                size="small"
-                                fullWidth
-                                value={dbNameConflictAction}
-                                onChange={event => {
-                                    setDbNameConflictAction(event.target.value as DbNameConflictAction);
-                                    setDbNameConflictRenameError(undefined);
-                                }}
-                                sx={{ mb: 2 }}
-                            >
-                                <MenuItem value="replace">Replace existing — removes the existing entry then imports the new one</MenuItem>
-                                <MenuItem value="rename">Save with a different name</MenuItem>
-                            </Select>
-
-                            {dbNameConflictAction === "rename" && (
-                                <FormControl fullWidth error={dbNameConflictRenameError !== undefined}>
-                                    <FormLabel>New database name</FormLabel>
-                                    <OutlinedInput
-                                        size="small"
-                                        value={dbNameConflictRename}
+                                        value={dbNameConflictAction}
                                         onChange={event => {
-                                            setDbNameConflictRename(event.target.value);
+                                            setDbNameConflictAction(event.target.value as DbNameConflictAction);
                                             setDbNameConflictRenameError(undefined);
                                         }}
-                                    />
-                                    {dbNameConflictRenameError && (
-                                        <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
-                                            {dbNameConflictRenameError}
-                                        </Typography>
+                                    >
+                                        <MenuItem value="replace">Replace existing — removes the existing entry then imports the new one</MenuItem>
+                                        <MenuItem value="rename">Save with a different name</MenuItem>
+                                    </Select>
+
+                                    {dbNameConflictAction === "rename" && (
+                                        <FormControl fullWidth error={dbNameConflictRenameError !== undefined}>
+                                            <FormLabel>New database name</FormLabel>
+                                            <OutlinedInput
+                                                size="small"
+                                                value={dbNameConflictRename}
+                                                onChange={event => {
+                                                    setDbNameConflictRename(event.target.value);
+                                                    setDbNameConflictRenameError(undefined);
+                                                }}
+                                            />
+                                            {dbNameConflictRenameError && (
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        marginTop: "var(--space-1)",
+                                                        color: "var(--color-danger)",
+                                                        fontSize: "var(--text-sm)",
+                                                    }}
+                                                    >
+                                                    {dbNameConflictRenameError}
+                                                </Typography>
+                                            )}
+                                        </FormControl>
                                     )}
-                                </FormControl>
+                                </>
                             )}
-                        </>
-                    )}
 
-                    {step === "success" && (
-                        <Alert data-id="receive-database-success" severity="success">
-                            Database imported successfully!
-                        </Alert>
-                    )}
+                            {step === "success" && (
+                                <SuccessCheck dataId="receive-database-success">
+                                    Database imported successfully!
+                                </SuccessCheck>
+                            )}
 
-                    {step === "error" && (
-                        <Alert severity="error">
-                            {errorMessage}
-                        </Alert>
-                    )}
+                            {step === "error" && (
+                                <Alert severity="error">
+                                    {errorMessage}
+                                </Alert>
+                            )}
+                        </StepTransition>
+                    </Box>
                 </DialogContent>
                 <DialogActions>
                     {step === "enter-code" && (
                         <>
-                            <Button data-id="receive-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                            <Button data-id="receive-database-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 data-id="receive-database-start-button"
                                 variant="contained"
@@ -656,12 +723,12 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                     )}
 
                     {step === "waiting" && (
-                        <Button data-id="receive-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="receive-database-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                     )}
 
                     {step === "review" && (
                         <>
-                            <Button data-id="receive-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                            <Button data-id="receive-database-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 data-id="receive-database-save-button"
                                 variant="contained"
@@ -675,7 +742,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                     {step === "conflict" && (
                         <>
-                            <Button variant="text" onClick={() => setStep("review")}>Back</Button>
+                            <Button variant="outlined" onClick={() => setStep("review")}>Back</Button>
                             <Button
                                 variant="contained"
                                 disabled={conflictResolutionInvalid}
@@ -688,7 +755,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                     {step === "db-name-conflict" && (
                         <>
-                            <Button variant="text" onClick={() => setStep("review")}>Cancel</Button>
+                            <Button variant="outlined" onClick={() => setStep("review")}>Cancel</Button>
                             <Button
                                 data-id="receive-database-name-conflict-continue"
                                 variant="contained"

@@ -4,9 +4,24 @@ import useResizeObserver from "@react-hook/resize-observer";
 import { useGallery } from "../context/gallery-context";
 import { GalleryItemContextProvider } from "../context/gallery-item-context";
 import { AssetView } from "./asset-view";
-import { SCROLLBAR_WIDTH } from "./gallery-scrollbar";
 import Drawer from "@mui/material/Drawer";
 import { useGalleryLayout } from "../context/gallery-layout-context";
+import { log } from "utils";
+
+//
+// Reads the style token `tokenName`, which must be a length in pixels such as "32px", as it
+// resolves on `element`, so the gallery's layout maths can use the sizes the style guide sets.
+// Returns 0 and logs an error when the token is missing or not in pixels.
+//
+export function readPixelToken(element: HTMLElement, tokenName: string): number {
+    const value = getComputedStyle(element).getPropertyValue(tokenName).trim();
+    const pixels = parseFloat(value);
+    if (!value.endsWith("px") || Number.isNaN(pixels)) {
+        log.error(`Style token ${tokenName} is "${value}", not a length in pixels.`);
+        return 0;
+    }
+    return pixels;
+}
 
 //
 // A photo gallery component.
@@ -26,6 +41,7 @@ export function Gallery() {
 
     const {
         setGalleryWidth,
+        setGalleryGap,
     } = useGalleryLayout();
 
     //
@@ -39,12 +55,16 @@ export function Gallery() {
     const containerRef = useRef<HTMLDivElement>(null);
 
     //
-    // Updates the gallery width when the container is resized. The cast is there because version 1
-    // of @react-hook/resize-observer types its target as React 18's RefObject, which React 19's
-    // nullable RefObject does not match. The hook already copes with a null current.
+    // Updates the gallery width when the container is resized, leaving room for the fast-scroll
+    // handle at the right edge, and the gap between photos from the --gallery-gap token. The cast
+    // is there because version 1 of @react-hook/resize-observer types its target as React 18's
+    // RefObject, which React 19's nullable RefObject does not match. The hook already copes with a
+    // null current.
     //
     useResizeObserver(containerRef as React.RefObject<HTMLDivElement>, () => {
-        setGalleryWidth(containerRef.current!.clientWidth - SCROLLBAR_WIDTH - 2);
+        const container = containerRef.current!;
+        setGalleryGap(readPixelToken(container, "--gallery-gap"));
+        setGalleryWidth(container.clientWidth - readPixelToken(container, "--scrubber-thumb-width") - 2);
     });
 
     useEffect(() => {
@@ -63,9 +83,9 @@ export function Gallery() {
 
     return (
         <div 
-        	className="pl-1" 
         	ref={containerRef}
             style={{
+                position: "relative",
                 height: "100%",
             }}
         	>

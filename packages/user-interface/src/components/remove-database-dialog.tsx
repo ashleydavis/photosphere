@@ -1,12 +1,12 @@
 import React from 'react';
 import { log } from 'utils';
 import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Typography from '@mui/material/Typography';
-import { desktopDialogActionsSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
+import { DialogIconBadge } from './dialog-icon-badge';
 import { type IDatabaseEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 
@@ -42,27 +42,41 @@ export function RemoveDatabaseDialog({ open, entry, onClose }: IRemoveDatabaseDi
     }
 
     return (
-        <Dialog open={open} onClose={onClose}>
-            <DialogTitle>Remove Database Entry</DialogTitle>
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={340}
+            maxWidth={444}
+            >
+            <DialogTitle>
+                <DialogIconBadge icon={<i className="fa-solid fa-trash-can" />} danger={true} />
+                Remove Database Entry
+            </DialogTitle>
             <DialogContent>
                 <Typography>
                     Remove <strong>{entry?.name || entry?.path}</strong> from the list?
                 </Typography>
-                <Typography variant="body2" sx={{ mt: 1 }}>
+                <Typography
+                    variant="body2"
+                    sx={{
+                        marginTop: 'var(--space-2)',
+                        color: 'var(--color-text-muted)',
+                    }}
+                    >
                     This only removes the entry from Photosphere's database list.
                     No files on disk will be deleted. Shared secrets are not affected.
                 </Typography>
             </DialogContent>
-            <DialogActions sx={desktopDialogActionsSx()}>
-                <Button variant="text" onClick={onClose}>Cancel</Button>
+            <DialogActions>
+                <Button variant="outlined" onClick={onClose}>Cancel</Button>
                 <Button
-                    variant="contained"
+                    variant="outlined"
                     color="error"
                     onClick={() => handleConfirm().catch(err => log.exception('Remove error:', err as Error))}
                 >
                     Remove
                 </Button>
             </DialogActions>
-        </Dialog>
+        </ResponsiveDialog>
     );
 }

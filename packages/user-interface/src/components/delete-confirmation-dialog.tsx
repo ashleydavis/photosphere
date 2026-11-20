@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Typography from '@mui/material/Typography';
+import { ResponsiveDialog } from './responsive-dialog';
+import { DialogIconBadge } from './dialog-icon-badge';
 
 export interface IProps {
     //
@@ -46,25 +47,31 @@ export function DeleteConfirmationDialog({ open, numItems, onCancel, onDelete }:
     }
 
     return (
-        <Dialog
+        <ResponsiveDialog
             open={open}
             onClose={onCancel}
+            minWidth={340}
+            maxWidth={444}
             >
             <DialogTitle>
+                <DialogIconBadge icon={<i className="fa-solid fa-trash-can" />} danger={true} />
                 Delete Confirmation
             </DialogTitle>
             <DialogContent>
-                <Typography>
+                <Typography
+                    sx={{
+                        color: 'var(--color-text-muted)',
+                    }}
+                    >
                     Are you sure you want to delete {numItems} assets? This cannot be undone.
                 </Typography>
             </DialogContent>
             <DialogActions>
-                <Button variant="text" onClick={onCancel}>
+                <Button variant="outlined" onClick={onCancel}>
                     Cancel
                 </Button>
-                <div className="flex-grow" />
                 <Button
-                    variant="contained"
+                    variant="outlined"
                     color="error"
                     disabled={working}
                     onClick={handleDelete}
@@ -72,6 +79,6 @@ export function DeleteConfirmationDialog({ open, numItems, onCancel, onDelete }:
                     Delete
                 </Button>
             </DialogActions>
-        </Dialog>
+        </ResponsiveDialog>
     );
 }

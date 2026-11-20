@@ -6,7 +6,9 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import FormControl from '@mui/material/FormControl';
 import FormLabel from '@mui/material/FormLabel';
+import Key from '@mui/icons-material/Key';
 import { ResponsiveDialog } from './responsive-dialog';
+import { DialogIconBadge } from './dialog-icon-badge';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import type { ISharedSecretEntry } from '../context/platform-context';
@@ -167,9 +169,15 @@ export function ConfigureSecretsModal({
             'data-id': `${dataIdPrefix}-select`,
         };
         return (
-            <FormControl fullWidth sx={{ mb: 1 }}>
+            <FormControl fullWidth>
                 <FormLabel>{label}</FormLabel>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'stretch',
+                        gap: 'var(--space-2)',
+                    }}
+                    >
                     <Select
                         size="small"
                         sx={{ flexGrow: 1 }}
@@ -187,6 +195,9 @@ export function ConfigureSecretsModal({
                         data-id={`${dataIdPrefix}-new-button`}
                         variant="outlined"
                         size="small"
+                        sx={{
+                            flex: 'none',
+                        }}
                         onClick={() => setQuickCreateType(secretType)}
                     >
                         + New
@@ -206,8 +217,14 @@ export function ConfigureSecretsModal({
             dataId="configure-secrets-modal"
             onKeyDown={createDialogKeyHandler(() => onSave(working), false)}
             >
-                <DialogTitle>Configure Secrets</DialogTitle>
-                <DialogContent>
+                <DialogTitle><DialogIconBadge icon={<Key />} danger={false} />Configure Secrets</DialogTitle>
+                <DialogContent
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-4)',
+                    }}
+                    >
                     {fields.includes('s3') && renderSecretSelector(
                         'S3 Credentials',
                         s3Secrets,
@@ -236,7 +253,7 @@ export function ConfigureSecretsModal({
                     )}
                 </DialogContent>
                 <DialogActions>
-                    <Button data-id="configure-secrets-cancel" variant="text" onClick={onClose}>Cancel</Button>
+                    <Button data-id="configure-secrets-cancel" variant="outlined" onClick={onClose}>Cancel</Button>
                     <Button data-id="configure-secrets-save" variant="contained" onClick={() => onSave(working)}>Save</Button>
                 </DialogActions>
         </ResponsiveDialog>

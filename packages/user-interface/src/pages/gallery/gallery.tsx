@@ -52,7 +52,9 @@ export function GalleryPage({}: IGalleryPageProps) {
             {databasePath && isLoading && allItems().length === 0 && (
                 <Box
                     className="flex items-center justify-center"
-                    sx={{ height: "calc(100vh - 60px)" }}
+                    sx={{
+                        height: "100%",
+                    }}
                 >
                     <CircularProgress />
                 </Box>

@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { version } from "config";
 import Box from "@mui/material/Box";
-import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import Link from "@mui/material/Link";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Download, OpenInNew } from "@mui/icons-material";
+import { Download, OpenInNew, CardGiftcard, ArrowUpward, Check } from "@mui/icons-material";
 import { useApi } from "../context/api-context";
 import { useIsMobile } from "../lib/use-is-mobile";
 
@@ -195,44 +194,124 @@ export function NewsPage() {
     const orderedItems = [...items].reverse();
 
     return (
-        <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', p: isMobile ? 2 : 4, pb: 16 }}>
-            <Box sx={{ mx: 'auto', maxWidth: 800 }}>
-                <Typography variant="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem', mb: 2 }}>
+        <Box sx={{ width: '100%', height: '100%', overflowY: 'auto' }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: isMobile ? 'var(--space-4)' : 'var(--space-6)',
+                    mx: 'auto',
+                    maxWidth: 'calc(var(--space-8) * 30)',
+                    padding: isMobile ? 'var(--space-4) var(--space-4) calc(var(--space-8) * 4)' : 'var(--space-6) var(--space-6) calc(var(--space-8) * 4)',
+                }}
+                >
+                <Typography
+                    variant="h2"
+                    sx={{
+                        fontFamily: 'var(--font-heading)',
+                        fontSize: 'var(--page-title-size)',
+                        fontWeight: 'var(--weight-bold)',
+                        lineHeight: 'var(--leading-tight)',
+                    }}
+                    >
                     News
                 </Typography>
 
                 {/* The version card leads with whether there is an update, because that is the one
                     thing anybody opens this page to find out. The download is a full-width button
                     on a mobile rather than an underlined link. */}
-                <Card
-                    variant="outlined"
+                <Box
+                    component="section"
+                    aria-label="Version"
                     sx={{
                         display: 'flex',
-                        flexDirection: 'column',
-                        bgcolor: hasUpdate ? 'rgba(var(--mui-palette-success-mainChannel) / 0.12)' : undefined,
-                        borderColor: hasUpdate ? 'success.main' : undefined,
-                        borderRadius: 3,
-                        p: 2,
-                        gap: 1,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        gap: 'var(--space-4)',
+                        padding: 'var(--space-4)',
+                        background: 'var(--color-panel)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-md)',
+                        boxShadow: 'var(--shadow-raised)',
                     }}
                     >
-                    <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                        <Typography variant="subtitle1">{`Version v${runningVersion}`}</Typography>
+                    <Box
+                        aria-hidden={true}
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flex: 'none',
+                            width: 'calc(var(--space-8) + var(--space-6))',
+                            height: 'calc(var(--space-8) + var(--space-6))',
+                            background: 'var(--empty-icon-bg)',
+                            color: 'var(--color-empty-icon)',
+                            borderRadius: 'var(--radius-md)',
+                            fontSize: 'var(--text-xl)',
+                        }}
+                        >
+                        <CardGiftcard fontSize="inherit" />
+                    </Box>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--space-1)',
+                            flex: 1,
+                            minWidth: 'calc(var(--space-8) * 6)',
+                        }}
+                        >
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: 'var(--space-2)',
+                            }}
+                            >
+                            <Typography
+                                variant="subtitle1"
+                                sx={{
+                                    fontSize: 'var(--text-lg)',
+                                    fontWeight: 'var(--weight-bold)',
+                                }}
+                                >
+                                {`Version v${runningVersion}`}
+                            </Typography>
+                            {latestVersion !== undefined
+                                && <Chip
+                                    size="small"
+                                    icon={hasUpdate ? <ArrowUpward /> : <Check />}
+                                    label={hasUpdate ? 'Update available' : 'Up to date'}
+                                    sx={{
+                                        minHeight: 'var(--space-6)',
+                                        fontSize: 'var(--text-xs)',
+                                        fontWeight: 'var(--weight-bold)',
+                                        background: hasUpdate ? 'color-mix(in srgb, var(--color-success) 14%, transparent)' : 'var(--color-raised)',
+                                        borderColor: hasUpdate ? 'color-mix(in srgb, var(--color-success) 45%, transparent)' : 'var(--color-border)',
+                                        color: hasUpdate ? 'var(--color-success)' : 'var(--color-text-muted)',
+                                        '& .MuiChip-icon': {
+                                            fontSize: 'var(--icon-sm)',
+                                            color: 'inherit',
+                                            marginLeft: 'var(--space-2)',
+                                        },
+                                    }}
+                                    />
+                            }
+                        </Box>
+
                         {latestVersion !== undefined
-                            && <Chip
-                                size="small"
-                                variant="filled"
-                                color={hasUpdate ? 'success' : 'default'}
-                                label={hasUpdate ? 'Update available' : 'Up to date'}
-                                />
+                            && <Typography
+                                variant="body2"
+                                sx={{
+                                    color: 'var(--color-text-muted)',
+                                    fontSize: 'var(--text-sm)',
+                                }}
+                                >
+                                {`Latest release: v${latestVersion}`}
+                            </Typography>
                         }
                     </Box>
-
-                    {latestVersion !== undefined
-                        && <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            {`Latest release: v${latestVersion}`}
-                        </Typography>
-                    }
 
                     {hasUpdate
                         && <Button
@@ -241,81 +320,145 @@ export function NewsPage() {
                             target="_blank"
                             rel="noopener noreferrer"
                             variant="contained"
-                            size="large"
-                            color="success"
+                            fullWidth={isMobile}
                             startIcon={<Download />}
-                            sx={{ minHeight: 48, mt: 0.5 }}
                             >
                             Download the latest release
                         </Button>
                     }
-                </Card>
+                </Box>
 
-                <Typography variant="h6" sx={{ mt: 3, mb: 1.5 }}>News items</Typography>
-
-                {loading
-                    && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2 }}>
-                        <CircularProgress size={24} />
-                        <Typography variant="body1" sx={{ color: 'text.secondary' }}>Loading...</Typography>
-                    </Box>
-                }
-
-                {!loading && orderedItems.length === 0
-                    && <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                        No news items available.
+                <Box
+                    component="section"
+                    aria-label="News items"
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-3)',
+                    }}
+                    >
+                    <Typography
+                        variant="h6"
+                        sx={{
+                            fontSize: 'var(--text-lg)',
+                            fontWeight: 'var(--weight-bold)',
+                        }}
+                        >
+                        News items
                     </Typography>
-                }
 
-                {!loading && orderedItems.map(item => (
-                    <Card
-                        key={item.id}
-                        elevation={0}
+                    {loading
+                        && <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 'var(--space-3)',
+                                padding: 'var(--space-4) 0',
+                            }}
+                            >
+                            <CircularProgress size="var(--icon-lg)" />
+                            <Typography variant="body1" sx={{ color: 'var(--color-text-muted)' }}>Loading...</Typography>
+                        </Box>
+                    }
+
+                    {!loading && orderedItems.length === 0
+                        && <Typography variant="body1" sx={{ color: 'var(--color-text-muted)' }}>
+                            No news items available.
+                        </Typography>
+                    }
+
+                    {/* Each item is a stop on a timeline, drawn by the news tokens: a rail down the
+                        left with a dot beside each item. */}
+                    <Box
                         sx={{
                             display: 'flex',
                             flexDirection: 'column',
-                            bgcolor: 'action.hover',
-                            borderRadius: 3,
-                            p: 2,
-                            mb: 1.5,
-                            gap: 1,
+                            gap: 'var(--news-list-gap)',
                         }}
                         >
-                        <Typography variant="body1">{item.message}</Typography>
-                        {item.link
-                            && <Link
-                                href={item.link.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                underline="hover"
+                        {!loading && orderedItems.map((item, itemIndex) => (
+                            <Box
+                                component="article"
+                                key={item.id}
                                 sx={{
-                                    display: 'inline-flex',
-                                    minHeight: 44,
-                                    alignItems: 'center',
-                                    gap: 0.5,
+                                    position: 'relative',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'flex-start',
+                                    gap: 'var(--space-2)',
+                                    padding: 'var(--news-item-padding-y) var(--news-item-padding-x)',
+                                    paddingLeft: 'var(--news-item-indent)',
+                                    background: 'var(--news-item-bg)',
+                                    borderStyle: 'solid',
+                                    borderWidth: '1px',
+                                    borderColor: 'var(--news-item-border-color) var(--news-item-border-color) var(--news-divider-color)',
+                                    borderRadius: 'var(--news-item-radius)',
+                                    boxShadow: 'var(--news-item-shadow)',
                                 }}
                                 >
-                                {item.link.label}
-                                <OpenInNew fontSize="small" />
-                            </Link>
-                        }
-                        {item.action
-                            && <Button
-                                component="a"
-                                href={item.action.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                variant="contained"
-                                size={isMobile ? 'large' : 'medium'}
-                                sx={{
-                                    minHeight: isMobile ? 48 : undefined,
-                                    alignSelf: isMobile ? 'stretch' : 'flex-start',
-                                }}
-                                >
-                                {item.action.label}
-                            </Button>
-                        }
-                    </Card>
-                ))}
+                                <Box
+                                    aria-hidden={true}
+                                    sx={{
+                                        display: 'var(--news-rail-display)',
+                                        position: 'absolute',
+                                        top: itemIndex === 0 ? 'calc(var(--news-item-padding-y) + var(--space-1) + var(--space-1) / 2)' : 0,
+                                        bottom: 0,
+                                        left: 'calc(var(--space-2) - var(--space-1) / 4)',
+                                        width: 'calc(var(--space-1) / 2)',
+                                        background: 'var(--color-border)',
+                                    }}
+                                    />
+                                <Box
+                                    aria-hidden={true}
+                                    sx={{
+                                        display: 'var(--news-rail-display)',
+                                        position: 'absolute',
+                                        top: 'calc(var(--news-item-padding-y) + var(--space-1) + var(--space-1) / 2)',
+                                        left: 'calc(var(--space-1) / 2)',
+                                        width: 'var(--space-3)',
+                                        height: 'var(--space-3)',
+                                        borderRadius: 'var(--radius-full)',
+                                        background: 'var(--color-bg)',
+                                        border: 'calc(var(--space-1) / 2) solid var(--color-border-control)',
+                                    }}
+                                    />
+                                <Typography variant="body1">{item.message}</Typography>
+                                {item.link
+                                    && <Link
+                                        href={item.link.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        underline="hover"
+                                        sx={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 'var(--space-1)',
+                                            minHeight: 'var(--button-height-lg)',
+                                            color: 'var(--color-accent)',
+                                            textDecorationColor: 'currentColor',
+                                        }}
+                                        >
+                                        {item.link.label}
+                                        <OpenInNew sx={{ fontSize: 'var(--icon-sm)' }} />
+                                    </Link>
+                                }
+                                {item.action
+                                    && <Button
+                                        component="a"
+                                        href={item.action.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        variant="contained"
+                                        size={isMobile ? 'large' : 'medium'}
+                                        fullWidth={isMobile}
+                                        >
+                                        {item.action.label}
+                                    </Button>
+                                }
+                            </Box>
+                        ))}
+                    </Box>
+                </Box>
             </Box>
         </Box>
     );

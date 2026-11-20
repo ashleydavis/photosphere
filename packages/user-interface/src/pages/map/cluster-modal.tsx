@@ -11,6 +11,7 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import CloseIcon from "@mui/icons-material/Close";
+import { useIsMobile } from "../../lib/use-is-mobile";
 
 export interface IClusterModalProps {
     //
@@ -107,6 +108,12 @@ function StaticGallerySourceProvider({ items, children }: IStaticGallerySourcePr
 //
 export function ClusterModal({ items, lat, lng, onClose }: IClusterModalProps) {
     //
+    // On a mobile the panel rises from the foot of the screen as a sheet; on a desktop it floats at
+    // the map's right, as the style guide's map panel does, so the map stays in view beside it.
+    //
+    const isMobile = useIsMobile();
+
+    //
     // Number of photos in the cluster, shown in the title.
     //
     const photoCount = items.length;
@@ -177,49 +184,86 @@ export function ClusterModal({ items, lat, lng, onClose }: IClusterModalProps) {
             open
             onClose={onClose}
             maxWidth={false}
+            sx={{
+                '& .MuiDialog-container': {
+                    alignItems: isMobile ? 'flex-end' : 'stretch',
+                    justifyContent: isMobile ? 'stretch' : 'flex-end',
+                },
+            }}
             slotProps={{
                 paper: {
-                    sx: {
-                        width: '95vw',
-                        height: '95vh',
-                        maxWidth: '95vw',
-                        maxHeight: '95vh',
-                        m: 0,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'hidden',
-                        p: 2,
-                    },
+                    sx: isMobile
+                        ? {
+                            width: '100%',
+                            maxWidth: '100%',
+                            height: 'calc(100% - var(--space-4))',
+                            maxHeight: 'calc(100% - var(--space-4))',
+                            m: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            overflow: 'hidden',
+                            borderBottom: 'none',
+                            borderBottomLeftRadius: 0,
+                            borderBottomRightRadius: 0,
+                            borderTopLeftRadius: 'var(--radius-lg)',
+                            borderTopRightRadius: 'var(--radius-lg)',
+                        }
+                        : {
+                            width: 'min(calc(var(--space-8) * 12), calc(100% - var(--space-4) * 2))',
+                            maxWidth: 'none',
+                            height: 'calc(100% - var(--space-4) * 2)',
+                            maxHeight: 'none',
+                            m: 'var(--space-4)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            overflow: 'hidden',
+                            borderRadius: 'var(--radius-lg)',
+                        },
                 },
             }}
             >
-            <IconButton
-                aria-label="Close"
-                size="small"
-                onClick={onClose}
+            <Box
                 sx={{
-                    position: 'absolute',
-                    top: 8,
-                    right: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    flex: 'none',
+                    gap: 'var(--space-2)',
+                    padding: 'var(--space-3) var(--space-3) var(--space-2) var(--space-4)',
                 }}
                 >
-                <CloseIcon />
-            </IconButton>
-            <Typography
-                variant="subtitle1"
-                sx={{
-                    mb: 1,
-                    pr: 4,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                }}
-                >
-                {title}
-            </Typography>
+                <Typography
+                    variant="subtitle1"
+                    sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 'var(--text-lg)',
+                        fontWeight: 'var(--weight-bold)',
+                        lineHeight: 'var(--leading-tight)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
+                    >
+                    {title}
+                </Typography>
+                <IconButton
+                    aria-label="Close"
+                    size="small"
+                    onClick={onClose}
+                    >
+                    <CloseIcon sx={{ fontSize: 'var(--icon-md)' }} />
+                </IconButton>
+            </Box>
             <Box
                 className="cluster-modal-gallery"
-                sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', transform: 'translateZ(0)' }}
+                sx={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    transform: 'translateZ(0)',
+                    borderTop: '1px solid var(--color-border)',
+                }}
             >
                 <StaticGallerySourceProvider items={items}>
                     <GalleryContextProvider>

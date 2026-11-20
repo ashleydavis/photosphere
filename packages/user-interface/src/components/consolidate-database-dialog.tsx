@@ -19,6 +19,9 @@ import MenuItem from '@mui/material/MenuItem';
 import { type IDatabaseEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import CallMergeIcon from '@mui/icons-material/CallMerge';
+import { DialogIconBadge } from './dialog-icon-badge';
+import { FIELD_LABEL_SX } from './create-database-modal';
 
 //
 // Props for the ConsolidateDatabaseDialog component.
@@ -131,23 +134,53 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
             )}
             dataId="consolidate-database-dialog"
             >
-            <DialogTitle>Consolidate into remote</DialogTitle>
+            <DialogTitle>
+                <DialogIconBadge icon={<CallMergeIcon />} danger={false} />
+                Consolidate into remote
+            </DialogTitle>
             <DialogContent>
                 {step === "configure"
-                    && <>
-                        <Typography variant="body2" sx={{ mb: 2 }}>
+                    && <Box
+                        sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--space-4)',
+                            paddingTop: 'var(--space-1)',
+                        }}
+                        >
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: 'var(--color-text-muted)',
+                                fontSize: 'var(--text-md)',
+                            }}
+                            >
                             Keeps a copy of "{entry.name}" on a remote. If the remote already holds a
                             different database, the two are joined and nothing it already has is
                             uploaded again.
                         </Typography>
                         {/* The picker sits outside the FormControl, not beside the input inside it: a
                             FormControl takes only one input component, and a Select is one. */}
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
-                            <FormControl sx={{ flexGrow: 1 }}>
-                                <FormLabel>Remote path</FormLabel>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'flex-end',
+                                gap: 'var(--space-2)',
+                            }}
+                            >
+                            <FormControl
+                                sx={{
+                                    flexGrow: 1,
+                                }}
+                                >
+                                <FormLabel sx={FIELD_LABEL_SX}>Remote path</FormLabel>
                                 <OutlinedInput
                                     size="small"
                                     data-id="consolidate-remote-path-input"
+                                    sx={{
+                                        fontFamily: 'var(--font-mono)',
+                                        fontSize: 'var(--text-sm)',
+                                    }}
                                     value={remotePath}
                                     placeholder="/path/to/backup or s3:bucket/prefix"
                                     onChange={event => setRemotePath(event.target.value)}
@@ -155,7 +188,10 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                             </FormControl>
                             {remoteCandidates.length > 0
                                 && <Select
-                                    sx={{ minWidth: 160 }}
+                                    sx={{
+                                        flex: 'none',
+                                        minWidth: 'calc(var(--space-8) * 5)',
+                                    }}
                                     size="small"
                                     value=""
                                     displayEmpty
@@ -179,12 +215,19 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                                 </Select>
                             }
                         </Box>
-                    </>
+                    </Box>
                 }
 
                 {step === "running"
-                    && <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
-                        <CircularProgress size={24} />
+                    && <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 'var(--space-4)',
+                            padding: 'var(--space-4) 0',
+                        }}
+                        >
+                        <CircularProgress size="var(--icon-lg)" />
                         <Typography variant="body2">Consolidating...</Typography>
                     </Box>
                 }
@@ -206,6 +249,9 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                 }
             </DialogContent>
             <DialogActions>
+                <Button variant="outlined" data-id="consolidate-database-close" onClick={close}>
+                    {step === "success" ? 'Done' : 'Cancel'}
+                </Button>
                 {step === "configure"
                     && <Button
                         data-id="consolidate-database-confirm"
@@ -218,9 +264,6 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                         Consolidate
                     </Button>
                 }
-                <Button variant="text" data-id="consolidate-database-close" onClick={close}>
-                    {step === "success" ? 'Done' : 'Cancel'}
-                </Button>
             </DialogActions>
         </ResponsiveDialog>
     );

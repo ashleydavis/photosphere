@@ -10,7 +10,6 @@ import FormLabel from '@mui/material/FormLabel';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
-import CircularProgress from '@mui/material/CircularProgress';
 import Checkbox from '@mui/material/Checkbox';
 import Box from '@mui/material/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
@@ -18,7 +17,11 @@ import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, I
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { lanShareErrorMessage, noReceiverMessage } from '../lib/lan-share-error-message';
 import { useLanShareTasks } from "../lib/use-lan-share-tasks";
+import IosShare from '@mui/icons-material/IosShare';
+import WifiTethering from '@mui/icons-material/WifiTethering';
 import { ResponsiveDialog } from './responsive-dialog';
+import { DialogIconBadge } from './dialog-icon-badge';
+import { PairingCodeTiles, PulsingSearch, StepDots, StepTransition, SuccessCheck } from './lan-share-parts';
 
 export interface IShareDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -203,6 +206,12 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
     // Enter does nothing while searching or showing the pairing code (only Cancel is available then).
     const dialogConfirmDisabled = step === "searching" || step === "showing-code";
 
+    // The step dots count the error step as the last step, the place the success step takes.
+    let stepIndex = 3;
+    if (step !== "error") {
+        stepIndex = ["review", "searching", "showing-code", "success"].indexOf(step);
+    }
+
     return (
         <ResponsiveDialog
             open={open}
@@ -211,119 +220,151 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
             maxWidth={600}
             onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
             >
-            <DialogTitle>Share Database</DialogTitle>
+            <DialogTitle><DialogIconBadge icon={<IosShare />} danger={false} />Share Database</DialogTitle>
             <DialogContent>
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                    Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
-                </Alert>
-
-                <Typography variant="body2" sx={{ mb: 2 }} color="text.secondary">
-                    Click Receive Database on another device to receive this database.
-                </Typography>
-
-                {step === "review" && (
-                    <>
-                        <FormControl fullWidth sx={{ mb: 1 }}>
-                            <FormLabel>Name</FormLabel>
-                            <OutlinedInput
-                                size="small"
-                                value={form.name}
-                                onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
-                            />
-                        </FormControl>
-
-                        <FormControl fullWidth sx={{ mb: 1 }}>
-                            <FormLabel>Description</FormLabel>
-                            <OutlinedInput
-                                size="small"
-                                value={form.description}
-                                onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
-                            />
-                        </FormControl>
-
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <FormLabel>Path</FormLabel>
-                            <OutlinedInput
-                                size="small"
-                                value={form.path}
-                                onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
-                            />
-                        </FormControl>
-
-                        {entry.s3Key && (
-                            <FormControlLabel
-                                label="Include S3 credentials"
-                                control={
-                                    <Checkbox
-                                        checked={form.includeS3}
-                                        onChange={event => setForm(prev => ({ ...prev, includeS3: event.target.checked }))}
-                                    />
-                                }
-                                sx={{ display: "flex", mb: 1 }}
-                            />
-                        )}
-
-                        {entry.encryptionKey && (
-                            <FormControlLabel
-                                label="Include encryption key"
-                                control={
-                                    <Checkbox
-                                        checked={form.includeEncryption}
-                                        onChange={event => setForm(prev => ({ ...prev, includeEncryption: event.target.checked }))}
-                                    />
-                                }
-                                sx={{ display: "flex", mb: 1 }}
-                            />
-                        )}
-
-                        {entry.geocodingKey && (
-                            <FormControlLabel
-                                label="Include geocoding key"
-                                control={
-                                    <Checkbox
-                                        checked={form.includeGeocoding}
-                                        onChange={event => setForm(prev => ({ ...prev, includeGeocoding: event.target.checked }))}
-                                    />
-                                }
-                                sx={{ display: "flex", mb: 1 }}
-                            />
-                        )}
-                    </>
-                )}
-
-                {step === "searching" && (
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
-                        <CircularProgress size={24} />
-                        <Typography>Searching for receiver on the local network...</Typography>
-                    </Box>
-                )}
-
-                {step === "showing-code" && (
-                    <Box sx={{ textAlign: "center", py: 3 }}>
-                        <Typography variant="body1" sx={{ mb: 1 }}>Pairing Code</Typography>
-                        <Typography data-id="share-pairing-code" variant="h4" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
-                            {pairingCode}
-                        </Typography>
-                        <Typography variant="body2">Tell the receiver to enter this code.</Typography>
-                    </Box>
-                )}
-
-                {step === "success" && (
-                    <Alert severity="success">
-                        Database sent successfully!
+                <StepDots index={stepIndex} count={4} />
+                <Box
+                    sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "var(--space-4)",
+                    }}
+                    >
+                    <Alert severity="warning">
+                        Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
                     </Alert>
-                )}
 
-                {step === "error" && (
-                    <Alert severity="error">
-                        {errorMessage}
-                    </Alert>
-                )}
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "var(--color-text-muted)",
+                        }}
+                        >
+                        Click Receive Database on another device to receive this database.
+                    </Typography>
+
+                    <StepTransition step={step} forward={true}>
+                        {step === "review" && (
+                            <>
+                                <FormControl fullWidth>
+                                    <FormLabel>Name</FormLabel>
+                                    <OutlinedInput
+                                        size="small"
+                                        value={form.name}
+                                        onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                                    />
+                                </FormControl>
+
+                                <FormControl fullWidth>
+                                    <FormLabel>Description</FormLabel>
+                                    <OutlinedInput
+                                        size="small"
+                                        value={form.description}
+                                        onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
+                                    />
+                                </FormControl>
+
+                                <FormControl fullWidth>
+                                    <FormLabel>Path</FormLabel>
+                                    <OutlinedInput
+                                        size="small"
+                                        value={form.path}
+                                        onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
+                                    />
+                                </FormControl>
+
+                                {(entry.s3Key || entry.encryptionKey || entry.geocodingKey) && <Box
+                                    sx={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                    }}
+                                    >
+                                    {entry.s3Key && (
+                                        <FormControlLabel
+                                            label="Include S3 credentials"
+                                            control={
+                                                <Checkbox
+                                                    checked={form.includeS3}
+                                                    onChange={event => setForm(prev => ({ ...prev, includeS3: event.target.checked }))}
+                                                />
+                                            }
+                                        />
+                                    )}
+
+                                    {entry.encryptionKey && (
+                                        <FormControlLabel
+                                            label="Include encryption key"
+                                            control={
+                                                <Checkbox
+                                                    checked={form.includeEncryption}
+                                                    onChange={event => setForm(prev => ({ ...prev, includeEncryption: event.target.checked }))}
+                                                />
+                                            }
+                                        />
+                                    )}
+
+                                    {entry.geocodingKey && (
+                                        <FormControlLabel
+                                            label="Include geocoding key"
+                                            control={
+                                                <Checkbox
+                                                    checked={form.includeGeocoding}
+                                                    onChange={event => setForm(prev => ({ ...prev, includeGeocoding: event.target.checked }))}
+                                                />
+                                            }
+                                        />
+                                    )}
+                                </Box>}
+                            </>
+                        )}
+
+                        {step === "searching" && (
+                            <PulsingSearch icon={<WifiTethering />} message="Searching for receiver on the local network..." />
+                        )}
+
+                        {step === "showing-code" && (
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    gap: "var(--space-3)",
+                                    padding: "var(--space-4) 0",
+                                    textAlign: "center",
+                                }}
+                                >
+                                <Typography
+                                    sx={{
+                                        color: "var(--color-text-muted)",
+                                        fontSize: "var(--text-sm)",
+                                        fontWeight: "var(--weight-bold)",
+                                    }}
+                                    >
+                                    Pairing Code
+                                </Typography>
+                                <PairingCodeTiles code={pairingCode} dataId="share-pairing-code" />
+                                <Typography>Tell the receiver to enter this code.</Typography>
+                            </Box>
+                        )}
+
+                        {step === "success" && (
+                            <SuccessCheck dataId={undefined}>
+                                Database sent successfully!
+                            </SuccessCheck>
+                        )}
+
+                        {step === "error" && (
+                            <Alert severity="error">
+                                {errorMessage}
+                            </Alert>
+                        )}
+                    </StepTransition>
+                </Box>
             </DialogContent>
             <DialogActions>
                 {step === "review" && (
                     <>
-                        <Button data-id="share-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="share-database-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                         <Button data-id="share-database-send-button" variant="contained" onClick={() => { handleStartSend(); }}>
                             Send
                         </Button>
@@ -331,11 +372,11 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 )}
 
                 {step === "searching" && (
-                    <Button data-id="share-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-database-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {step === "showing-code" && (
-                    <Button data-id="share-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-database-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {(step === "success" || step === "error") && (

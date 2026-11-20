@@ -19,6 +19,17 @@ export interface IGalleryLayoutContext {
     setGalleryWidth: (width: number) => void;
 
     //
+    // The space in pixels between photos, across a row and between rows.
+    //
+    galleryGap: number;
+
+    //
+    // Sets the space in pixels between photos, across a row and between rows. The gallery reads it
+    // from the --gallery-gap style token, which only the rendered page can resolve.
+    //
+    setGalleryGap(gap: number): void;
+
+    //
     // The target row height of the gallery.
     //
     targetRowHeight: number;
@@ -59,6 +70,11 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     // The width of the gallery.
     //
     const [galleryWidth, setGalleryWidth] = useState<number>(0);
+
+    //
+    // The space in pixels between photos, set by the gallery from the --gallery-gap style token.
+    //
+    const [galleryGap, setGalleryGap] = useState<number>(0);
 
     //
     // The target row height of the gallery.
@@ -133,7 +149,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             return;
         }
         const _sorting = sorting();
-        const newLayout = computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
+        const newLayout = computePartialLayout(undefined, sortedItems(), galleryWidth, targetRowHeight, galleryGap, _sorting.group, _sorting.heading);
 
         const newIndex = new Map<string, { rowIndex: number; itemIndex: number }>();
         for (let rowIndex = 0; rowIndex < newLayout.rows.length; rowIndex++) {
@@ -151,26 +167,35 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     useEffect(() => {
         rebuildLayout();
 
-        if (galleryWidth > 0) {
-            //
-            // Incrementally appends new items to the existing layout.
-            //
-            const newItemsSubscription = onNewItems.subscribe(newItems => {
-                // Compute layout into the ref synchronously — no React state update yet.
-                const _sorting = sorting();
-                const startingRowIndex = (layoutRef.current && layoutRef.current.rows.length > 0) ? layoutRef.current.rows.length - 1 : 0;
-                layoutRef.current = computePartialLayout(layoutRef.current, newItems, galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
-                for (let rowIndex = startingRowIndex; rowIndex < layoutRef.current.rows.length; rowIndex++) {
-                    const row = layoutRef.current.rows[rowIndex];
-                    for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
-                        layoutItemsIndex.current.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
-                    }
+        //
+        // Incrementally appends new items to the existing layout.
+        //
+        // Subscribed even while the gallery has no width. The gallery's Observable holds the items
+        // announced while nobody listens and replays them to the next subscriber, and those items are
+        // already in sortedItems, which rebuildLayout has just laid out: a replay would add every one
+        // a second time. Listening throughout means nothing is held back.
+        //
+        const newItemsSubscription = onNewItems.subscribe(newItems => {
+            if (galleryWidth === 0) {
+                // No layout yet. rebuildLayout lays these out from sortedItems once the width is known.
+                return;
+            }
+            // Compute layout into the ref synchronously — no React state update yet.
+            const _sorting = sorting();
+            const startingRowIndex = (layoutRef.current && layoutRef.current.rows.length > 0) ? layoutRef.current.rows.length - 1 : 0;
+            layoutRef.current = computePartialLayout(layoutRef.current, newItems, galleryWidth, targetRowHeight, galleryGap, _sorting.group, _sorting.heading);
+            for (let rowIndex = startingRowIndex; rowIndex < layoutRef.current.rows.length; rowIndex++) {
+                const row = layoutRef.current.rows[rowIndex];
+                for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
+                    layoutItemsIndex.current.set(row.items[itemIndex]._id, { rowIndex, itemIndex });
                 }
-                // No state update here. The rAF-throttled setTime in gallery-context cascades
-                // through (GalleryLayoutContextProvider re-renders as a consumer of useGallery()),
-                // which picks up the latest layoutRef.current at that point.
-            });
+            }
+            // No state update here. The rAF-throttled setTime in gallery-context cascades
+            // through (GalleryLayoutContextProvider re-renders as a consumer of useGallery()),
+            // which picks up the latest layoutRef.current at that point.
+        });
 
+        if (galleryWidth > 0) {
             //
             // Incrementally reflows the layout from the earliest affected row when items are deleted.
             //
@@ -179,7 +204,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
                     return;
                 }
                 const _sorting = sorting();
-                const newLayout = deleteFromLayout(layoutRef.current, assetIds, galleryWidth, targetRowHeight, _sorting.group, _sorting.heading);
+                const newLayout = deleteFromLayout(layoutRef.current, assetIds, galleryWidth, targetRowHeight, galleryGap, _sorting.group, _sorting.heading);
                 if (newLayout === layoutRef.current) {
                     return;
                 }
@@ -232,7 +257,10 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
             };
         }
 
-    }, [galleryWidth, targetRowHeight, searchText, sortBy]);
+        return () => {
+            newItemsSubscription.unsubscribe();
+        };
+    }, [galleryWidth, targetRowHeight, galleryGap, searchText, sortBy]);
 
     const setTargetRowHeight = (height: number) => {
         _setTargetRowHeight(height);
@@ -254,6 +282,8 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     const value: IGalleryLayoutContext = {
         galleryWidth,
         setGalleryWidth,
+        galleryGap,
+        setGalleryGap,
         targetRowHeight,
         setTargetRowHeight,
         layout: layoutRef.current,

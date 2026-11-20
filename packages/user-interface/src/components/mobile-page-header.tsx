@@ -53,14 +53,16 @@ export interface IMobilePageHeaderProps {
 }
 
 //
-// The header shared by the management pages (databases, secrets).
+// The header shared by the management pages (databases, secrets), drawn as the style guide's list
+// page header: the title over a muted line saying what the page holds, then the actions.
 //
-// On a mobile it is laid out as a mobile screen: a large title with a subtitle, a single full-width
-// primary action, and every other action folded into an overflow menu. Cramming a title, a refresh
-// button, and three labelled buttons into one row is what pushed actions off the side of the screen
-// before; a mobile header carries one action and hides the rest behind the ⋮ menu.
+// On a mobile the title stands alone with Refresh and the ⋮ menu beside it, holding every
+// secondary action, and the primary action fills the width below. Cramming a title, a refresh
+// button and three labelled buttons into one row is what pushed actions off the side of the
+// screen.
 //
-// On a wide screen it stays the familiar row: title on the left, actions on the right.
+// On a wide screen the actions sit in a row under the title, as --list-header-direction and
+// --list-header-align set.
 //
 export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActions, onRefresh, refreshing }: IMobilePageHeaderProps): React.JSX.Element {
     const isMobile = useIsMobile();
@@ -75,60 +77,104 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
     //
     const spinSx = refreshing
         ? {
-            animation: 'spin 0.8s linear infinite',
-            '@keyframes spin': {
-                from: { transform: 'rotate(0deg)' },
-                to: { transform: 'rotate(360deg)' },
+            animation: 'page-header-spin var(--duration-slow) linear infinite',
+            '@keyframes page-header-spin': {
+                from: {
+                    transform: 'rotate(0deg)',
+                },
+                to: {
+                    transform: 'rotate(360deg)',
+                },
             },
         }
         : undefined;
 
+    const refreshButton = (
+        <IconButton
+            disabled={refreshing}
+            title="Refresh"
+            onClick={onRefresh}
+            sx={isMobile
+                ? {
+                    width: 'var(--button-height-lg)',
+                    height: 'var(--button-height-lg)',
+                }
+                : undefined
+            }
+            >
+            <Refresh fontSize="inherit" sx={spinSx} />
+        </IconButton>
+    );
+
+    const heading = (
+        <Box sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
+        }}>
+            <Typography
+                component={isMobile ? 'h2' : 'h3'}
+                sx={{
+                    margin: 0,
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: 'var(--page-title-size)',
+                    fontWeight: 'var(--weight-bold)',
+                    lineHeight: 'var(--leading-tight)',
+                    color: 'var(--color-text)',
+                }}
+                >
+                {title}
+            </Typography>
+            {subtitle
+                && <Typography
+                    component="span"
+                    sx={{
+                        marginTop: 'var(--space-1)',
+                        fontSize: 'var(--text-sm)',
+                        color: 'var(--color-text-muted)',
+                    }}
+                    >
+                    {subtitle}
+                </Typography>
+            }
+        </Box>
+    );
+
     if (isMobile) {
         return (
-            <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Typography
-                            variant="h4"
-                            component="h2"
+            <Box sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-4)',
+                marginBottom: 'var(--space-4)',
+            }}>
+                <Box sx={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 'var(--space-2)',
+                }}>
+                    {heading}
+
+                    <Box sx={{
+                        display: 'flex',
+                        flex: 'none',
+                        gap: 'var(--space-2)',
+                    }}>
+                        {refreshButton}
+
+                        <IconButton
+                            data-id="page-actions-menu"
+                            aria-label="More actions"
+                            onClick={event => setMenuAnchor(event.currentTarget)}
                             sx={{
-                                fontSize: '1.75rem',
-                                lineHeight: 1.2,
-                                fontWeight: 600,
+                                width: 'var(--button-height-lg)',
+                                height: 'var(--button-height-lg)',
                             }}
                             >
-                            {title}
-                        </Typography>
-                        {subtitle
-                            && <Typography
-                                variant="body2"
-                                sx={{
-                                    mt: 0.5,
-                                    color: 'text.secondary',
-                                }}
-                                >
-                                {subtitle}
-                            </Typography>
-                        }
+                            <MoreVert fontSize="inherit" />
+                        </IconButton>
                     </Box>
-
-                    <IconButton
-                        size="large"
-                        disabled={refreshing}
-                        title="Refresh"
-                        onClick={onRefresh}
-                        >
-                        <Refresh sx={spinSx} />
-                    </IconButton>
-
-                    <IconButton
-                        size="large"
-                        data-id="page-actions-menu"
-                        aria-label="More actions"
-                        onClick={event => setMenuAnchor(event.currentTarget)}
-                        >
-                        <MoreVert />
-                    </IconButton>
                     <Menu
                         anchorEl={menuAnchor}
                         open={menuAnchor !== undefined}
@@ -144,7 +190,7 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
                         slotProps={{
                             paper: {
                                 sx: {
-                                    minWidth: 220,
+                                    minWidth: 'calc(var(--space-8) * 7)',
                                 },
                             },
                         }}
@@ -157,7 +203,9 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
                                     setMenuAnchor(undefined);
                                     action.onClick();
                                 }}
-                                sx={{ minHeight: 48 }}
+                                sx={{
+                                    minHeight: 'var(--menu-item-height)',
+                                }}
                                 >
                                 <ListItemIcon>{action.icon}</ListItemIcon>
                                 {action.label}
@@ -172,12 +220,7 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
                     startIcon={primaryAction.icon}
                     onClick={primaryAction.onClick}
                     size="large"
-                    sx={{
-                        mt: 2,
-                        width: '100%',
-                        minHeight: 52,
-                        borderRadius: 2,
-                    }}
+                    fullWidth={true}
                     >
                     {primaryAction.label}
                 </Button>
@@ -186,48 +229,46 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
     }
 
     return (
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-            <Typography
-                variant="h5"
-                component="h3"
-                sx={{
-                    fontWeight: 600,
-                }}
-                >
-                {title}
-            </Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <IconButton
-                disabled={refreshing}
-                sx={{
-                    border: 1,
-                    borderColor: 'divider',
-                    borderRadius: 2,
-                }}
-                title="Refresh"
-                onClick={onRefresh}
-                >
-                <Refresh sx={spinSx} />
-            </IconButton>
-            <Button
-                data-id={primaryAction.dataId}
-                variant="contained"
-                startIcon={primaryAction.icon}
-                onClick={primaryAction.onClick}
-                >
-                {primaryAction.label}
-            </Button>
-            {secondaryActions.map(action => (
+        <Box sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            flexDirection: 'var(--list-header-direction)',
+            alignItems: 'var(--list-header-align)',
+            justifyContent: 'space-between',
+            gap: 'var(--space-4)',
+            marginBottom: 'var(--space-4)',
+        }}>
+            {heading}
+            <Box sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+            }}>
+                {refreshButton}
+                {secondaryActions.map(action => (
+                    <Button
+                        key={action.label}
+                        data-id={action.dataId}
+                        variant="outlined"
+                        startIcon={action.icon}
+                        onClick={action.onClick}
+                        sx={{
+                            whiteSpace: 'nowrap',
+                        }}
+                        >
+                        {action.label}
+                    </Button>
+                ))}
                 <Button
-                    key={action.label}
-                    data-id={action.dataId}
-                    variant="outlined"
-                    onClick={action.onClick}
-                    sx={{ whiteSpace: 'nowrap' }}
+                    data-id={primaryAction.dataId}
+                    variant="contained"
+                    startIcon={primaryAction.icon}
+                    onClick={primaryAction.onClick}
                     >
-                    {action.label}
+                    {primaryAction.label}
                 </Button>
-            ))}
+            </Box>
         </Box>
     );
 }

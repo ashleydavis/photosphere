@@ -1,23 +1,26 @@
+
 import React from 'react';
+import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 
 export function FullscreenSpinner() {
     return (
-        <div
-            style={{
+        <Box
+            sx={{
                 position: 'fixed',
                 top: 0,
                 left: 0,
                 width: '100%',
                 height: '100%',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backgroundColor: 'var(--color-scrim)',
+                backdropFilter: 'blur(var(--backdrop-blur))',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 1300,
+                zIndex: theme => theme.zIndex.modal,
             }}
             >
             <CircularProgress />
-        </div>
+        </Box>
     );
 };

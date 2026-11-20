@@ -12,12 +12,16 @@ import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import StorageIcon from '@mui/icons-material/Storage';
+import { type SxProps, type Theme } from '@mui/material/styles';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
 import { SelectSecretModal } from './select-secret-modal';
 import { S3BrowserModal } from './s3-browser-modal';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { DialogIconBadge } from './dialog-icon-badge';
 import { ResponsiveDialog } from './responsive-dialog';
 
 export interface ICreateDatabaseModalProps {
@@ -26,6 +30,57 @@ export interface ICreateDatabaseModalProps {
 
     // Called when the modal should close.
     onClose: () => void;
+}
+
+//
+// The look of a field's label over its box, as the style guide's dialogs label a group of
+// controls: muted, small and bold. The focused and error colours MUI gives a label are replaced so
+// the label keeps the token colours.
+//
+export const FIELD_LABEL_SX: SxProps<Theme> = {
+    marginBottom: "var(--space-1)",
+    color: "var(--color-text-muted)",
+    fontSize: "var(--text-sm)",
+    fontWeight: "var(--weight-bold)",
+    "&.Mui-focused": {
+        color: "var(--color-text-muted)",
+    },
+    "&.Mui-error": {
+        color: "var(--color-danger)",
+    },
+};
+
+//
+// The look of a card of rows, the settings card the style guide groups a dialog's switches and
+// linked secrets in.
+//
+export const CARD_SX: SxProps<Theme> = {
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    backgroundColor: "var(--color-settings-section-bg)",
+    border: "var(--list-divider-width) solid var(--color-settings-section-border)",
+    borderRadius: "var(--radius-settings-section)",
+};
+
+//
+// Returns the look of one row of a card: its label at the left and its control at the right, with
+// a divider above every row but the first, so the card's own edge is the only line above the first.
+//
+export function cardRowSx(first: boolean): SxProps<Theme> {
+    let borderTop = "var(--settings-row-divider-width) solid var(--color-border)";
+    if (first) {
+        borderTop = "none";
+    }
+    return {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "var(--space-3)",
+        minHeight: "calc(var(--space-8) + var(--space-6))",
+        padding: "var(--space-2) var(--space-3)",
+        borderTop,
+    };
 }
 
 //
@@ -196,31 +251,58 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
 
     //
     // Renders a secret selector row with the chosen secret's name and a button to open SelectSecretModal.
+    // `first` leaves off the divider above the row when it is the first row of its card.
     //
     function renderSecretButton(
         label: string,
         secretType: string,
         chosenName: string | undefined,
         chosenNameDataId: string | undefined,
-        buttonDataId: string
+        buttonDataId: string,
+        first: boolean
     ): React.ReactNode {
         return (
-            <FormControl fullWidth sx={{ mb: 1 }}>
-                <FormLabel>{label}</FormLabel>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Typography data-id={chosenNameDataId} variant="body2" sx={{ flexGrow: 1 }}>
+            <Box sx={cardRowSx(first)}>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minWidth: 0,
+                    }}
+                    >
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'var(--color-text)',
+                            fontSize: 'var(--text-md)',
+                        }}
+                        >
+                        {label}
+                    </Typography>
+                    <Typography
+                        data-id={chosenNameDataId}
+                        variant="body2"
+                        sx={{
+                            overflowWrap: 'anywhere',
+                            color: 'var(--color-text-muted)',
+                            fontSize: 'var(--text-sm)',
+                        }}
+                        >
                         {chosenName ?? 'None selected'}
                     </Typography>
-                    <Button
-                        data-id={buttonDataId}
-                        variant="outlined"
-                        size="small"
-                        onClick={() => setSelectSecretType(secretType)}
-                    >
-                        Select
-                    </Button>
                 </Box>
-            </FormControl>
+                <Button
+                    data-id={buttonDataId}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                        flex: 'none',
+                    }}
+                    onClick={() => setSelectSecretType(secretType)}
+                >
+                    Select
+                </Button>
+            </Box>
         );
     }
 
@@ -238,96 +320,150 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                 maxWidth={700}
                 onKeyDown={createDialogKeyHandler(createAndShowError, !form.path || nameError !== undefined)}
                 >
-                <DialogTitle>New Database</DialogTitle>
+                <DialogTitle>
+                    <DialogIconBadge icon={<StorageIcon />} danger={false} />
+                    New Database
+                </DialogTitle>
                 <DialogContent>
-                    <FormControl fullWidth sx={{ mb: 1 }} error={nameError !== undefined}>
-                        <FormLabel>Name</FormLabel>
-                        <OutlinedInput
-                            size="small"
-                            data-id="database-name-input"
-                            value={form.name}
-                            onChange={event => {
-                                setForm(prev => ({ ...prev, name: event.target.value }));
-                                setNameError(undefined);
-                            }}
-                        />
-                        {nameError && (
-                            <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
-                                {nameError}
-                            </Typography>
-                        )}
-                    </FormControl>
-
-                    <FormControl fullWidth sx={{ mb: 1 }}>
-                        <FormLabel>Description</FormLabel>
-                        <OutlinedInput
-                            size="small"
-                            value={form.description}
-                            onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
-                        />
-                    </FormControl>
-
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                        <FormLabel>Type</FormLabel>
-                        <Select
-                            value={form.storageType}
-                            size="small"
-                            onChange={event => setForm(prev => ({ ...prev, storageType: event.target.value as StorageType, path: '', s3Key: undefined }))}
-                            data-id="database-storage-type-select"
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--space-4)',
+                            paddingTop: 'var(--space-1)',
+                        }}
                         >
-                            <MenuItem value="filesystem">File system</MenuItem>
-                            <MenuItem data-id="database-storage-type-option-s3" value="s3">S3</MenuItem>
-                        </Select>
-                    </FormControl>
-
-                    {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'chosen-s3-secret', 'select-s3-button')}
-
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                        <FormLabel>Path</FormLabel>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
+                        <FormControl fullWidth error={nameError !== undefined}>
+                            <FormLabel sx={FIELD_LABEL_SX}>Name</FormLabel>
                             <OutlinedInput
                                 size="small"
-                                data-id="database-path-input"
-                                sx={{ flexGrow: 1 }}
-                                value={form.path}
-                                placeholder={showBrowse ? undefined : 'Type a name for the database'}
-                                onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
+                                data-id="database-name-input"
+                                value={form.name}
+                                onChange={event => {
+                                    setForm(prev => ({ ...prev, name: event.target.value }));
+                                    setNameError(undefined);
+                                }}
                             />
-                            {showBrowse && (
-                                <Button
-                                    data-id="database-browse-button"
-                                    variant="outlined"
-                                    disabled={browseDisabled}
-                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
-                                >
-                                    {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
-                                </Button>
+                            {nameError && (
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        marginTop: 'var(--space-1)',
+                                        color: 'var(--color-danger)',
+                                        fontSize: 'var(--text-sm)',
+                                    }}
+                                    >
+                                    {nameError}
+                                </Typography>
                             )}
-                        </Box>
-                    </FormControl>
+                        </FormControl>
 
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Switch
-                                checked={form.encrypted}
-                                onChange={event => setForm(prev => ({ ...prev, encrypted: event.target.checked, encryptionKey: undefined }))}
+                        <FormControl fullWidth>
+                            <FormLabel sx={FIELD_LABEL_SX}>Description</FormLabel>
+                            <OutlinedInput
+                                size="small"
+                                value={form.description}
+                                onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
                             />
-                            <FormLabel>Encrypted</FormLabel>
+                        </FormControl>
+
+                        <FormControl fullWidth>
+                            <FormLabel sx={FIELD_LABEL_SX}>Type</FormLabel>
+                            <Select
+                                value={form.storageType}
+                                size="small"
+                                onChange={event => setForm(prev => ({ ...prev, storageType: event.target.value as StorageType, path: '', s3Key: undefined }))}
+                                data-id="database-storage-type-select"
+                            >
+                                <MenuItem value="filesystem">File system</MenuItem>
+                                <MenuItem data-id="database-storage-type-option-s3" value="s3">S3</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        {form.storageType === 's3' && (
+                            <Box sx={CARD_SX}>
+                                {renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'chosen-s3-secret', 'select-s3-button', true)}
+                            </Box>
+                        )}
+
+                        <FormControl fullWidth>
+                            <FormLabel sx={FIELD_LABEL_SX}>Path</FormLabel>
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'stretch',
+                                    gap: 'var(--space-2)',
+                                }}
+                                >
+                                <OutlinedInput
+                                    size="small"
+                                    data-id="database-path-input"
+                                    sx={{
+                                        flexGrow: 1,
+                                        fontFamily: 'var(--font-mono)',
+                                        fontSize: 'var(--text-sm)',
+                                    }}
+                                    value={form.path}
+                                    placeholder={showBrowse ? undefined : 'Type a name for the database'}
+                                    onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
+                                />
+                                {showBrowse && (
+                                    <Button
+                                        data-id="database-browse-button"
+                                        variant="outlined"
+                                        disabled={browseDisabled}
+                                        startIcon={<FolderOpenIcon />}
+                                        sx={{
+                                            flex: 'none',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                        onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
+                                    >
+                                        {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
+                                    </Button>
+                                )}
+                            </Box>
+                        </FormControl>
+
+                        <Box sx={CARD_SX}>
+                            <Box sx={cardRowSx(true)}>
+                                <FormLabel
+                                    sx={{
+                                        color: 'var(--color-text)',
+                                        '&.Mui-focused': {
+                                            color: 'var(--color-text)',
+                                        },
+                                    }}
+                                    >
+                                    Encrypted
+                                </FormLabel>
+                                <Switch
+                                    checked={form.encrypted}
+                                    onChange={event => setForm(prev => ({ ...prev, encrypted: event.target.checked, encryptionKey: undefined }))}
+                                />
+                            </Box>
+                            {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, undefined, 'select-encryption-button', false)}
                         </Box>
-                    </FormControl>
 
-                    {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, undefined, 'select-encryption-button')}
+                        <Box sx={CARD_SX}>
+                            {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, undefined, 'select-geocoding-button', true)}
+                        </Box>
 
-                    {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, undefined, 'select-geocoding-button')}
-
-                    {createError && (
-                        <Typography data-id="create-database-error" variant="body2" color="error">
-                            {createError}
-                        </Typography>
-                    )}
+                        {createError && (
+                            <Typography
+                                data-id="create-database-error"
+                                variant="body2"
+                                sx={{
+                                    color: 'var(--color-danger)',
+                                }}
+                                >
+                                {createError}
+                            </Typography>
+                        )}
+                    </Box>
                 </DialogContent>
                 <DialogActions>
-                    <Button data-id="create-database-cancel" variant="text" onClick={onClose}>Cancel</Button>
+                    <Button data-id="create-database-cancel" variant="outlined" onClick={onClose}>Cancel</Button>
                     <Button
                         data-id="create-database-confirm"
                         variant="contained"

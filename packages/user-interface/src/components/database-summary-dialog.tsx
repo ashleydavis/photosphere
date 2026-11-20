@@ -5,6 +5,8 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import { ResponsiveDialog } from "./responsive-dialog";
 import { DatabaseSummaryView } from "./database-summary-view";
+import { DialogIconBadge } from "./dialog-icon-badge";
+import { PieChart } from "@mui/icons-material";
 
 export interface IDatabaseSummaryDialogProps {
     //
@@ -34,7 +36,7 @@ export function DatabaseSummaryDialog({ open, onClose }: IDatabaseSummaryDialogP
             maxWidth={640}
             dataId="database-summary-dialog"
             >
-            <DialogTitle>Database</DialogTitle>
+            <DialogTitle><DialogIconBadge icon={<PieChart />} danger={false} />Database</DialogTitle>
 
             <DialogContent>
                 {/*

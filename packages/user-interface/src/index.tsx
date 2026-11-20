@@ -1,3 +1,9 @@
+import '@fontsource/nunito/400.css';
+import '@fontsource/nunito/500.css';
+import '@fontsource/nunito/600.css';
+import '@fontsource/jetbrains-mono/400.css';
+import './styles/photosphere.css';
+import './styles/base.css';
 import './styles.css';
 
 export { Main } from './main';

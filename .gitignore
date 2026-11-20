@@ -72,3 +72,6 @@ apps/photosphere-frontend/page.*
 
 # Made locally by scripts/make-format-test-images.sh, not committed.
 /test/formats/
+
+# Videos and screenshots recorded as evidence of the styling work, kept out of git for their size.
+/styling-evidence/

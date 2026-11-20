@@ -21,30 +21,57 @@ export function EmptyDatabase() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                height: "calc(100vh - 60px)",
-                px: isMobile ? 3 : 0,
+                height: "100%",
+                padding: "var(--space-4)",
             }}
         >
-            <Box sx={{ textAlign: "center", width: "100%", maxWidth: 420 }}>
+            <Box
+                sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    gap: "var(--space-3)",
+                    width: "100%",
+                    maxWidth: "calc(var(--space-8) * 12)",
+                }}
+            >
                 <Box
                     sx={{
-                        display: "inline-flex",
+                        display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        width: isMobile ? 96 : 80,
-                        height: isMobile ? 96 : 80,
-                        borderRadius: "50%",
-                        backgroundColor: "action.selected",
-                        mb: 2.5,
+                        width: "calc(var(--space-8) * 2)",
+                        height: "calc(var(--space-8) * 2)",
+                        borderRadius: "var(--radius-full)",
+                        background: "var(--empty-icon-bg)",
+                        color: "var(--color-empty-icon)",
                     }}
                     >
-                    <AddPhotoAlternateIcon sx={{ fontSize: isMobile ? 48 : 40, color: "text.secondary" }} />
+                    <AddPhotoAlternateIcon
+                        sx={{
+                            fontSize: "var(--space-8)",
+                        }}
+                        />
                 </Box>
 
-                <Typography variant={isMobile ? "h2" : "h4"} sx={{ fontSize: isMobile ? "1.9rem" : undefined, mb: 1.5 }}>
+                <Typography
+                    component="h2"
+                    sx={{
+                        fontFamily: "var(--font-heading)",
+                        fontSize: "var(--text-xl)",
+                        fontWeight: "var(--weight-bold)",
+                        lineHeight: "var(--leading-tight)",
+                        overflowWrap: "anywhere",
+                    }}
+                    >
                     No photos yet
                 </Typography>
-                <Typography variant="body1" sx={{ mb: 4, color: "text.secondary" }}>
+                <Typography
+                    sx={{
+                        color: "var(--color-text-muted)",
+                    }}
+                    >
                     Import photos and videos to get started.
                 </Typography>
 
@@ -55,11 +82,9 @@ export function EmptyDatabase() {
                     size="large"
                     startIcon={<AddPhotoAlternateIcon />}
                     onClick={() => navigate('/import')}
+                    fullWidth={isMobile}
                     sx={{
-                        width: isMobile ? "100%" : undefined,
-                        minHeight: 52,
-                        borderRadius: 2,
-                        px: 4,
+                        marginTop: "var(--space-2)",
                     }}
                 >
                     Import photos

@@ -9,6 +9,8 @@ import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import { createDialogKeyHandler } from "../lib/dialog-keys";
+import { DialogIconBadge } from "./dialog-icon-badge";
+import { CalendarMonth } from "@mui/icons-material";
 
 //
 // The mode for setting a photo date.
@@ -156,13 +158,13 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
             maxWidth={340}
             onKeyDown={createDialogKeyHandler(handleConfirm, isConfirmDisabled())}
             >
-                <DialogTitle>Set Photo Date</DialogTitle>
-                <DialogContent sx={{ overflow: "visible", pb: 1 }}>
+                <DialogTitle><DialogIconBadge icon={<CalendarMonth />} danger={false} />Set Photo Date</DialogTitle>
+                <DialogContent sx={{ overflow: "visible" }}>
                     <Select
                         size="small"
                         value={dateMode}
                         onChange={event => setDateMode(event.target.value as DateMode)}
-                        sx={{ mt: 1, width: "100%" }}
+                        sx={{ marginTop: "var(--space-1)", width: "100%" }}
                     >
                         <MenuItem value="specific">Specific date</MenuItem>
                         <MenuItem value="year">Year</MenuItem>
@@ -171,13 +173,14 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
                         <MenuItem value="clear">Clear date (undated)</MenuItem>
                     </Select>
 
-                    <div style={{ minHeight: 40, marginTop: 16 }}>
+                    <div style={{ minHeight: "var(--button-height-md)", marginTop: "var(--space-4)" }}>
                         {dateMode === "specific" && (
-                            <input
+                            <TextField
+                                size="small"
                                 type="date"
                                 value={specificDate}
                                 onChange={event => setSpecificDate(event.target.value)}
-                                style={{ width: "100%", padding: "4px 8px", boxSizing: "border-box" }}
+                                sx={{ width: "100%" }}
                             />
                         )}
                         {dateMode === "year" && (
@@ -197,7 +200,7 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
                             />
                         )}
                         {dateMode === "month" && (
-                            <div style={{ display: "flex", gap: 8 }}>
+                            <div style={{ display: "flex", gap: "var(--space-3)" }}>
                                 <Select
                                     size="small"
                                     value={month}
@@ -220,7 +223,7 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
                                         },
                                     }}
                                     placeholder="Year"
-                                    sx={{ width: 90 }}
+                                    sx={{ width: "calc(var(--space-8) * 3)" }}
                                 />
                             </div>
                         )}
@@ -239,7 +242,7 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
                     </div>
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="text" color="inherit" onClick={onClose}>
+                    <Button variant="outlined" onClick={onClose}>
                         Cancel
                     </Button>
                     <Button

@@ -45,9 +45,11 @@ export type GetGroupFn = (item: IGalleryItem) => string[];
 export type GetHeadingFn = (group: string[]) => string;
 
 //
-// Creates or updates a row-based layout for items in the gallery.
+// Creates or updates a row-based layout for items in the gallery. `gap` is the space in pixels
+// between photos, across a row and between rows. It is passed in rather than fixed here because the
+// gallery takes it from the --gallery-gap style token.
 //
-export function computePartialLayout(layout: IGalleryLayout | undefined, items: IGalleryItem[], galleryWidth: number, targetRowHeight: number, getGroup: GetGroupFn, getHeading: GetHeadingFn): IGalleryLayout {
+export function computePartialLayout(layout: IGalleryLayout | undefined, items: IGalleryItem[], galleryWidth: number, targetRowHeight: number, gap: number, getGroup: GetGroupFn, getHeading: GetHeadingFn): IGalleryLayout {
 
     if (!layout) {
         layout = {
@@ -67,9 +69,6 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     if (!items || !items.length) {
         return layout;
     }
-
-    const horizonalGutter = 4;
-    const verticalGutter = 4;
 
     const rows = layout.rows;
 
@@ -158,7 +157,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         curRow.items.push(item);
         curRow.width += computedWidth;
         if (itemIndex < items.length-1) {
-            curRow.width += horizonalGutter;
+            curRow.width += gap;
         }
     }
 
@@ -169,18 +168,18 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         const row = rows[rowIndex];
         const nextRow = rows[rowIndex+1];
         if (!groupsMatch(row.group, nextRow.group)) {
-            computeFromHeight(row, targetRowHeight, horizonalGutter);
+            computeFromHeight(row, targetRowHeight, gap);
             continue; // Don't expand the last row in each group.
         }
 
-        const gap = galleryWidth - row.width;
-        const deltaWidth = gap / row.items.length;
+        const spareWidth = galleryWidth - row.width;
+        const deltaWidth = spareWidth / row.items.length;
 
         let maxThumbHeight = 0;
         row.width = 0;
 
         //
-        // Expand each item to fill the gap.
+        // Expand each item to fill the spare width.
         //
         for (let itemIndex = 0; itemIndex < row.items.length; itemIndex++) {
             const item = row.items[itemIndex];
@@ -188,12 +187,12 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             item.thumbHeight = item.thumbWidth! * (1.0 / item.aspectRatio!);
             row.width += item.thumbWidth!;
             if (itemIndex < row.items.length-1) {
-                row.width += horizonalGutter;
+                row.width += gap;
             }
             maxThumbHeight = Math.max(maxThumbHeight, item.thumbHeight);
         }
 
-        computeFromHeight(row, maxThumbHeight, horizonalGutter);
+        computeFromHeight(row, maxThumbHeight, gap);
     }
 
     //
@@ -201,7 +200,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
     //
     if (rows.length > 0) {
         const lastRow = rows[rows.length-1];
-        computeFromHeight(lastRow, targetRowHeight, horizonalGutter);
+        computeFromHeight(lastRow, targetRowHeight, gap);
     }
     
     //
@@ -255,7 +254,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             //
             pullback *= 2;
 
-            computeFromHeight(row, origHeight - pullback, horizonalGutter);
+            computeFromHeight(row, origHeight - pullback, gap);
 
             if (row.width < galleryWidth) {
                 // We have pulled in too far. Move onto the next phase.
@@ -274,7 +273,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             prevPullback = pullback;
             pullback *= 0.75;
 
-            computeFromHeight(row, origHeight - pullback, horizonalGutter);
+            computeFromHeight(row, origHeight - pullback, gap);
 
             if (row.width >= galleryWidth) {
                 // We have pushed out too far. Move onto the next phase.
@@ -295,7 +294,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
             prevPullback = pullback;
             pullback -= 1;
 
-            computeFromHeight(row, origHeight - pullback, horizonalGutter);
+            computeFromHeight(row, origHeight - pullback, gap);
 
             if (row.width >= galleryWidth) {
                 // We have pushed out too far. Time to finish up.
@@ -307,7 +306,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         // 
         // Backup a bit.
         //
-        computeFromHeight(row, origHeight - pullback, horizonalGutter);
+        computeFromHeight(row, origHeight - pullback, gap);
 
         // 
         // Inch the row out pixel by pixel by expanding the horizontal gutter until it just overlaps the right hand edge of the gallery.
@@ -315,7 +314,7 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         let finalGap = galleryWidth - row.width;
         if (finalGap > 0) {
             let finalDeltaGap = finalGap / (row.items.length - 1);
-            computeFromHeight(row, origHeight - pullback, horizonalGutter + finalDeltaGap);
+            computeFromHeight(row, origHeight - pullback, gap + finalDeltaGap);
         }
     }
 
@@ -367,10 +366,10 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
         row.offsetY = prevRowHeight;
 
         //
-        // Add the height of the row and the vertical gutter.
+        // Add the height of the row and the gap below it.
         // Integrate with TanStack Virtual needs this.
         //
-        row.height += verticalGutter;
+        row.height += gap;
 
         prevRowHeight += row.height;
         layout.galleryHeight = prevRowHeight;
@@ -382,13 +381,15 @@ export function computePartialLayout(layout: IGalleryLayout | undefined, items: 
 //
 // Computes a new layout after deleting the specified assets.
 // Reflows only from the earliest affected row, leaving earlier rows unchanged.
-// Returns the original layout unchanged if none of the asset IDs were found.
+// Returns the original layout unchanged if none of the asset IDs were found. `gap` is the space in
+// pixels between photos, as computePartialLayout takes it.
 //
 export function deleteFromLayout(
     layout: IGalleryLayout,
     assetIds: string[],
     galleryWidth: number,
     targetRowHeight: number,
+    gap: number,
     getGroup: GetGroupFn,
     getHeading: GetHeadingFn
 ): IGalleryLayout {
@@ -445,7 +446,7 @@ export function deleteFromLayout(
     const truncatedLayout: IGalleryLayout | undefined = newRows.length === 0
         ? undefined
         : { rows: newRows, galleryHeight: 0 };
-    return computePartialLayout(truncatedLayout, tailItems, galleryWidth, targetRowHeight, getGroup, getHeading);
+    return computePartialLayout(truncatedLayout, tailItems, galleryWidth, targetRowHeight, gap, getGroup, getHeading);
 }
 
 //

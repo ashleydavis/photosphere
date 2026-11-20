@@ -11,7 +11,9 @@ import { type ISharedSecretEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { buildValueJson, emptyFormState, type ISecretFormState } from '../lib/secrets-form';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import Key from '@mui/icons-material/Key';
 import { ResponsiveDialog } from './responsive-dialog';
+import { DialogIconBadge } from './dialog-icon-badge';
 
 export interface ICreateSecretDialogProps {
     // Whether the dialog is open.
@@ -59,7 +61,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
         if (secretType === 's3-credentials') {
             return (
                 <>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Endpoint (optional)</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -68,7 +70,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                             onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Region</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -77,7 +79,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                             onChange={event => setForm(prev => ({ ...prev, s3Region: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Access Key ID</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -86,7 +88,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                             onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Secret Access Key</FormLabel>
                         <OutlinedInput
                             size="small"
@@ -102,30 +104,42 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
         if (secretType === 'encryption-key') {
             return (
                 <>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Private Key PEM</FormLabel>
                         <OutlinedInput
                             multiline
                             minRows={4}
                             value={form.privateKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}
-                            sx={{ '& textarea': { WebkitTextSecurity: 'disc' } }}
+                            sx={{
+                                '& textarea': {
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 'var(--text-xs)',
+                                    WebkitTextSecurity: 'disc',
+                                },
+                            }}
                         />
                     </FormControl>
-                    <FormControl fullWidth sx={{ mb: 1 }}>
+                    <FormControl fullWidth>
                         <FormLabel>Public Key PEM</FormLabel>
                         <OutlinedInput
                             multiline
                             minRows={4}
                             value={form.publicKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, publicKeyPem: event.target.value }))}
+                            sx={{
+                                '& textarea': {
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 'var(--text-xs)',
+                                },
+                            }}
                         />
                     </FormControl>
                 </>
             );
         }
         return (
-            <FormControl fullWidth sx={{ mb: 1 }}>
+            <FormControl fullWidth>
                 <FormLabel>API Key</FormLabel>
                 <OutlinedInput
                     size="small"
@@ -146,9 +160,15 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
             maxWidth={640}
             onKeyDown={createDialogKeyHandler(handleSave, false)}
             >
-            <DialogTitle>New {secretType} Secret</DialogTitle>
-            <DialogContent>
-                <FormControl fullWidth sx={{ mb: 2 }}>
+            <DialogTitle><DialogIconBadge icon={<Key />} danger={false} />New {secretType} Secret</DialogTitle>
+            <DialogContent
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--space-4)',
+                }}
+                >
+                <FormControl fullWidth>
                     <FormLabel>Name</FormLabel>
                     <OutlinedInput
                         size="small"
@@ -160,7 +180,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                 {renderTypeFields()}
             </DialogContent>
             <DialogActions>
-                <Button variant="text" onClick={onClose}>Cancel</Button>
+                <Button variant="outlined" onClick={onClose}>Cancel</Button>
                 <Button data-id="create-secret-confirm" variant="contained" onClick={() => handleSave().catch(err => log.exception('Create secret error:', err as Error))}>Create</Button>
             </DialogActions>
         </ResponsiveDialog>

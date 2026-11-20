@@ -2,7 +2,7 @@ import React, { ReactNode, KeyboardEvent } from 'react';
 import Dialog from '@mui/material/Dialog';
 import Drawer from '@mui/material/Drawer';
 import { useIsMobile } from '../lib/use-is-mobile';
-import { desktopDialogSx, mobileSheetDrawerSx, SHEET_TRANSITION_DURATION_MS, SHEET_TRANSITION_EASING } from '../lib/modal-styles';
+import { cssTimeToMs, desktopDialogSx, mobileSheetDrawerSx, SHEET_TRANSITION_EASING } from '../lib/modal-styles';
 
 declare module '@mui/material/Dialog' {
     //
@@ -91,13 +91,18 @@ export function ResponsiveDialog({ open, onClose, minWidth, maxWidth, onKeyDown,
     const isMobile = useIsMobile();
 
     if (isMobile) {
+        //
+        // The sheet slides for as long as the style guide's normal duration token says. Material's
+        // Drawer takes its duration as a number, so the token is read from the page here.
+        //
+        const transitionDuration = cssTimeToMs(getComputedStyle(document.documentElement).getPropertyValue('--duration-normal'));
         return (
             <Drawer
                 anchor="bottom"
                 open={open}
                 onClose={onClose}
                 onKeyDown={onKeyDown}
-                transitionDuration={SHEET_TRANSITION_DURATION_MS}
+                transitionDuration={transitionDuration}
                 sx={mobileSheetDrawerSx()}
                 slotProps={{
                     paper: {

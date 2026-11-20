@@ -1,7 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
-import Card from "@mui/material/Card";
 import Button from "@mui/material/Button";
 import Switch from "@mui/material/Switch";
 import Typography from "@mui/material/Typography";
@@ -38,33 +37,67 @@ export function DeveloperPage(): React.JSX.Element {
     }
 
     //
-    // Height of each row. Every row is a full-width tap target on a mobile, comfortably above the
-    // 48px minimum, because these rows carry switches that are easy to miss with a thumb.
+    // Height of each row. Every row is a full-width tap target, as tall as a menu item a finger can
+    // tap, because these rows carry switches that are easy to miss with a thumb.
     //
     const rowSx = {
-        minHeight: isMobile ? 56 : 44,
-        borderRadius: 2,
-        px: 1,
+        minHeight: 'var(--menu-item-height)',
+        borderRadius: 'var(--radius-sm)',
+        paddingLeft: 'var(--space-3)',
+        paddingRight: 'var(--space-3)',
+        '& .MuiListItemIcon-root': {
+            color: 'var(--color-accent)',
+            fontSize: 'var(--icon-lg)',
+        },
+        '& .MuiSvgIcon-root': {
+            fontSize: 'var(--icon-lg)',
+        },
+        '& .MuiListItemText-secondary': {
+            color: 'var(--color-text-muted)',
+            fontSize: 'var(--text-sm)',
+        },
+    };
+
+    //
+    // The surface each list of tools sits on: a panel on the page with the raised shadow, as the
+    // style guide draws the cards of its information pages.
+    //
+    const cardSx = {
+        padding: 'var(--space-2)',
+        background: 'var(--color-panel)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-md)',
+        boxShadow: 'var(--shadow-raised)',
     };
 
     return (
         <Box
             data-id="developer-page"
-            sx={{ width: '100%', height: '100%', overflowY: 'auto', p: isMobile ? 2 : 4, pb: 16 }}
+            sx={{ width: '100%', height: '100%', overflowY: 'auto' }}
             >
-            <Box sx={{ mx: 'auto', maxWidth: 800 }}>
-                <Typography variant="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem', mb: 2 }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--space-4)',
+                    mx: 'auto',
+                    maxWidth: 'calc(var(--space-8) * 30)',
+                    padding: isMobile ? 'var(--space-4) var(--space-4) calc(var(--space-8) * 4)' : 'var(--space-6) var(--space-6) calc(var(--space-8) * 4)',
+                }}
+                >
+                <Typography
+                    variant="h2"
+                    sx={{
+                        fontFamily: 'var(--font-heading)',
+                        fontSize: 'var(--page-title-size)',
+                        fontWeight: 'var(--weight-bold)',
+                        lineHeight: 'var(--leading-tight)',
+                    }}
+                    >
                     Developer
                 </Typography>
 
-                <Card
-                    elevation={0}
-                    sx={{
-                        bgcolor: 'action.hover',
-                        borderRadius: 3,
-                        p: 1,
-                    }}
-                    >
+                <Box sx={cardSx}>
                     <List disablePadding>
                         {/* Add future developer tools as additional ListItem entries here. */}
                         <ListItem
@@ -75,7 +108,7 @@ export function DeveloperPage(): React.JSX.Element {
                             <ListItemButton sx={rowSx}>
                                 <ListItemIcon><Science /></ListItemIcon>
                                 <ListItemText primary="Stories" />
-                                <ChevronRight sx={{ color: 'text.secondary' }} />
+                                <ChevronRight sx={{ color: 'var(--color-text-muted)' }} />
                             </ListItemButton>
                         </ListItem>
 
@@ -117,24 +150,24 @@ export function DeveloperPage(): React.JSX.Element {
                             </ListItemButton>
                         </ListItem>
                     </List>
-                </Card>
+                </Box>
 
-                <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>
+                <Typography
+                    variant="subtitle1"
+                    sx={{
+                        marginTop: 'var(--space-4)',
+                        fontSize: 'var(--text-lg)',
+                        fontWeight: 'var(--weight-bold)',
+                    }}
+                    >
                     Test background jobs
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <Typography variant="body2" sx={{ color: 'var(--color-text-muted)' }}>
                     Synthetic work that does nothing but take twenty to sixty seconds, so the background
                     jobs list can be watched and cancelled without staging a database first.
                 </Typography>
 
-                <Card
-                    elevation={0}
-                    sx={{
-                        bgcolor: 'action.hover',
-                        borderRadius: 3,
-                        p: 1,
-                    }}
-                    >
+                <Box sx={cardSx}>
                     <List disablePadding>
                         {TEST_JOB_KINDS.map((kind, kindIndex) => (
                             <ListItem
@@ -178,21 +211,21 @@ export function DeveloperPage(): React.JSX.Element {
                             </ListItemButton>
                         </ListItem>
                     </List>
-                </Card>
+                </Box>
 
                 <Button
                     data-id="developer-exit"
                     color="error"
                     variant="outlined"
                     size={isMobile ? 'large' : 'medium'}
+                    fullWidth={isMobile}
                     onClick={() => {
                         disableDeveloperMode();
                         navigate("/gallery");
                     }}
                     sx={{
-                        mt: 3,
-                        width: isMobile ? '100%' : undefined,
-                        minHeight: isMobile ? 48 : undefined,
+                        marginTop: 'var(--space-4)',
+                        alignSelf: isMobile ? 'stretch' : 'flex-end',
                     }}
                     >
                     Exit developer mode

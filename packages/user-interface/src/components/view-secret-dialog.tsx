@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { log } from 'utils';
 import { ResponsiveDialog } from './responsive-dialog';
+import Key from '@mui/icons-material/Key';
+import { DialogIconBadge } from './dialog-icon-badge';
+import { DetailRows } from './lan-share-parts';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
@@ -80,24 +83,50 @@ interface IFieldProps {
 }
 
 //
+// The look of a copyable value, such as a revealed key or the dots that hide it: the mono font on
+// the --mono-value tokens, wrapping anywhere so a long key never widens the dialog. The revealed
+// fields and the hidden value share it, so revealing changes the text and not the box.
+//
+const MONO_VALUE_SX = {
+    margin: 0,
+    minHeight: 'var(--button-height-md)',
+    padding: 'var(--mono-value-padding)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: 'var(--text-sm)',
+    lineHeight: 'var(--leading-normal)',
+    color: 'var(--color-text)',
+    backgroundColor: 'var(--mono-value-bg)',
+    border: '1px solid var(--mono-value-border-color)',
+    borderRadius: 'var(--radius-md)',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+};
+
+//
 // Labelled read-only field row.
 //
 function Field({ label, value, multiline, dataId }: IFieldProps) {
     return (
-        <Box sx={{ mb: 1.5 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>{label}</Typography>
+        <Box
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-1)',
+            }}
+            >
+            <Typography
+                variant="body2"
+                sx={{
+                    color: 'var(--color-text-muted)',
+                    fontSize: 'var(--text-sm)',
+                }}
+                >
+                {label}
+            </Typography>
             <Box
                 data-id={dataId}
                 component={multiline ? 'pre' : 'div'}
-                sx={{
-                    fontFamily: 'monospace',
-                    fontSize: '0.85rem',
-                    background: 'var(--mui-palette-action-hover)',
-                    borderRadius: 1,
-                    p: 1,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
-                }}
+                sx={MONO_VALUE_SX}
             >
                 {value}
             </Box>
@@ -191,17 +220,37 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
             maxWidth={680}
             onKeyDown={createDialogKeyHandler(handleConfirm, loading)}
             >
-                <DialogTitle>View Secret</DialogTitle>
-                <DialogContent>
-                    <Typography data-id="view-secret-name" variant="body1" sx={{ mb: 1 }}>
-                        <strong>Name:</strong> {secret.name}
-                    </Typography>
-                    <Typography data-id="view-secret-type" variant="body1" sx={{ mb: 2 }}>
-                        <strong>Type:</strong> {secret.type}
-                    </Typography>
+                <DialogTitle><DialogIconBadge icon={<Key />} danger={false} />View Secret</DialogTitle>
+                <DialogContent
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-4)',
+                    }}
+                    >
+                    <DetailRows
+                        details={[
+                            {
+                                label: 'Name:',
+                                value: secret.name,
+                                dataId: 'view-secret-name',
+                            },
+                            {
+                                label: 'Type:',
+                                value: secret.type,
+                                dataId: 'view-secret-type',
+                            },
+                        ]}
+                        />
                     {!revealed
                         ? (
-                            <Typography data-id="hidden-secret-value" sx={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>
+                            <Typography
+                                data-id="hidden-secret-value"
+                                sx={{
+                                    ...MONO_VALUE_SX,
+                                    letterSpacing: 'var(--space-1)',
+                                }}
+                                >
                                 ••••••••••
                             </Typography>
                         )
@@ -209,7 +258,7 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
                     }
                 </DialogContent>
                 <DialogActions>
-                    <Button data-id="view-secret-close-button" variant="text" onClick={onClose}>Close</Button>
+                    <Button data-id="view-secret-close-button" variant="outlined" onClick={onClose}>Close</Button>
                     {!revealed && (
                         <Button
                             data-id="reveal-secret-button"

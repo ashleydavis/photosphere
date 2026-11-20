@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
+import { useColorScheme } from "@mui/material/styles";
 import "leaflet/dist/leaflet.css";
 import { useNavigate } from "react-router-dom";
 import { IGalleryItem } from "../../lib/gallery-item";
@@ -101,7 +102,8 @@ function isInBounds(lat: number, lng: number, bounds: IMapBounds): boolean {
 }
 
 //
-// Creates a Leaflet divIcon for a single-photo marker.
+// Creates a Leaflet divIcon for a single-photo marker: the photo's thumbnail in the map marker's
+// rounded square, edged in the marker border colour so it stands off the map in either theme.
 //
 function createSinglePhotoIcon(item: IGalleryItem, thumbUrl: (item: IGalleryItem) => string): L.DivIcon {
     return L.divIcon({
@@ -109,13 +111,15 @@ function createSinglePhotoIcon(item: IGalleryItem, thumbUrl: (item: IGalleryItem
             <div style="
                 width: 48px;
                 height: 48px;
-                border-radius: 50%;
+                box-sizing: border-box;
+                border-radius: var(--map-marker-radius);
                 overflow: hidden;
-                border: 3px solid white;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                border: var(--map-marker-border-width) solid var(--color-map-marker-border);
+                box-shadow: var(--shadow-overlay);
+                background: var(--color-raised);
                 cursor: pointer;
             ">
-                <img src="${thumbUrl(item)}" style="width: 100%; height: 100%; object-fit: cover;" />
+                <img src="${thumbUrl(item)}" style="display: block; width: 100%; height: 100%; object-fit: cover;" />
             </div>
         `,
         iconSize: [48, 48],
@@ -153,14 +157,16 @@ function createClusterIcon(cluster: ICluster, thumbUrl: (item: IGalleryItem) => 
                 top: ${baseTop + layer.offsetY}px;
                 width: ${photoSize}px;
                 height: ${photoSize}px;
-                border-radius: 4px;
+                box-sizing: border-box;
+                border-radius: var(--map-cluster-radius);
                 overflow: hidden;
-                border: 2px solid white;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.35);
+                border: var(--map-marker-border-width) solid var(--color-map-marker-border);
+                box-shadow: var(--shadow-overlay);
+                background: var(--color-raised);
                 transform: rotate(${layer.rotation}deg);
                 transform-origin: center;
             ">
-                <img src="${thumbUrl(item)}" style="width: 100%; height: 100%; object-fit: cover;" />
+                <img src="${thumbUrl(item)}" style="display: block; width: 100%; height: 100%; object-fit: cover;" />
             </div>
         `;
     }).join('');
@@ -171,17 +177,23 @@ function createClusterIcon(cluster: ICluster, thumbUrl: (item: IGalleryItem) => 
                 ${layersHtml}
                 <div style="
                     position: absolute;
-                    top: 2px;
-                    right: 2px;
-                    background: #1976d2;
-                    color: white;
-                    border-radius: 12px;
-                    padding: 2px 6px;
-                    font-size: 11px;
-                    font-weight: bold;
-                    font-family: sans-serif;
-                    line-height: 1.4;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                    top: 0;
+                    right: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-sizing: border-box;
+                    min-width: calc(var(--space-6) - var(--space-1));
+                    height: calc(var(--space-6) - var(--space-1));
+                    padding: 0 var(--space-1);
+                    background: var(--color-badge-bg);
+                    color: var(--color-badge-text);
+                    border: calc(var(--space-1) / 2) solid var(--color-map-marker-border);
+                    border-radius: var(--radius-full);
+                    font-size: var(--text-xs);
+                    font-weight: var(--weight-bold);
+                    font-family: var(--font-sans);
+                    line-height: 1;
                 ">
                     ${cluster.items.length}
                 </div>
@@ -241,6 +253,13 @@ function MapEvents({ onBoundsChange }: IMapEventsProps) {
 //
 export function MapView() {
     const { searchedItems } = useGallery();
+    const { mode, systemMode } = useColorScheme();
+
+    //
+    // The theme the page is drawn in. The map's tiles are pictures that cannot take the theme's
+    // colours, so the dark theme loads CARTO's dark tiles in place of its light ones.
+    //
+    const isDark = (mode === 'system' ? systemMode : mode) === 'dark';
     const { assetUrl } = useAssetDatabase();
     const navigate = useNavigate();
 
@@ -295,15 +314,22 @@ export function MapView() {
     }
 
     return (
-        <div style={{ width: '100%', height: 'calc(100vh - 60px)' }}>
+        <div className="photosphere-map" style={{ width: '100%', height: '100%' }}>
             <MapContainer
                 center={[20, 0]}
                 zoom={3}
-                style={{ width: '100%', height: '100%' }}
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    background: 'var(--color-map-water)',
+                }}
             >
                 <TileLayer
+                    key={isDark ? 'dark' : 'light'}
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                    url={isDark
+                        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                        : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"}
                 />
 
                 <MapEvents onBoundsChange={setMapBounds} />

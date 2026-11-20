@@ -1,0 +1,1000 @@
+/*
+ * Photosphere design tokens. Every value in the style guide is a CSS variable in this file.
+ * Raw palette tokens hold values. Role tokens point at raw palette tokens and are what
+ * components use. Role tokens have a light value (on :root and .light) and a dark value (under
+ * .dark), so a page or a single panel switches theme by setting the light or dark class.
+ *
+ * Values not yet chosen are neutral grey placeholders, so the explorer draws before every choice
+ * is made. Each pick in process.md replaces the placeholders it covers.
+ */
+
+/* Raw palette: the same in both themes. */
+:root {
+    --gray-0: #ffffff;
+    --gray-50: #fafafa;
+    --gray-100: #f5f5f5;
+    --gray-200: #e5e5e5;
+    --gray-300: #d4d4d4;
+    --gray-350: #bdbdbd;
+    --gray-400: #a3a3a3;
+    --gray-450: #8f8f8f;
+    --gray-500: #737373;
+    --gray-600: #525252;
+    --gray-700: #404040;
+    --gray-800: #262626;
+    --gray-900: #171717;
+    --gray-950: #0a0a0a;
+
+    --indigo-300: #a5b4fc;
+    --indigo-400: #818cf8;
+    --indigo-450: #7e88f7;
+    --indigo-600: #4f46e5;
+    --indigo-700: #4338ca;
+    --indigo-950: #10121c;
+    --indigo-600-a08: rgb(79 70 229 / 0.08);
+    --indigo-400-a14: rgb(129 140 248 / 0.14);
+    --indigo-600-a12: rgb(79 70 229 / 0.12);
+    --indigo-400-a20: rgb(129 140 248 / 0.2);
+    --indigo-600-a30: rgb(79 70 229 / 0.3);
+    --indigo-400-a40: rgb(129 140 248 / 0.4);
+    --indigo-600-a50: rgb(79 70 229 / 0.5);
+    --indigo-400-a50: rgb(129 140 248 / 0.5);
+
+    --green-200: #8fd1a8;
+    --green-700: #3e7c57;
+    --amber-200: #e8c26a;
+    --amber-700: #946200;
+    --red-200: #f0a09c;
+    --red-700: #b4413f;
+    --blue-200: #9cc3ee;
+    --blue-700: #3b6ea5;
+
+    --rose-400: #fb7185;
+    --rose-600: #e11d48;
+
+    --brand-purple: #6c25a7;
+    --brand-rose: #fb7185;
+    --brand-amber: #fbbf24;
+    --brand-purple-bright: #8f59bc;
+    --brand-rose-deep: #df6576;
+    --brand-rose-light: #fc8b9b;
+    --brand-amber-deep: #b08619;
+
+    --black-25: rgb(0 0 0 / 0.25);
+    --black-40: rgb(0 0 0 / 0.4);
+    --black-45: rgb(0 0 0 / 0.45);
+    --black-65: rgb(0 0 0 / 0.65);
+    --black: #000000;
+    --white-30: rgb(255 255 255 / 0.3);
+
+    --font-sans: "Nunito", system-ui, sans-serif;
+    --font-heading: "Nunito", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+    --text-xs: 12px;
+    --text-sm: 13px;
+    --text-md: 15px;
+    --text-lg: 17px;
+    --text-xl: 22px;
+    --text-2xl: 28px;
+
+    --weight-normal: 400;
+    --weight-medium: 500;
+    --weight-bold: 600;
+
+    --leading-tight: 1.25;
+    --leading-normal: 1.5;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-6: 24px;
+    --space-8: 32px;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-full: 999px;
+    --radius-button: var(--radius-sm);
+    --radius-icon-button: var(--radius-sm);
+
+    --icon-sm: 13px;
+    --icon-md: 15px;
+    --icon-lg: 17px;
+
+    --focus-ring-width: 2px;
+    --focus-ring-offset: 2px;
+
+    --button-height-sm: 32px;
+    --button-height-md: 36px;
+    --button-height-lg: 44px;
+
+    --menu-item-height: 44px;
+
+    --switch-track-width: 48px;
+    --switch-track-height: 28px;
+    --switch-thumb-size: 22px;
+
+    --banner-tint: 12%;
+    --banner-border-width: 0px;
+    --banner-bar-width: 0px;
+
+    --backdrop-blur: 6px;
+
+    --tab-indicator-height: 2px;
+    --radius-tab: var(--radius-sm);
+    --nav-current-bar-width: 0px;
+    --toolbar-blur: 0px;
+    --progress-height: 6px;
+    --radius-progress: var(--radius-full);
+    --radius-chip: var(--radius-full);
+    --list-gap: 0px;
+    --list-divider-width: 1px;
+    --radius-list-row: 0px;
+    --slider-track-height: 6px;
+    --slider-thumb-size: 20px;
+    --toast-status-tint: 12%;
+    --toast-status-bar-width: 0px;
+    --toast-status-icon-mix: 100%;
+    --toast-close-position: absolute;
+    --toast-close-top: -10px;
+    --toast-close-right: -10px;
+    --toast-close-size: 22px;
+    --toast-close-radius: var(--radius-full);
+    --toast-close-border-width: 1px;
+    --toast-close-opacity: 1;
+    --toast-close-room: 0px;
+    --radius-photo: 0px;
+    --photo-selected-scale: 1;
+    --photo-selected-ring-width: 3px;
+    --photo-selected-ring-edge-width: 1px;
+    --photo-selected-dim: 1;
+    --scrollbar-size: 14px;
+    --scrollbar-thumb-inset: 3px;
+    --album-card-padding: 0px;
+    --gallery-gap: 0px;
+    --date-heading-size: var(--text-lg);
+    --date-heading-font: var(--font-sans);
+    --date-heading-count-display: inline;
+    --selection-bar-top: 0px;
+    --selection-bar-bottom: auto;
+    --selection-bar-left: 0px;
+    --selection-bar-right: 0px;
+    --selection-bar-shift: 0%;
+    --radius-selection-bar: 0px;
+    --viewer-photo-glow: 0;
+    --radius-viewer-control: var(--radius-full);
+    --viewer-control-blur: 8px;
+    --radius-search: var(--radius-full);
+    --search-clear-size: 22px;
+    --settings-section-gap: var(--space-4);
+    --radius-settings-section: var(--radius-md);
+    --settings-row-divider-width: 0px;
+    --album-banner-display: none;
+    --album-thumb-display: block;
+    --details-columns: 1fr;
+    --details-label-display: block;
+    --details-icon-display: block;
+    --album-text-below: none;
+    --album-text-over: flex;
+
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
+    --duration-slow: 400ms;
+    --ease-standard: ease-in-out;
+
+    /* App tokens, frame: the app frame: navbar, sidebars, tab bar, toasts and page motion (both themes). */
+    --navbar-button-padding: 0px var(--space-4);
+    --navbar-tab-direction: row;
+    --navbar-tab-gap: var(--space-2);
+    --navbar-tab-label-size: var(--text-md);
+    --navbar-tab-radius: 0px;
+    --navbar-tabs-gap: 0px;
+    --navbar-tabs-padding: 0px;
+    --navbar-tabs-radius: 0px;
+    --navbar-tabs-margin-block: calc(var(--space-2) * -1);
+    --navbar-current-line-y: calc(var(--tab-bar-line-height) * -1);
+    --tab-bar-label-display: block;
+    --tab-bar-current-label-display: block;
+    --tab-bar-icon-size: var(--icon-lg);
+    --tab-bar-line-height: 3px;
+    --sidebar-row-radius: 0px;
+    --sidebar-list-padding: var(--space-2) var(--space-2) var(--space-2) 0px;
+    --sidebar-current-bar-width: var(--space-1);
+    --sidebar-heading-size: var(--text-sm);
+    --toast-stack-top: auto;
+    --toast-stack-bottom: var(--space-4);
+    --toast-stack-align: center;
+    --toast-arrive-shift: var(--space-4);
+    --page-enter-opacity: 0;
+    --page-enter-x: 0px;
+    --page-enter-y: var(--space-2);
+    /* End of app tokens, frame (both themes). */
+
+    /* App tokens, gallery: the gallery and the photo viewer (both themes). */
+    --gallery-row-scale: 1;
+    --gallery-row-scale-compact: 0.7;
+    --date-heading-blur: var(--backdrop-blur);
+    --date-heading-inset: 0px;
+    --date-heading-width: auto;
+    --date-heading-padding: var(--space-3) var(--space-4) var(--space-2);
+    --radius-date-heading: 0px;
+    --scrubber-thumb-width: var(--space-8);
+    --scrubber-thumb-height: calc(var(--space-8) + var(--space-4));
+    --scrubber-thumb-border-width: 0px;
+    --scrubber-thumb-edge-gap: 0px;
+    --scrubber-thumb-icon-display: inline-block;
+    --radius-scrubber-thumb: calc(var(--scrubber-thumb-height) / 2) 0 0 calc(var(--scrubber-thumb-height) / 2);
+    --tile-tick-size: calc(var(--icon-lg) + var(--space-1));
+    --radius-tile-tick: var(--radius-full);
+    --video-play-display: flex;
+    --film-strip-current-width: calc(var(--space-8) * 1.75);
+    --film-strip-current-lift: 0px;
+    --film-strip-other-opacity: 0.7;
+    --quick-info-display: block;
+    --quick-info-grow: 0;
+    --quick-info-max-width: calc(var(--space-8) * 10);
+    --radius-quick-info: var(--radius-md);
+    --viewer-enter-scale: 0.9;
+    --viewer-enter-shift: 0px;
+    --viewer-enter-duration: var(--duration-normal);
+    --details-panel-position: absolute;
+    --details-panel-top: 0px;
+    --details-panel-inset: 0px;
+    --radius-details-panel: 0px;
+    --viewer-actions-padding: 0px;
+    --viewer-actions-gap: var(--space-2);
+    --viewer-actions-blur: 0px;
+    /* End of app tokens, gallery (both themes). */
+
+    /* App tokens, places: the map, albums, import, sync and welcome pages (both themes). */
+    --map-marker-radius: var(--radius-md);
+    --map-cluster-radius: var(--radius-md);
+    --map-marker-border-width: 3px;
+    --map-controls-top: auto;
+    --map-controls-bottom: var(--space-4);
+    --album-cover-aspect: 1 / 1;
+    --sync-destination-gap: 1px;
+    --sync-destinations-radius: var(--radius-md);
+    --sync-destinations-overflow: hidden;
+    --sync-destination-radius: 0px;
+    --welcome-logo-radius: 22px;
+    --welcome-logo-glow-opacity: 0.3;
+    --welcome-collage-opacity: 0.15;
+    /* End of app tokens, places (both themes). */
+
+    /* App tokens, info: the databases, secrets, summary, news and about pages (both themes). */
+    --row-buttons-opacity: 1;
+    --list-header-direction: column;
+    --list-header-align: flex-start;
+    --page-title-size: var(--text-2xl);
+    --year-bars-display: flex;
+    --news-list-gap: 0px;
+    --news-item-padding-y: var(--space-3);
+    --news-item-padding-x: 0px;
+    --news-item-indent: var(--space-8);
+    --news-item-radius: 0px;
+    --news-rail-display: block;
+    --feature-columns: repeat(3, minmax(0, 1fr));
+    --feature-direction: column;
+    --feature-padding: var(--space-4);
+    --feature-icon-display: flex;
+    --mono-value-padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+    /* End of app tokens, info (both themes). */
+
+    /* App tokens, dialogs: the app's dialogs (both themes). */
+    --dialog-sheet-max-height: 92%;
+    --dialog-sheet-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    --dialog-page-height: 100%;
+    --dialog-page-radius: 0px;
+    --dialog-actions-justify: space-between;
+    --pairing-digit-gap: var(--space-2);
+    --pairing-digit-width: calc(var(--space-8) * 2);
+    --dialog-step-shift: var(--space-6);
+    --dialog-step-duration: var(--duration-normal);
+    /* End of app tokens, dialogs (both themes). */
+
+    /* App tokens, time: memories, years, videos, people, explore and labels (both themes). */
+    --memory-card-aspect: 1 / 1;
+    --memory-card-width: calc(var(--space-8) * 6);
+    --memory-card-width-compact: calc(var(--space-8) * 4.5);
+    --story-progress-height: calc(var(--space-1) * 1.5);
+    --story-progress-gap: calc(var(--space-1) * 1.5);
+    --story-progress-radius: var(--radius-full);
+    --story-caption-size: var(--text-lg);
+    --story-caption-align: left;
+    --story-caption-self: flex-start;
+    --story-caption-padding: var(--space-2) var(--space-3);
+    --story-caption-radius: var(--radius-md);
+    --story-caption-blur: var(--viewer-control-blur);
+    --on-this-day-columns: repeat(3, 1fr);
+    --on-this-day-gap: 2px;
+    --year-heat-cell-radius: 0px;
+    --year-heat-cell-gap: 1px;
+    --video-controls-inset: var(--space-2);
+    --video-controls-radius: var(--radius-lg);
+    --video-controls-padding-top: var(--space-3);
+    --video-controls-blur: var(--viewer-control-blur);
+    --face-radius: 12%;
+    --explore-caption-over-display: flex;
+    --explore-photo-radius: 0px;
+    /* End of app tokens, time (both themes). */
+
+    /* App tokens, keeping: duplicates, bin, storage, history, activity, shared and published (both themes). */
+    --duplicate-copies-columns: minmax(0, 1fr);
+    --duplicate-copies-columns-phone: minmax(0, 1fr);
+    --duplicate-copy-direction: row;
+    --duplicate-copy-photo-width: clamp(calc(var(--space-8) * 3.5), 30%, calc(var(--space-8) * 5.5));
+    --compare-handle-width: var(--button-height-lg);
+    --compare-handle-height: var(--button-height-lg);
+    --compare-line-width: 3px;
+    --bin-badge-top: auto;
+    --bin-badge-right: 0px;
+    --bin-badge-bottom: 0px;
+    --bin-badge-left: 0px;
+    --bin-badge-justify: center;
+    --bin-badge-max-width: 100%;
+    --radius-bin-badge: 0px;
+    --storage-ring-thickness: 22px;
+    --history-graph-lane-width: var(--space-4);
+    --history-graph-line-width: 2px;
+    --activity-list-gap: var(--space-2);
+    --activity-item-border-width: 1px;
+    --radius-activity-item: var(--radius-md);
+    --sparkline-bars-display: inline;
+    /* End of app tokens, keeping (both themes). */
+
+    /* App tokens, making: the editor, collage, photo book, export and the table view (both themes). */
+    --editor-panel-display: flex;
+    --editor-strip-display: block;
+    --editor-panel-position: absolute;
+    --editor-panel-inset: var(--space-4);
+    --editor-panel-radius: var(--radius-lg);
+    --editor-panel-border-width: 1px;
+    --editor-slider-ruler-height: 10px;
+    --editor-histogram-channels-display: inline;
+    --editor-histogram-luma-opacity: 0.14;
+    --editor-filter-thumb-radius: var(--radius-full);
+    --editor-filter-thumb-ring-width: 2px;
+    --crop-bracket-thickness: calc(var(--space-1) / 2);
+    --crop-bracket-length: var(--space-4);
+    --collage-unselected-opacity: 0.45;
+    --book-page-curve-depth: 0.16;
+    --radio-card-border-width: 1px;
+    --radio-card-padding: var(--space-2);
+    --radio-card-icon-display: inline-block;
+    --radio-card-detail-display: block;
+    --table-row-height: 60px;
+    --table-thumb-size: calc(var(--space-8) + var(--space-3));
+    --table-row-detail-display: block;
+    /* End of app tokens, making (both themes). */
+
+    /* App tokens, trust: identity, key backup, contacts, library health, storage locations, help, the command palette and the tour (both themes). */
+    --avatar-radius: var(--radius-full);
+    --fingerprint-words-gap: var(--space-1);
+    --fingerprint-word-flex: 0 0 calc((100% - var(--fingerprint-words-gap) * 2) / 3);
+    --fingerprint-word-padding: var(--space-2) var(--space-3);
+    --fingerprint-word-radius: var(--radius-sm);
+    --locations-chip-radius: var(--radius-chip);
+    --palette-align: center;
+    --palette-margin: var(--space-4);
+    --palette-width: calc(100% - var(--space-8) * 2);
+    --palette-max-width: calc(var(--space-8) * 19);
+    --palette-radius: var(--radius-lg);
+    --keycap-bottom-width: 2px;
+    --keycap-radius: var(--radius-sm);
+    --tour-spotlight-ring-width: 3px;
+    --tour-spotlight-glow: 20px;
+    --tour-spotlight-pulse-width: 2px;
+    /* End of app tokens, trust (both themes). */
+}
+
+/* Role tokens, light theme. */
+:root,
+.light {
+    --color-bg: var(--gray-50);
+    --color-panel: var(--gray-0);
+    --color-raised: var(--gray-100);
+    --color-border: var(--gray-200);
+    --color-border-control: var(--gray-500);
+    --color-text: var(--gray-900);
+    --color-text-muted: var(--gray-700);
+    --color-text-disabled: var(--gray-600);
+    --color-hover: var(--indigo-600-a08);
+    --color-selected: var(--gray-200);
+    --color-selected-edge: var(--color-border-control);
+    --color-disabled: var(--gray-100);
+    --color-input: var(--gray-50);
+    --color-danger-button-fill: transparent;
+    --color-danger-button-text: var(--color-danger);
+    --color-danger-button-border: var(--color-danger);
+    --color-icon-button-fill: transparent;
+    --color-icon-button-border: var(--color-border-control);
+    --shadow-button-main: 0 4px 14px rgb(79 70 229 / 0.35);
+    --focus-glow: none;
+    --color-tooltip-bg: var(--gray-900);
+    --color-tooltip-text: var(--gray-50);
+    --color-tooltip-border: transparent;
+    --shadow-tooltip: none;
+    --color-tab-selected-bg: transparent;
+    --color-tab-selected-text: var(--color-text);
+    --color-nav-current-bg: var(--indigo-600-a12);
+    --color-nav-current-text: var(--indigo-700);
+    --color-toolbar-bg: var(--color-panel);
+    --color-toolbar-border: transparent;
+    --shadow-toolbar: var(--shadow-raised);
+    --progress-fill: linear-gradient(90deg, var(--color-progress-start), var(--color-progress-middle) 60%, var(--color-progress-end));
+    --color-progress-track: var(--color-raised);
+    --color-progress-start: var(--brand-purple);
+    --color-progress-middle: var(--brand-rose-deep);
+    --color-progress-end: var(--brand-amber-deep);
+    --color-chip-bg: var(--indigo-600-a12);
+    --color-chip-border: var(--indigo-600-a30);
+    --color-chip-text: var(--indigo-700);
+    --color-toast-bg: var(--gray-0);
+    --color-toast-text: var(--gray-900);
+    --color-toast-border: var(--gray-200);
+    --color-toast-action: var(--indigo-700);
+    --color-list-row-bg: transparent;
+    --color-list-row-border: transparent;
+    --slider-fill: var(--color-accent);
+    --color-empty-icon: var(--gray-0);
+    --color-empty-icon-bg-start: var(--brand-purple);
+    --color-empty-icon-bg-middle: var(--brand-rose-deep);
+    --color-empty-icon-bg-end: var(--brand-amber-deep);
+    --empty-icon-bg: linear-gradient(135deg, var(--color-empty-icon-bg-start), var(--color-empty-icon-bg-middle) 60%, var(--color-empty-icon-bg-end));
+    --color-badge-bg: var(--color-accent);
+    --color-badge-text: var(--color-on-accent);
+    --color-toast-status-text: var(--color-toast-text);
+    --color-toast-info: var(--blue-700);
+    --color-toast-success: var(--green-700);
+    --color-toast-warning: var(--amber-700);
+    --color-toast-danger: var(--red-700);
+    --toast-close-fill: var(--color-toast-bg);
+    --toast-close-color: var(--color-toast-text);
+    --shadow-toast-close: var(--shadow-raised);
+    --color-selection-bar-bg: var(--color-panel);
+    --color-selection-bar-text: var(--color-text);
+    --shadow-selection-bar: var(--shadow-raised);
+    --color-viewer-bg: var(--gray-50);
+    --color-viewer-control-fill: var(--black-65);
+    --color-viewer-control-border: var(--white-30);
+    --color-viewer-control-text: var(--gray-0);
+    --color-viewer-danger: var(--red-200);
+    --viewer-bar-bg: transparent;
+    --dropzone-fill: var(--indigo-600-a08);
+    --dropzone-border: 2px dashed var(--indigo-600);
+    --color-search-bg: var(--color-input);
+    --color-search-border: var(--color-accent);
+    --color-settings-section-bg: var(--color-panel);
+    --color-settings-section-border: var(--color-border);
+    --color-album-card-bg: transparent;
+    --color-album-card-border: transparent;
+    --shadow-album-card: none;
+    --color-accent: var(--indigo-600);
+    --color-accent-hover: var(--indigo-700);
+    --color-on-accent: var(--gray-0);
+    --color-focus: var(--indigo-600);
+    --color-success: var(--green-700);
+    --color-warning: var(--amber-700);
+    --color-danger: var(--red-700);
+    --color-on-danger: var(--gray-0);
+    --color-info: var(--blue-700);
+    --color-brand-start: var(--brand-purple);
+    --color-brand-middle: var(--brand-rose);
+    --color-brand-end: var(--brand-amber);
+    --color-scrim: var(--black-25);
+    --color-scrollbar-thumb: var(--gray-450);
+    --color-scrollbar-thumb-hover: var(--gray-500);
+    --color-scrollbar-track: transparent;
+    --tile-tick-shadow: none;
+    --color-photo-selected-ring-edge: var(--gray-0);
+    --photo-selected-ring: inset 0 0 0 var(--photo-selected-ring-width) var(--color-accent), inset 0 0 0 calc(var(--photo-selected-ring-width) + var(--photo-selected-ring-edge-width)) var(--color-photo-selected-ring-edge);
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+    --shadow-overlay: 0 8px 24px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.08);
+
+    /* App tokens, frame: the app frame: navbar, sidebars, tab bar, toasts and page motion (light). */
+    --color-navbar-bg: var(--color-toolbar-bg);
+    --color-navbar-border: var(--color-toolbar-border);
+    --shadow-navbar: var(--shadow-toolbar);
+    --color-navbar-tab-text: var(--color-text-muted);
+    --color-navbar-tab-border: transparent;
+    --color-navbar-tabs-bg: transparent;
+    --color-navbar-current-bg: transparent;
+    --color-navbar-current-text: var(--color-accent);
+    --color-navbar-current-ring: transparent;
+    --color-navbar-current-line: var(--color-accent);
+    --color-navbar-chip-bg: var(--color-raised);
+    --color-navbar-chip-border: var(--color-border-control);
+    --color-navbar-chip-text: var(--color-text);
+    --color-navbar-update-bg: var(--green-700);
+    --color-navbar-update-text: var(--gray-0);
+    --color-tab-bar-current-icon: var(--color-accent);
+    --color-sidebar-current-bar: var(--color-accent);
+    --color-sidebar-heading-text: var(--color-text-muted);
+    --color-sidebar-heading-bg: transparent;
+    /* End of app tokens, frame (light). */
+
+    /* App tokens, gallery: the gallery and the photo viewer (light). */
+    --color-date-heading-bg: color-mix(in srgb, var(--color-bg) 88%, transparent);
+    --shadow-date-heading: none;
+    --color-scrubber-thumb-bg: var(--color-accent);
+    --color-scrubber-thumb-text: var(--color-on-accent);
+    --color-scrubber-thumb-border: var(--color-accent);
+    --shadow-scrubber-thumb: var(--shadow-overlay);
+    --color-tile-tick-ring: var(--indigo-600);
+    --color-tile-tick-fill: var(--black-25);
+    --color-video-badge-bg: var(--black-65);
+    --film-strip-current-border: 2px solid var(--color-accent);
+    --film-strip-current-ring: 0 0 0 2px var(--color-viewer-bg), 0 0 0 4px var(--color-accent);
+    --color-quick-info-bg: var(--color-viewer-control-fill);
+    --color-details-panel-bg: var(--color-panel);
+    --shadow-details-panel: var(--shadow-overlay);
+    --color-viewer-actions-bg: transparent;
+    --color-viewer-actions-border: transparent;
+    --viewer-actions-button-fill: var(--color-viewer-control-fill);
+    --color-tile-star-fill: var(--color-viewer-control-fill);
+    --color-tile-star-icon: var(--color-viewer-control-text);
+    --color-tile-starred: var(--color-brand-end);
+    --color-viewer-starred: var(--color-brand-end);
+    --color-viewer-flagged: var(--brand-rose-light);
+    --color-tile-flag-fill: var(--color-viewer-control-fill);
+    --color-tile-flag-icon: var(--color-viewer-control-text);
+    --color-tile-flagged: var(--color-viewer-flagged);
+    /* End of app tokens, gallery (light). */
+
+    /* App tokens, places: the map, albums, import, sync and welcome pages (light). */
+    --color-map-water: color-mix(in srgb, var(--color-accent) 9%, var(--color-bg));
+    --color-map-land: color-mix(in srgb, var(--color-text) 5%, var(--color-panel));
+    --color-map-coast: color-mix(in srgb, var(--color-accent) 68%, var(--color-border));
+    --color-map-grid: color-mix(in srgb, var(--color-accent) 16%, transparent);
+    --color-map-marker-border: var(--color-panel);
+    --color-map-controls-bg: var(--color-panel);
+    --color-album-cover-ring: transparent;
+    --color-sync-line: var(--gray-500);
+    --color-sync-destinations-bg: var(--color-border);
+    --color-sync-destinations-border: var(--color-border);
+    --color-sync-destination-bg: var(--color-panel);
+    --color-sync-destination-border: transparent;
+    --sync-destination-shadow: none;
+    --color-import-item-bg: transparent;
+    --welcome-logo-fill: linear-gradient(135deg, var(--color-empty-icon-bg-start), var(--color-empty-icon-bg-middle) 55%, var(--color-empty-icon-bg-end));
+    --welcome-bg: transparent;
+    --identity-header-bg: radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--brand-purple) 12%, transparent), transparent 40%), radial-gradient(circle at 85% 30%, color-mix(in srgb, var(--brand-rose) 10%, transparent), transparent 40%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--brand-amber) 8%, transparent), transparent 45%);
+    /* End of app tokens, places (light). */
+
+    /* App tokens, info: the databases, secrets, summary, news and about pages (light). */
+    --list-table-bg: var(--color-panel);
+    --list-table-border-color: var(--color-border);
+    --list-table-shadow: var(--shadow-raised);
+    --list-table-head-bg: var(--color-raised);
+    --list-table-head-line-color: var(--color-border);
+    --list-table-divider-color: var(--color-border);
+    --list-table-stripe-bg: transparent;
+    --stat-icon-bg: var(--empty-icon-bg);
+    --stat-icon-color: var(--color-empty-icon);
+    --stat-icon-border-color: transparent;
+    --year-bar-fill: var(--color-accent);
+    --year-bar-peak-fill: var(--color-accent);
+    --news-item-bg: transparent;
+    --news-item-border-color: transparent;
+    --news-item-shadow: none;
+    --news-divider-color: transparent;
+    --feature-card-bg: var(--color-raised);
+    --feature-card-border-color: transparent;
+    --mono-value-bg: var(--color-raised);
+    --mono-value-border-color: transparent;
+    /* End of app tokens, info (light). */
+
+    /* App tokens, dialogs: the app's dialogs (light). */
+    --dialog-icon-color: var(--color-accent);
+    --dialog-icon-bg: var(--color-chip-bg);
+    --dialog-phone-handle-color: var(--color-border-control);
+    --pairing-digit-color: var(--color-accent);
+    --pairing-digit-bg: var(--color-chip-bg);
+    --pairing-digit-border-color: var(--color-chip-border);
+    --dialog-step-dot-color: var(--color-border-control);
+    --dialog-step-dot-current-color: var(--color-accent);
+    /* End of app tokens, dialogs (light). */
+
+    /* App tokens, time: memories, years, videos, people, explore and labels (light). */
+    --color-memory-card-title: var(--color-viewer-control-text);
+    --color-story-progress-fill: var(--color-viewer-control-text);
+    --color-story-progress-track: var(--color-viewer-control-border);
+    --color-story-caption-bg: var(--color-viewer-control-fill);
+    --color-on-this-day-gap: var(--color-viewer-bg);
+    --color-year-heat-0: var(--color-progress-track);
+    --color-year-heat-1: color-mix(in srgb, var(--color-accent) 25%, var(--color-panel));
+    --color-year-heat-2: color-mix(in srgb, var(--color-accent) 50%, var(--color-panel));
+    --color-year-heat-3: color-mix(in srgb, var(--color-accent) 84%, var(--color-panel));
+    --color-year-heat-4: var(--color-accent);
+    --color-year-heat-strong-text: var(--color-on-accent);
+    --color-video-controls-bg: var(--color-viewer-control-fill);
+    --color-video-controls-border: var(--color-viewer-control-border);
+    --color-explore-card-bg: var(--color-raised);
+    --color-explore-card-border: var(--color-border);
+    --shadow-explore-card: var(--shadow-raised);
+    /* End of app tokens, time (light). */
+
+    /* App tokens, keeping: duplicates, bin, storage, history, activity, shared and published (light). */
+    --color-duplicate-best-bg: var(--color-accent);
+    --color-duplicate-best-text: var(--color-on-accent);
+    --color-compare-handle-bg: var(--color-accent);
+    --color-compare-handle-icon: var(--color-on-accent);
+    --color-compare-handle-border: var(--gray-0);
+    --color-compare-line: var(--color-accent);
+    --color-activity-item-bg: var(--color-panel);
+    --color-like: var(--color-accent);
+    --color-duplicate-copy-edge: var(--color-border);
+    --color-bin-badge-bg: var(--color-video-badge-bg);
+    --color-storage-ring-track: var(--color-progress-track);
+    --color-sparkline: var(--color-accent);
+    --color-history-lane-1: var(--color-accent);
+    --color-history-lane-2: var(--green-700);
+    --color-history-lane-3: var(--amber-700);
+    --color-history-lane-4: var(--rose-600);
+    /* End of app tokens, keeping (light). */
+
+    /* App tokens, making: the editor, collage, photo book, export and the table view (light). */
+    --color-editor-panel-border: var(--color-border);
+    --shadow-editor-panel: var(--shadow-overlay);
+    --color-editor-slider-tick: var(--color-border-control);
+    --color-editor-histogram-luma: var(--color-text);
+    --color-crop-handle: var(--color-viewer-control-text);
+    --collage-selected-ring: 0 0 0 3px var(--color-accent);
+    --shadow-book-page: var(--shadow-overlay);
+    --book-spine-shade: linear-gradient(to right, transparent, var(--black-40) 50%, transparent);
+    --color-radio-card-bg: var(--color-panel);
+    --color-radio-card-picked-bg: color-mix(in srgb, var(--color-accent) 7%, var(--color-panel));
+    --color-radio-card-border: var(--color-border);
+    --query-chip-tint: 12%;
+    --query-chip-border-tint: 30%;
+    --color-query-chip-hue: var(--indigo-600);
+    --color-query-chip-text: var(--color-chip-text);
+    /* End of app tokens, making (light). */
+
+    /* App tokens, trust: identity, key backup, contacts, library health, storage locations, help, the command palette and the tour (light). */
+    --color-avatar-accent-bg: var(--color-accent);
+    --color-avatar-accent-text: var(--color-on-danger);
+    --color-avatar-success-bg: var(--color-success);
+    --color-avatar-success-text: var(--color-on-danger);
+    --color-avatar-info-bg: var(--color-info);
+    --color-avatar-info-text: var(--color-on-danger);
+    --color-avatar-warning-bg: var(--color-warning);
+    --color-avatar-warning-text: var(--color-on-danger);
+    --color-avatar-danger-bg: var(--color-danger);
+    --color-avatar-danger-text: var(--color-on-danger);
+    --color-avatar-verified-bg: var(--color-success);
+    --color-fingerprint-word-bg: var(--color-raised);
+    --color-fingerprint-word-border: transparent;
+    --color-fingerprint-word-text: var(--color-text);
+    --color-health-light-housing: var(--color-border);
+    --color-locations-rail-bg: var(--color-panel);
+    --color-locations-chip-border: var(--color-border-control);
+    --color-locations-chip-current-bg: var(--color-accent);
+    --color-locations-chip-current-border: var(--color-accent);
+    --color-locations-chip-current-text: var(--color-on-accent);
+    --color-help-panel-border: var(--color-border);
+    --color-palette-border: var(--color-border);
+    --color-keycap-bg: var(--color-raised);
+    --color-keycap-border: var(--color-border-control);
+    --color-keycap-text: var(--color-text);
+    --color-tour-ring: var(--color-accent);
+    --color-tour-glow: var(--indigo-600-a50);
+    --color-avatar-edge: var(--color-panel);
+    --color-backup-chip-bg: var(--color-raised);
+    --color-backup-chip-border: var(--color-border);
+    --color-backup-current-text: var(--color-success);
+    --color-backup-stale-text: var(--color-warning);
+    --color-backup-missing-text: var(--color-text-muted);
+    --color-strength-weak: var(--color-danger);
+    --color-strength-fair: var(--color-warning);
+    --color-strength-strong: var(--color-success);
+    --color-strength-track: var(--color-progress-track);
+    /* End of app tokens, trust (light). */
+}
+
+/* Role tokens, dark theme. */
+.dark {
+    --color-bg: var(--gray-950);
+    --color-panel: var(--gray-900);
+    --color-raised: var(--gray-800);
+    --color-border: var(--gray-700);
+    --color-border-control: var(--gray-450);
+    --color-text: var(--gray-50);
+    --color-text-muted: var(--gray-350);
+    --color-text-disabled: var(--gray-400);
+    --color-hover: var(--indigo-400-a14);
+    --color-selected: var(--gray-700);
+    --color-selected-edge: var(--color-border-control);
+    --color-disabled: var(--gray-800);
+    --color-input: var(--gray-950);
+    --color-danger-button-fill: transparent;
+    --color-danger-button-text: var(--color-danger);
+    --color-danger-button-border: var(--color-danger);
+    --color-icon-button-fill: transparent;
+    --color-icon-button-border: var(--color-border-control);
+    --shadow-button-main: 0 4px 14px rgb(129 140 248 / 0.35);
+    --focus-glow: none;
+    --color-tooltip-bg: var(--gray-50);
+    --color-tooltip-text: var(--gray-900);
+    --color-tooltip-border: transparent;
+    --shadow-tooltip: none;
+    --color-tab-selected-bg: transparent;
+    --color-tab-selected-text: var(--color-text);
+    --color-nav-current-bg: var(--indigo-400-a20);
+    --color-nav-current-text: var(--indigo-300);
+    --color-toolbar-bg: var(--color-panel);
+    --color-toolbar-border: transparent;
+    --shadow-toolbar: var(--shadow-raised);
+    --progress-fill: linear-gradient(90deg, var(--color-progress-start), var(--color-progress-middle) 60%, var(--color-progress-end));
+    --color-progress-track: var(--color-raised);
+    --color-progress-start: var(--brand-purple-bright);
+    --color-progress-middle: var(--brand-rose);
+    --color-progress-end: var(--brand-amber);
+    --color-chip-bg: var(--indigo-400-a20);
+    --color-chip-border: var(--indigo-400-a40);
+    --color-chip-text: var(--indigo-300);
+    --color-toast-bg: var(--gray-900);
+    --color-toast-text: var(--gray-50);
+    --color-toast-border: var(--gray-700);
+    --color-toast-action: var(--indigo-300);
+    --color-list-row-bg: transparent;
+    --color-list-row-border: transparent;
+    --slider-fill: var(--color-accent);
+    --color-empty-icon: var(--gray-0);
+    --color-empty-icon-bg-start: var(--brand-purple);
+    --color-empty-icon-bg-middle: var(--brand-rose-deep);
+    --color-empty-icon-bg-end: var(--brand-amber-deep);
+    --empty-icon-bg: linear-gradient(135deg, var(--color-empty-icon-bg-start), var(--color-empty-icon-bg-middle) 60%, var(--color-empty-icon-bg-end));
+    --color-badge-bg: var(--indigo-450);
+    --color-badge-text: var(--color-on-accent);
+    --color-toast-status-text: var(--color-toast-text);
+    --color-toast-info: var(--blue-200);
+    --color-toast-success: var(--green-200);
+    --color-toast-warning: var(--amber-200);
+    --color-toast-danger: var(--red-200);
+    --toast-close-fill: var(--color-toast-bg);
+    --toast-close-color: var(--color-toast-text);
+    --shadow-toast-close: var(--shadow-raised);
+    --color-selection-bar-bg: var(--color-panel);
+    --color-selection-bar-text: var(--color-text);
+    --shadow-selection-bar: var(--shadow-raised);
+    --color-viewer-bg: var(--gray-950);
+    --color-viewer-control-fill: var(--black-65);
+    --color-viewer-control-border: var(--white-30);
+    --color-viewer-control-text: var(--gray-0);
+    --color-viewer-danger: var(--red-200);
+    --viewer-bar-bg: transparent;
+    --dropzone-fill: var(--indigo-400-a14);
+    --dropzone-border: 2px dashed var(--indigo-400);
+    --color-search-bg: var(--color-input);
+    --color-search-border: var(--color-accent);
+    --color-settings-section-bg: var(--color-panel);
+    --color-settings-section-border: var(--color-border);
+    --color-album-card-bg: transparent;
+    --color-album-card-border: transparent;
+    --shadow-album-card: none;
+    --color-accent: var(--indigo-400);
+    --color-accent-hover: var(--indigo-300);
+    --color-on-accent: var(--indigo-950);
+    --color-focus: var(--indigo-400);
+    --color-success: var(--green-200);
+    --color-warning: var(--amber-200);
+    --color-danger: var(--red-200);
+    --color-on-danger: var(--gray-950);
+    --color-info: var(--blue-200);
+    --color-brand-start: var(--brand-purple);
+    --color-brand-middle: var(--brand-rose);
+    --color-brand-end: var(--brand-amber);
+    --color-scrim: var(--black-45);
+    --color-scrollbar-thumb: var(--gray-500);
+    --color-scrollbar-thumb-hover: var(--gray-450);
+    --color-scrollbar-track: transparent;
+    --tile-tick-shadow: none;
+    --color-photo-selected-ring-edge: var(--gray-950);
+    --photo-selected-ring: inset 0 0 0 var(--photo-selected-ring-width) var(--color-accent), inset 0 0 0 calc(var(--photo-selected-ring-width) + var(--photo-selected-ring-edge-width)) var(--color-photo-selected-ring-edge);
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5), 0 1px 1px rgb(0 0 0 / 0.3);
+    --shadow-overlay: 0 8px 24px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.4);
+
+    /* App tokens, frame: the app frame: navbar, sidebars, tab bar, toasts and page motion (dark). */
+    --color-navbar-bg: var(--color-toolbar-bg);
+    --color-navbar-border: var(--color-toolbar-border);
+    --shadow-navbar: var(--shadow-toolbar);
+    --color-navbar-tab-text: var(--color-text-muted);
+    --color-navbar-tab-border: transparent;
+    --color-navbar-tabs-bg: transparent;
+    --color-navbar-current-bg: transparent;
+    --color-navbar-current-text: var(--color-accent);
+    --color-navbar-current-ring: transparent;
+    --color-navbar-current-line: var(--color-accent);
+    --color-navbar-chip-bg: var(--color-raised);
+    --color-navbar-chip-border: var(--color-border-control);
+    --color-navbar-chip-text: var(--color-text);
+    --color-navbar-update-bg: var(--green-200);
+    --color-navbar-update-text: var(--gray-950);
+    --color-tab-bar-current-icon: var(--color-accent);
+    --color-sidebar-current-bar: var(--color-accent);
+    --color-sidebar-heading-text: var(--color-text-muted);
+    --color-sidebar-heading-bg: transparent;
+    /* End of app tokens, frame (dark). */
+
+    /* App tokens, gallery: the gallery and the photo viewer (dark). */
+    --color-date-heading-bg: color-mix(in srgb, var(--color-bg) 88%, transparent);
+    --shadow-date-heading: none;
+    --color-scrubber-thumb-bg: var(--color-accent);
+    --color-scrubber-thumb-text: var(--color-on-accent);
+    --color-scrubber-thumb-border: var(--color-accent);
+    --shadow-scrubber-thumb: var(--shadow-overlay);
+    --color-tile-tick-ring: var(--indigo-600);
+    --color-tile-tick-fill: var(--black-25);
+    --color-video-badge-bg: var(--black-65);
+    --film-strip-current-border: 2px solid var(--color-accent);
+    --film-strip-current-ring: 0 0 0 2px var(--color-viewer-bg), 0 0 0 4px var(--color-accent);
+    --color-quick-info-bg: var(--color-viewer-control-fill);
+    --color-details-panel-bg: var(--color-panel);
+    --shadow-details-panel: var(--shadow-overlay);
+    --color-viewer-actions-bg: transparent;
+    --color-viewer-actions-border: transparent;
+    --viewer-actions-button-fill: var(--color-viewer-control-fill);
+    --color-tile-star-fill: var(--color-viewer-control-fill);
+    --color-tile-star-icon: var(--color-viewer-control-text);
+    --color-tile-starred: var(--color-brand-end);
+    --color-viewer-starred: var(--color-brand-end);
+    --color-viewer-flagged: var(--brand-rose-light);
+    --color-tile-flag-fill: var(--color-viewer-control-fill);
+    --color-tile-flag-icon: var(--color-viewer-control-text);
+    --color-tile-flagged: var(--color-viewer-flagged);
+    /* End of app tokens, gallery (dark). */
+
+    /* App tokens, places: the map, albums, import, sync and welcome pages (dark). */
+    --color-map-water: color-mix(in srgb, var(--color-accent) 9%, var(--color-bg));
+    --color-map-land: color-mix(in srgb, var(--color-text) 5%, var(--color-panel));
+    --color-map-coast: color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
+    --color-map-grid: color-mix(in srgb, var(--color-accent) 16%, transparent);
+    --color-map-marker-border: var(--color-panel);
+    --color-map-controls-bg: var(--color-panel);
+    --color-album-cover-ring: transparent;
+    --color-sync-line: var(--gray-450);
+    --color-sync-destinations-bg: var(--color-border);
+    --color-sync-destinations-border: var(--color-border);
+    --color-sync-destination-bg: var(--color-panel);
+    --color-sync-destination-border: transparent;
+    --sync-destination-shadow: none;
+    --color-import-item-bg: transparent;
+    --welcome-logo-fill: linear-gradient(135deg, var(--color-empty-icon-bg-start), var(--color-empty-icon-bg-middle) 55%, var(--color-empty-icon-bg-end));
+    --welcome-bg: transparent;
+    --identity-header-bg: radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--brand-purple) 12%, transparent), transparent 40%), radial-gradient(circle at 85% 30%, color-mix(in srgb, var(--brand-rose) 10%, transparent), transparent 40%), radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--brand-amber) 8%, transparent), transparent 45%);
+    /* End of app tokens, places (dark). */
+
+    /* App tokens, info: the databases, secrets, summary, news and about pages (dark). */
+    --list-table-bg: var(--color-panel);
+    --list-table-border-color: var(--color-border);
+    --list-table-shadow: var(--shadow-raised);
+    --list-table-head-bg: var(--color-raised);
+    --list-table-head-line-color: var(--color-border);
+    --list-table-divider-color: var(--color-border);
+    --list-table-stripe-bg: transparent;
+    --stat-icon-bg: var(--empty-icon-bg);
+    --stat-icon-color: var(--color-empty-icon);
+    --stat-icon-border-color: transparent;
+    --year-bar-fill: var(--color-accent);
+    --year-bar-peak-fill: var(--color-accent);
+    --news-item-bg: transparent;
+    --news-item-border-color: transparent;
+    --news-item-shadow: none;
+    --news-divider-color: transparent;
+    --feature-card-bg: var(--color-raised);
+    --feature-card-border-color: transparent;
+    --mono-value-bg: var(--color-raised);
+    --mono-value-border-color: transparent;
+    /* End of app tokens, info (dark). */
+
+    /* App tokens, dialogs: the app's dialogs (dark). */
+    --dialog-icon-color: var(--color-accent);
+    --dialog-icon-bg: var(--color-chip-bg);
+    --dialog-phone-handle-color: var(--color-border-control);
+    --pairing-digit-color: var(--color-accent);
+    --pairing-digit-bg: var(--color-chip-bg);
+    --pairing-digit-border-color: var(--color-chip-border);
+    --dialog-step-dot-color: var(--color-border-control);
+    --dialog-step-dot-current-color: var(--color-accent);
+    /* End of app tokens, dialogs (dark). */
+
+    /* App tokens, time: memories, years, videos, people, explore and labels (dark). */
+    --color-memory-card-title: var(--color-viewer-control-text);
+    --color-story-progress-fill: var(--color-viewer-control-text);
+    --color-story-progress-track: var(--color-viewer-control-border);
+    --color-story-caption-bg: var(--color-viewer-control-fill);
+    --color-on-this-day-gap: var(--color-viewer-bg);
+    --color-year-heat-0: var(--color-progress-track);
+    --color-year-heat-1: color-mix(in srgb, var(--color-accent) 25%, var(--color-panel));
+    --color-year-heat-2: color-mix(in srgb, var(--color-accent) 50%, var(--color-panel));
+    --color-year-heat-3: color-mix(in srgb, var(--color-accent) 82%, var(--color-panel));
+    --color-year-heat-4: var(--color-accent);
+    --color-year-heat-strong-text: var(--color-on-accent);
+    --color-video-controls-bg: var(--color-viewer-control-fill);
+    --color-video-controls-border: var(--color-viewer-control-border);
+    --color-explore-card-bg: var(--color-raised);
+    --color-explore-card-border: var(--color-border);
+    --shadow-explore-card: var(--shadow-raised);
+    /* End of app tokens, time (dark). */
+
+    /* App tokens, keeping: duplicates, bin, storage, history, activity, shared and published (dark). */
+    --color-duplicate-best-bg: var(--indigo-450);
+    --color-duplicate-best-text: var(--color-on-accent);
+    --color-compare-handle-bg: var(--indigo-450);
+    --color-compare-handle-icon: var(--color-on-accent);
+    --color-compare-handle-border: var(--gray-0);
+    --color-compare-line: var(--color-accent);
+    --color-activity-item-bg: var(--color-panel);
+    --color-like: var(--color-accent);
+    --color-duplicate-copy-edge: var(--color-border);
+    --color-bin-badge-bg: var(--color-video-badge-bg);
+    --color-storage-ring-track: var(--color-progress-track);
+    --color-sparkline: var(--color-accent);
+    --color-history-lane-1: var(--color-accent);
+    --color-history-lane-2: var(--green-200);
+    --color-history-lane-3: var(--amber-200);
+    --color-history-lane-4: var(--rose-400);
+    /* End of app tokens, keeping (dark). */
+
+    /* App tokens, making: the editor, collage, photo book, export and the table view (dark). */
+    --color-editor-panel-border: var(--color-border);
+    --shadow-editor-panel: var(--shadow-overlay);
+    --color-editor-slider-tick: var(--color-border-control);
+    --color-editor-histogram-luma: var(--color-text);
+    --color-crop-handle: var(--color-viewer-control-text);
+    --collage-selected-ring: 0 0 0 3px var(--color-accent);
+    --shadow-book-page: var(--shadow-overlay);
+    --book-spine-shade: linear-gradient(to right, transparent, var(--black-40) 50%, transparent);
+    --color-radio-card-bg: var(--color-panel);
+    --color-radio-card-picked-bg: color-mix(in srgb, var(--color-accent) 7%, var(--color-panel));
+    --color-radio-card-border: var(--color-border);
+    --query-chip-tint: 20%;
+    --query-chip-border-tint: 40%;
+    --color-query-chip-hue: var(--indigo-400);
+    --color-query-chip-text: var(--color-chip-text);
+    /* End of app tokens, making (dark). */
+
+    /* App tokens, trust: identity, key backup, contacts, library health, storage locations, help, the command palette and the tour (dark). */
+    --color-avatar-accent-bg: var(--color-accent);
+    --color-avatar-accent-text: var(--color-on-danger);
+    --color-avatar-success-bg: var(--color-success);
+    --color-avatar-success-text: var(--color-on-danger);
+    --color-avatar-info-bg: var(--color-info);
+    --color-avatar-info-text: var(--color-on-danger);
+    --color-avatar-warning-bg: var(--color-warning);
+    --color-avatar-warning-text: var(--color-on-danger);
+    --color-avatar-danger-bg: var(--color-danger);
+    --color-avatar-danger-text: var(--color-on-danger);
+    --color-avatar-verified-bg: var(--color-success);
+    --color-fingerprint-word-bg: var(--color-raised);
+    --color-fingerprint-word-border: transparent;
+    --color-fingerprint-word-text: var(--color-text);
+    --color-health-light-housing: var(--color-border);
+    --color-locations-rail-bg: var(--color-panel);
+    --color-locations-chip-border: var(--color-border-control);
+    --color-locations-chip-current-bg: var(--color-accent);
+    --color-locations-chip-current-border: var(--color-accent);
+    --color-locations-chip-current-text: var(--color-on-accent);
+    --color-help-panel-border: var(--color-border);
+    --color-palette-border: var(--color-border);
+    --color-keycap-bg: var(--color-raised);
+    --color-keycap-border: var(--color-border-control);
+    --color-keycap-text: var(--color-text);
+    --color-tour-ring: var(--color-accent);
+    --color-tour-glow: var(--indigo-400-a50);
+    --color-avatar-edge: var(--color-panel);
+    --color-backup-chip-bg: var(--color-raised);
+    --color-backup-chip-border: var(--color-border);
+    --color-backup-current-text: var(--color-success);
+    --color-backup-stale-text: var(--color-warning);
+    --color-backup-missing-text: var(--color-text-muted);
+    --color-strength-weak: var(--color-danger);
+    --color-strength-fair: var(--color-warning);
+    --color-strength-strong: var(--color-success);
+    --color-strength-track: var(--color-progress-track);
+    /* End of app tokens, trust (dark). */
+}

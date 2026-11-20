@@ -2,11 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { log } from "utils";
 import { TaskQueue, TaskStatus } from "task-queue";
 import Box from "@mui/material/Box";
-import Card from "@mui/material/Card";
 import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
-import { Storage, Photo, Folder, Save, CloudSync } from "@mui/icons-material";
+import { Storage, Photo, Folder, Save, CloudSync, LocationOn, Shield } from "@mui/icons-material";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useUuidGenerator } from "../context/uuid-generator-context";
 import { formatBytes, getStorageType } from "../lib/database-summary-format";
@@ -97,32 +96,76 @@ interface IStatTileProps {
 //
 // A single headline statistic, shown as a tile with the number given real size. On a mobile this is
 // what the page is for: the numbers should be readable at arm's length, not buried in a label/value
-// table built for a wide screen.
+// table built for a wide screen. The icon sits on the summary's stat icon square, the one place the
+// brand gradient greets the user on this page.
 //
 function StatTile({ label, value, icon }: IStatTileProps) {
     return (
-        <Card
-            elevation={0}
+        <Box
             sx={{
                 display: 'flex',
-                flexDirection: 'column',
-                borderRadius: '12px',
-                p: 2,
-                gap: 0.5,
+                alignItems: 'center',
+                gap: 'var(--space-4)',
+                padding: 'var(--space-4)',
                 minWidth: 0,
-                bgcolor: 'action.hover',
+                background: 'var(--color-panel)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-raised)',
             }}
             >
-            <Box sx={{ color: 'text.secondary', display: 'flex' }}>
+            <Box
+                aria-hidden={true}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flex: 'none',
+                    width: 'calc(var(--space-8) + var(--space-4))',
+                    height: 'calc(var(--space-8) + var(--space-4))',
+                    background: 'var(--stat-icon-bg)',
+                    color: 'var(--stat-icon-color)',
+                    boxShadow: 'inset 0 0 0 1px var(--stat-icon-border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 'var(--text-xl)',
+                    '& .MuiSvgIcon-root': {
+                        fontSize: 'inherit',
+                    },
+                }}
+                >
                 {icon}
             </Box>
-            <Typography variant="h2" sx={{ fontSize: '1.6rem', lineHeight: 1.1, fontWeight: 700 }}>
-                {value}
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {label}
-            </Typography>
-        </Card>
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minWidth: 0,
+                }}
+                >
+                <Typography
+                    variant="body2"
+                    sx={{
+                        color: 'var(--color-text-muted)',
+                        fontSize: 'var(--text-sm)',
+                    }}
+                    >
+                    {label}
+                </Typography>
+                <Typography
+                    variant="h2"
+                    sx={{
+                        fontFamily: 'var(--font-sans)',
+                        fontSize: 'var(--text-2xl)',
+                        fontWeight: 'var(--weight-bold)',
+                        lineHeight: 'var(--leading-tight)',
+                        fontVariantNumeric: 'tabular-nums',
+                        overflowWrap: 'anywhere',
+                    }}
+                    >
+                    {value}
+                </Typography>
+            </Box>
+        </Box>
     );
 }
 
@@ -147,11 +190,35 @@ interface ISummaryRowProps {
 //
 function SummaryRow({ dataId, label, value }: ISummaryRowProps) {
     return (
-        <Box data-id={dataId} sx={{ py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        <Box
+            data-id={dataId}
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-1)',
+            }}
+            >
+            <Typography
+                variant="caption"
+                sx={{
+                    color: 'var(--color-text-muted)',
+                    fontSize: 'var(--text-sm)',
+                }}
+                >
                 {label}
             </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', mt: 0.25 }}>
+            <Typography
+                variant="body2"
+                sx={{
+                    padding: 'var(--mono-value-padding)',
+                    background: 'var(--mono-value-bg)',
+                    boxShadow: 'inset 0 0 0 1px var(--mono-value-border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--text-sm)',
+                    overflowWrap: 'anywhere',
+                }}
+                >
                 {value}
             </Typography>
         </Box>
@@ -165,19 +232,54 @@ interface ISummarySectionProps {
     // The group's heading.
     title: string;
 
+    // Icon shown in the accent colour beside the heading.
+    icon: React.ReactNode;
+
     // The rows in the group.
     children: React.ReactNode | React.ReactNode[];
 }
 
 //
-// A titled group of detail rows, presented as a card.
+// A titled group of detail rows, presented as a card with its icon in the accent colour beside its
+// title.
 //
-function SummarySection({ title, children }: ISummarySectionProps) {
+function SummarySection({ title, icon, children }: ISummarySectionProps) {
     return (
-        <Card variant="outlined" sx={{ borderRadius: '12px', p: 2, mt: 2 }}>
-            <Typography variant="subtitle1" sx={{ mb: 0.5 }}>{title}</Typography>
+        <Box
+            component="section"
+            aria-label={title}
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-3)',
+                minWidth: 0,
+                padding: 'var(--space-4)',
+                background: 'var(--color-panel)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-raised)',
+            }}
+            >
+            <Typography
+                variant="subtitle1"
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                    fontSize: 'var(--text-lg)',
+                    fontWeight: 'var(--weight-bold)',
+                    lineHeight: 'var(--leading-tight)',
+                    '& .MuiSvgIcon-root': {
+                        color: 'var(--color-accent)',
+                        fontSize: 'var(--icon-lg)',
+                    },
+                }}
+                >
+                {icon}
+                {title}
+            </Typography>
             {children}
-        </Card>
+        </Box>
     );
 }
 
@@ -269,9 +371,15 @@ export function DatabaseSummaryView() {
     }, [databasePath, uuidGenerator]);
 
     return (
-        <>
+        <Box
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-4)',
+            }}
+            >
             {!databasePath
-                && <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                && <Typography variant="body1" sx={{ color: 'var(--color-text-muted)' }}>
                     No database is currently open.
                 </Typography>
             }
@@ -279,16 +387,23 @@ export function DatabaseSummaryView() {
             {databasePath
                 && <>
                     {isLoading
-                        && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 3 }}>
-                            <CircularProgress size={24} />
-                            <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                        && <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 'var(--space-3)',
+                                padding: 'var(--space-6) 0',
+                            }}
+                            >
+                            <CircularProgress size="var(--icon-lg)" />
+                            <Typography variant="body1" sx={{ color: 'var(--color-text-muted)' }}>
                                 Loading summary...
                             </Typography>
                         </Box>
                     }
 
                     {error
-                        && <Alert severity="error" icon={false} sx={{ borderRadius: '12px', p: 2 }}>
+                        && <Alert severity="error" icon={false}>
                             <Typography variant="body1">{error}</Typography>
                         </Alert>
                     }
@@ -297,11 +412,21 @@ export function DatabaseSummaryView() {
                         Two fixed columns rather than a wrapping flex row. Wrapping stretched
                         whatever landed on the last row to the full width, so the fourth tile read
                         as a banner across the modal instead of one of four. Two columns put the
-                        four stats in a square at every width this is rendered at, and no tile is
-                        ever left alone on a row of its own.
+                        four stats in a square, and no tile is ever left alone on a row of its own.
+                        Below the small breakpoint the tiles stack in one column, as the style
+                        guide's summary does, so each number keeps its full size.
                     */}
                     {summary
-                        && <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1.5 }}>
+                        && <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: {
+                                    xs: 'minmax(0, 1fr)',
+                                    sm: 'repeat(2, minmax(0, 1fr))',
+                                },
+                                gap: 'var(--space-3)',
+                            }}
+                            >
                             <StatTile
                                 label="Photos and videos"
                                 value={summary.totalImports.toLocaleString()}
@@ -325,36 +450,50 @@ export function DatabaseSummaryView() {
                         </Box>
                     }
 
-                    <SummarySection title="Location">
-                        <SummaryRow dataId="database-path" label="Path" value={databasePath} />
-                        <SummaryRow dataId="database-storage-type" label="Storage type" value={getStorageType(databasePath)} />
-                        {summary
-                            && <SummaryRow dataId="database-mode" label="Mode" value={summary.mode} />
-                        }
-                    </SummarySection>
+                    {/*
+                        Location and Integrity sit side by side where both fit, as on the style
+                        guide's summary, and stack where they do not.
+                    */}
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(calc(var(--space-8) * 9), 1fr))',
+                            gap: 'var(--space-4)',
+                        }}
+                        >
+                        <SummarySection title="Location" icon={<LocationOn />}>
+                            <SummaryRow dataId="database-path" label="Path" value={databasePath} />
+                            <SummaryRow dataId="database-storage-type" label="Storage type" value={getStorageType(databasePath)} />
+                            {summary
+                                && <SummaryRow dataId="database-mode" label="Mode" value={summary.mode} />
+                            }
+                        </SummarySection>
 
-                    <SummarySection title="Remote copy">
-                        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                        {summary
+                            && <SummarySection title="Integrity" icon={<Shield />}>
+                                <SummaryRow dataId="database-full-hash" label="Full hash" value={summary.fullHash} />
+                            </SummarySection>
+                        }
+                    </Box>
+
+                    <SummarySection title="Remote copy" icon={<CloudSync />}>
+                        <Typography variant="body2" sx={{ color: 'var(--color-text-muted)' }}>
                             Keeps a copy of this database on a remote. If the remote already holds a
                             different database, the two are joined and nothing it already has is
                             uploaded again.
                         </Typography>
                         <Button
-                            size="small"
                             variant="outlined"
                             startIcon={<CloudSync />}
+                            sx={{
+                                alignSelf: 'flex-start',
+                            }}
                             data-id="summary-consolidate-database-button"
                             onClick={() => { log.info('Consolidate into remote dialog opened'); setConsolidateOpen(true); }}
                             >
                             Consolidate into remote
                         </Button>
                     </SummarySection>
-
-                    {summary
-                        && <SummarySection title="Integrity">
-                            <SummaryRow dataId="database-full-hash" label="Full hash" value={summary.fullHash} />
-                        </SummarySection>
-                    }
                 </>
             }
 
@@ -365,6 +504,6 @@ export function DatabaseSummaryView() {
                     onClose={() => setConsolidateOpen(false)}
                 />
             }
-        </>
+        </Box>
     );
 }

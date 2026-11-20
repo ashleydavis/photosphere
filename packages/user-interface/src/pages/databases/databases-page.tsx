@@ -28,6 +28,7 @@ import { ConsolidateDatabaseDialog } from '../../components/consolidate-database
 import { useConfigStore } from '../../context/config-store-context';
 import { getDefaultDatabasePath, setDefaultDatabasePath } from '../../lib/auto-import-config';
 import Chip from '@mui/material/Chip';
+import { LIST_TABLE_SX } from '../../lib/list-table-styles';
 
 //
 // Full CRUD management page for configured database entries.
@@ -206,7 +207,13 @@ export function DatabasesPage() {
     }
 
     return (
-        <Box sx={{ p: isMobile ? 2 : 3 }}>
+        <Box
+            sx={{
+                maxWidth: 'calc(var(--space-8) * 30)',
+                mx: 'auto',
+                padding: isMobile ? 'var(--space-4) var(--space-4) var(--space-8)' : 'var(--space-6) var(--space-6) var(--space-8)',
+            }}
+            >
             <MobilePageHeader
                 title="Manage Databases"
                 subtitle={databases.length === 1 ? '1 database' : `${databases.length} databases`}
@@ -236,16 +243,50 @@ export function DatabasesPage() {
             {databases.length === 0
                 && <Box
                     sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 'var(--space-2)',
                         textAlign: 'center',
-                        py: 6,
-                        px: 2,
-                        borderRadius: 3,
-                        backgroundColor: 'action.hover',
+                        padding: 'var(--space-8) var(--space-4)',
+                        background: 'var(--color-panel)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-md)',
+                        boxShadow: 'var(--shadow-raised)',
                     }}
                     >
-                    <Storage sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-                    <Typography variant="subtitle1" sx={{ mb: 0.5 }}>No databases yet</Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    <Box
+                        aria-hidden={true}
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 'calc(var(--space-8) * 2)',
+                            height: 'calc(var(--space-8) * 2)',
+                            borderRadius: 'var(--radius-full)',
+                            background: 'var(--empty-icon-bg)',
+                            color: 'var(--color-empty-icon)',
+                            fontSize: 'var(--space-8)',
+                        }}
+                        >
+                        <Storage fontSize="inherit" />
+                    </Box>
+                    <Typography
+                        variant="subtitle1"
+                        sx={{
+                            fontSize: 'var(--text-lg)',
+                            fontWeight: 'var(--weight-bold)',
+                        }}
+                        >
+                        No databases yet
+                    </Typography>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: 'var(--color-text-muted)',
+                            fontSize: 'var(--text-sm)',
+                        }}
+                        >
                         Create a new database, add an existing one, or receive one from another device.
                     </Typography>
                 </Box>
@@ -266,123 +307,189 @@ export function DatabasesPage() {
                             icon={<Storage />}
                             onClick={() => handleOpen(entry).catch(err => log.exception('Open database error:', err as Error))}
                             actions={databaseActions(entry)}
+                            monoTitle={false}
+                            subtitleChip={false}
                             />
                     ))}
                 </Box>
             }
 
             {databases.length > 0 && !isMobile
-                && <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Name</TableCell>
-                            <TableCell>Description</TableCell>
-                            <TableCell>Path</TableCell>
-                            <TableCell>Origin</TableCell>
-                            <TableCell
-                                style={{
-                                    width: '170px',
-                                    whiteSpace: 'nowrap',
-                                }}
-                                >
-                                Actions
-                            </TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {databases.map((entry, entryIndex) => (
-                            <TableRow key={entry.name}>
-                                <TableCell data-id={`database-row-name-${entry.name}`}>
-                                    {entry.name}
-                                    {entry.path === defaultDatabasePath
-                                        && <Chip
-                                            size="small"
-                                            color="primary"
-                                            sx={{ ml: 1 }}
-                                            data-id={`database-default-badge-${entryIndex}`}
-                                            label="Default"
-                                            />
-                                    }
-                                </TableCell>
-                                <TableCell>{entry.description}</TableCell>
-                                <TableCell>{entry.path}</TableCell>
-                                <TableCell>{entry.origin ?? ''}</TableCell>
+                && <Box
+                    sx={{
+                        background: 'var(--list-table-bg)',
+                        border: '1px solid var(--list-table-border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        boxShadow: 'var(--list-table-shadow)',
+                        overflow: 'hidden',
+                    }}
+                    >
+                    <Table sx={LIST_TABLE_SX}>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Name</TableCell>
+                                <TableCell>Description</TableCell>
+                                <TableCell>Path</TableCell>
+                                <TableCell>Origin</TableCell>
                                 <TableCell
-                                    style={{
+                                    sx={{
                                         whiteSpace: 'nowrap',
                                     }}
                                     >
-                                    <IconButton
-                                        data-id="view-database-button"
-                                        size="small"
-                                        title="View database"
-                                        onClick={() => { log.info('View database dialog opened'); setViewingEntry(entry); }}
-                                    >
-                                        <Visibility fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        data-id="open-database-button"
-                                        size="small"
-                                        title="Open database"
-                                        onClick={() => handleOpen(entry).catch(err => log.exception('Open database error:', err as Error))}
-                                    >
-                                        <FolderOpen fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        data-id="share-database-button"
-                                        size="small"
-                                        title="Share database"
-                                        onClick={() => setSharingEntry(entry)}
-                                    >
-                                        <IosShare fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        data-id="replicate-database-button"
-                                        size="small"
-                                        title="Replicate database"
-                                        onClick={() => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); }}
-                                    >
-                                        <FileCopy fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        data-id="set-default-database-button"
-                                        size="small"
-                                        title="Set as the database automatic import writes to"
-                                        onClick={() => {
-                                            makeDefault(entry).catch(error => log.exception('Failed to set the default database', error as Error));
-                                        }}
-                                    >
-                                        <Star fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        data-id="consolidate-database-button"
-                                        size="small"
-                                        title="Consolidate into remote"
-                                        onClick={() => { log.info('Consolidate into remote dialog opened'); setConsolidatingEntry(entry); }}
-                                    >
-                                        <CloudSync fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        data-id="edit-database-button"
-                                        size="small"
-                                        title="Edit database"
-                                        onClick={() => openEditDialog(entry)}
-                                    >
-                                        <Edit fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        size="small"
-                                        color="error"
-                                        title="Remove database"
-                                        onClick={() => promptRemove(entry)}
-                                    >
-                                        <Delete fontSize="small" />
-                                    </IconButton>
+                                    Actions
                                 </TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                        </TableHead>
+                        <TableBody>
+                            {databases.map((entry, entryIndex) => (
+                                <TableRow key={entry.name}>
+                                    <TableCell>
+                                        <Box
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 'var(--space-3)',
+                                            }}
+                                            >
+                                            <Box
+                                                aria-hidden={true}
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flex: 'none',
+                                                    width: 'calc(var(--space-8) + var(--space-2))',
+                                                    height: 'calc(var(--space-8) + var(--space-2))',
+                                                    background: 'var(--color-chip-bg)',
+                                                    color: 'var(--color-accent)',
+                                                    border: '1px solid var(--color-chip-border)',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    fontSize: 'var(--icon-lg)',
+                                                }}
+                                                >
+                                                <Storage fontSize="inherit" />
+                                            </Box>
+                                            <Box
+                                                data-id={`database-row-name-${entry.name}`}
+                                                sx={{
+                                                    display: 'flex',
+                                                    flexWrap: 'wrap',
+                                                    alignItems: 'center',
+                                                    gap: 'var(--space-1) var(--space-2)',
+                                                    fontWeight: 'var(--weight-bold)',
+                                                }}
+                                                >
+                                                {entry.name}
+                                                {entry.path === defaultDatabasePath
+                                                    && <Chip
+                                                        size="small"
+                                                        icon={<Star />}
+                                                        data-id={`database-default-badge-${entryIndex}`}
+                                                        label="Default"
+                                                        sx={{
+                                                            minHeight: 'var(--space-6)',
+                                                            fontSize: 'var(--text-xs)',
+                                                            fontWeight: 'var(--weight-bold)',
+                                                            '& .MuiChip-icon': {
+                                                                fontSize: 'var(--icon-sm)',
+                                                                color: 'var(--color-chip-text)',
+                                                                marginLeft: 'var(--space-2)',
+                                                            },
+                                                        }}
+                                                        />
+                                                }
+                                            </Box>
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell className="list-table-muted">{entry.description}</TableCell>
+                                    <TableCell className="list-table-mono">{entry.path}</TableCell>
+                                    <TableCell className="list-table-muted">{entry.origin ?? ''}</TableCell>
+                                    <TableCell
+                                        sx={{
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                        >
+                                        <IconButton
+                                            data-id="view-database-button"
+                                            size="small"
+                                            title="View database"
+                                            onClick={() => { log.info('View database dialog opened'); setViewingEntry(entry); }}
+                                        >
+                                            <Visibility fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="open-database-button"
+                                            size="small"
+                                            title="Open database"
+                                            onClick={() => handleOpen(entry).catch(err => log.exception('Open database error:', err as Error))}
+                                        >
+                                            <FolderOpen fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="share-database-button"
+                                            size="small"
+                                            title="Share database"
+                                            onClick={() => setSharingEntry(entry)}
+                                        >
+                                            <IosShare fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="replicate-database-button"
+                                            size="small"
+                                            title="Replicate database"
+                                            onClick={() => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); }}
+                                        >
+                                            <FileCopy fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="set-default-database-button"
+                                            size="small"
+                                            title="Set as the database automatic import writes to"
+                                            onClick={() => {
+                                                makeDefault(entry).catch(error => log.exception('Failed to set the default database', error as Error));
+                                            }}
+                                        >
+                                            <Star fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="consolidate-database-button"
+                                            size="small"
+                                            title="Consolidate into remote"
+                                            onClick={() => { log.info('Consolidate into remote dialog opened'); setConsolidatingEntry(entry); }}
+                                        >
+                                            <CloudSync fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            data-id="edit-database-button"
+                                            size="small"
+                                            title="Edit database"
+                                            onClick={() => openEditDialog(entry)}
+                                        >
+                                            <Edit fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            size="small"
+                                            title="Remove database"
+                                            onClick={() => promptRemove(entry)}
+                                            sx={{
+                                                color: 'var(--color-danger-button-text)',
+                                                borderColor: 'var(--color-danger-button-border)',
+                                                backgroundColor: 'var(--color-danger-button-fill)',
+                                                '&:hover': {
+                                                    color: 'var(--color-danger-button-text)',
+                                                    backgroundColor: 'var(--color-danger-button-fill)',
+                                                    boxShadow: 'inset 0 0 0 1px var(--color-danger-button-border)',
+                                                },
+                                            }}
+                                        >
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Box>
             }
 
             <EditDatabaseModal

@@ -1,25 +1,12 @@
+/* The app fills the window and scrolls inside its own panels, never as a whole page. Its colours and
+   font come from styles/base.css. */
 body {
     overflow: hidden;
-    font-family: 'Roboto', Arial, sans-serif;
-    font-size: 1.125rem;
-    line-height: 1.5rem;
-    letter-spacing: 0;
-    font-weight: 400;
     position: absolute;
     top: 0;
     bottom: 0;
     left: 0;
     right: 0;
-}
-
-/* Light mode: white background */
-html.light body {
-    background-color: white;
-}
-
-/* Dark mode: black background */
-html.dark body {
-    background-color: black;
 }
 
 /* Mobile-specific styles using safe-area-inset */
@@ -40,15 +27,10 @@ body.mobile #app {
     height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 
+/* The page area, which fills the frame between the navbar and, on a mobile, the tab bar. */
 #main {
-    width: 100vw;
-    height: 100vh;
+    min-height: 0;
     overflow: hidden;
-}
-
-body.mobile #main {
-    width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right));
-    height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 
 #content {
@@ -63,38 +45,42 @@ body.mobile #main {
     overflow-y: scroll;
 }
 
-/* Icons */
+/* Icons are muted unless their component colours them. The rule sits in the base layer, under MUI's
+   styles and Tailwind's utilities, so a component's own icon colour wins over it. */
 
-i {
-    color: #777777;
+@layer base {
+    i {
+        color: var(--color-text-muted);
+    }
 }
 
 
-/* Nav bar */
+/* Navbar and page frame (components/navbar.tsx, components/mobile-tab-bar.tsx, main.tsx) */
 
-#navbar {
-    z-index: 500;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 52px;
-    border-bottom: 1px solid rgb(218, 220, 224);
+/*
+ * A page moves in each time another page opens: it starts at --page-enter-opacity, shifted by
+ * --page-enter-x and --page-enter-y, and settles in place. It does not run when the computer asks
+ * for reduced motion.
+ */
+@keyframes photosphere-page-change {
+    from {
+        opacity: var(--page-enter-opacity);
+        transform: translate(var(--page-enter-x), var(--page-enter-y));
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
 }
 
-/* Dark mode: lighten the nav bar divider so it is visible against the dark background */
-html.dark #navbar {
-    border-bottom-color: rgba(255, 255, 255, 0.16);
+.photosphere-page-change {
+    animation: photosphere-page-change var(--duration-normal) var(--ease-standard);
 }
 
-body.mobile #navbar {
-    top: env(safe-area-inset-top);
-    left: env(safe-area-inset-left);
-    right: env(safe-area-inset-right);
-}
-
-#navbar.search {
-    height: 100px;
+@media (prefers-reduced-motion: reduce) {
+    .photosphere-page-change {
+        animation: none;
+    }
 }
 
 /*
@@ -136,46 +122,49 @@ body.mobile #navbar {
     flex-shrink: 0;
 }
 
-#main {
-    padding-top: 52px;
-}
+/* Gallery (components/gallery-layout.tsx, components/gallery-scrollbar.tsx). In the components
+   layer, so a component's sx can still override them. */
 
-#main.search {
-    padding-top: 100px;
-}
+@layer components {
+    /* The month heading that stays at the top while its photos scroll under it, faded in when a
+       month's own heading row has scrolled away and out when the next one arrives. */
 
-/* Gallery */
+    .gallery-sticky-heading {
+        opacity: 0;
+        transition: opacity var(--duration-normal) var(--ease-standard);
+    }
 
-.gallery-sticky-heading {
-    opacity: 0;
-}
+    .gallery-sticky-heading.fade-in {
+        opacity: 1;
+    }
 
-@keyframes fadeIn {
-    from {
+    .gallery-sticky-heading.fade-out {
         opacity: 0;
     }
-    to {
-        opacity: 0.75;
-    }
-}
 
-@keyframes fadeOut {
-    from {
-        opacity: 0.75;
-    }
-    to {
-        opacity: 0;
-    }
-}
+    /* The scroller hides the native scrollbar, as the fast-scroll handle replaces it. */
 
-.gallery-sticky-heading.fade-in {
-    animation: fadeIn 0.3s ease-in;
-    opacity: 0.75;
-}
+    .gallery-scroller {
+        overflow-y: auto;
+        -ms-overflow-style: none; /* IE and Edge */
+        scrollbar-width: none; /* Firefox */
+    }
 
-.gallery-sticky-heading.fade-out {
-    opacity: 0;
-    animation: fadeOut 0.3s ease-out;
+    .gallery-scroller::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Opera */
+    }
+
+    /* The fast-scroll handle's track, down the right edge of the gallery's own area, so it fits
+       the page area under the navbar and above a mobile's tab bar, and a modal that hosts the
+       gallery. The handle's look is set in gallery-scrollbar.tsx from the --scrubber-thumb-*
+       tokens. */
+
+    .gallery-scrollbar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 100%;
+    }
 }
 
 @keyframes fadeInThumb {
@@ -188,74 +177,89 @@ body.mobile #navbar {
     }
 }
 
-.fade-in-thumb {
-    animation: fadeInThumb 0.5s cubic-bezier(1,0,.95,.82);
+/* A photo fades in as it arrives, over the normal duration with the standard easing, and appears at
+   once when the system asks for reduced motion. */
+@layer components {
+    .fade-in-thumb {
+        animation: fadeInThumb var(--duration-normal) var(--ease-standard);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .fade-in-thumb {
+            animation: none;
+        }
+    }
 }
 
-.selection-tick {
-    display: none;
+
+/* Map.
+
+   Leaflet draws its own zoom buttons and attribution. On the map page and in the set-location
+   dialog they take the map tokens: the zoom buttons sit on a panel like the style guide's map
+   controls, each a square icon button with a visible edge, and the attribution reads in muted text
+   on the panel. */
+
+.photosphere-map .leaflet-container {
+    font-family: var(--font-sans);
 }
 
-.asset-view-select-btn {
-    background-color: rgba(255, 255, 255, 0.15);
-}
-
-.asset-view-select-btn:hover {
-    background-color: rgba(255, 255, 255, 0.5);
-}
-
-.asset-view-select-btn.selected {
-    background-color: rgba(0, 0, 255, 1);
-}
-
-.asset-view-select-btn.selected:hover {
-    background-color: rgba(0, 0, 200, 1);
-}
-
-.gallery-thumb-container:hover .selection-tick {
+.photosphere-map .leaflet-control-zoom.leaflet-bar {
     display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    background: var(--color-map-controls-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-overlay);
 }
 
-.gallery-scroller {
-    overflow-y: auto;
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+.photosphere-map .leaflet-control-zoom.leaflet-bar a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--button-height-md);
+    height: var(--button-height-md);
+    line-height: 1;
+    font-size: var(--icon-lg);
+    color: var(--color-text-muted);
+    background: var(--color-icon-button-fill);
+    border: 1px solid var(--color-icon-button-border);
+    border-radius: var(--radius-icon-button);
+    transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
-.gallery-scroller::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
+.photosphere-map .leaflet-control-zoom.leaflet-bar a:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
 }
 
-/* Gallery scrollbar */
-
-.gallery-scrollbar {
-    position: fixed;
-    top: 52px;
-    right: 0px;
-    height: calc(100vh - 52px);
+.photosphere-map .leaflet-control-zoom.leaflet-bar a:focus-visible {
+    outline: var(--focus-ring-width) solid var(--color-focus);
+    outline-offset: var(--focus-ring-offset);
 }
 
-/* When the gallery is hosted inside a modal, the transform on .cluster-modal-gallery
-   captures position:fixed descendants so they are fixed relative to the modal container
-   instead of the viewport. Override top and height to fill the modal area. */
-.cluster-modal-gallery .gallery-scrollbar {
-    top: 0;
-    height: 100%;
+.photosphere-map .leaflet-control-zoom.leaflet-bar a.leaflet-disabled {
+    color: var(--color-text-disabled);
+    border-color: var(--color-border);
+    background: var(--color-icon-button-fill);
 }
 
-.gallery-scrollbar-thumb {
-    border-radius: 11px;
-    border: 3px solid transparent;
-    background-clip: content-box;
-    background-color: #d55959;
-    left: 0px;
-    width: 22px;
+.photosphere-map .leaflet-control-attribution {
+    background: var(--color-panel);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    border-top-left-radius: var(--radius-sm);
 }
 
-/* Backdrop for Drawers */
+.photosphere-map .leaflet-control-attribution a {
+    color: var(--color-accent);
+}
 
-.MuiDrawer-root .MuiModal-backdrop {
-    backdrop-filter: blur(2px) !important;
+@media (prefers-reduced-motion: reduce) {
+    .photosphere-map .leaflet-control-zoom.leaflet-bar a {
+        transition: none;
+    }
 }
 
 .asset-view-drawer .MuiDrawer-paper {
@@ -281,213 +285,47 @@ body.mobile #navbar {
     }
 }
 
-/* Info page */
+/* Toasts.
 
-#info-area {
-    border: 2px solid #ccc;
-    border-radius: 20px;
-    max-width: 480px;
-    margin: 100px auto;
-    padding: 30px;
+   A toast rises by --toast-arrive-shift as it fades in, as the style guide's toasts do. It does
+   not move when the user asks for reduced motion. */
+
+@keyframes photosphere-toast-arrive {
+    from {
+        opacity: 0;
+        transform: translateY(var(--toast-arrive-shift));
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
 }
 
-/* Fullscreen photo */
+@layer components {
+    .photosphere-toast-arrive {
+        animation: photosphere-toast-arrive var(--duration-normal) var(--ease-standard);
+    }
 
-.photo {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    @media (prefers-reduced-motion: reduce) {
+        .photosphere-toast-arrive {
+            animation: none;
+        }
+    }
 }
 
-.photo-header {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 50px;
-    z-index: 2100;
-}
 
-body.mobile .photo-header {
-    top: env(safe-area-inset-top);
-    left: env(safe-area-inset-left);
-    right: env(safe-area-inset-right);
-}
+/* Photo viewer and photo details (components/asset-view.tsx, pages/gallery/components/asset-info.tsx) */
 
-.photo-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    overflow: hidden;
-}
-
-body.mobile .photo-container {
-    top: env(safe-area-inset-top);
-    left: env(safe-area-inset-left);
-    right: env(safe-area-inset-right);
-    bottom: env(safe-area-inset-bottom);
-}
-
-body.mobile .photo-container .thumbnail {
-    position: absolute;
-    top: env(safe-area-inset-top);
-    left: env(safe-area-inset-left);
-    right: env(safe-area-inset-right);
-    bottom: env(safe-area-inset-bottom);
-    width: calc(80vw - env(safe-area-inset-left) - env(safe-area-inset-right));
-    height: calc(80vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    margin: auto;
-    object-fit: contain;
-}
-
-body.mobile .photo-container .full {
-    position: absolute;
-    top: env(safe-area-inset-top);
-    left: env(safe-area-inset-left);
-    right: env(safe-area-inset-right);
-    bottom: env(safe-area-inset-bottom);
-    width: calc(80vw - env(safe-area-inset-left) - env(safe-area-inset-right));
-    height: calc(80vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    margin: auto;
-    object-fit: contain;
-    opacity: 0;
-    transition: opacity 1s ease-in-out;
-}
-
-body.mobile .photo-container .full.loaded {
-    opacity: 1;
-}
-
-.photo-nav {
-    z-index: 2100;
-}
-
-/* Previous/next nav buttons. Always visible with a translucent dark backing so the arrow reads
-   clearly over any photo, with a larger tap target suitable for touch devices. */
-.photo-nav-btn {
-    background: rgba(0, 0, 0, 0.45) !important;
-    color: white !important;
-    border-color: rgba(255, 255, 255, 0.35) !important;
-    min-width: 44px !important;
-    min-height: 44px !important;
-}
-
-.photo-nav-btn:hover {
-    background: rgba(0, 0, 0, 0.65) !important;
-}
-
-/* Compact metadata summary card shown bottom-left over the photo. Acts as a preview of the full info panel.
-   Stacks an always-visible header over the collapsible body, so collapsing leaves just the title row. */
-.asset-summary-panel {
-    display: flex;
-    flex-direction: column;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-    padding: 6px;
-    color: white;
-}
-
-/* The collapse toggle, sitting at the right end of the header. */
-.asset-summary-toggle {
-    flex-shrink: 0;
-    color: white !important;
-}
-
-/* Animates the body open/closed by collapsing it to the left. The column track drives the leftward
-   slide; the row track collapses the height in step so no empty gap is left below the header. */
-.asset-summary-collapse {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-    transition: grid-template-columns 0.25s ease, grid-template-rows 0.25s ease;
-}
-
-/* Collapsed state: both tracks animate to zero, hiding the body and leaving only the header. */
-.asset-summary-collapse.collapsed {
-    grid-template-columns: 0fr;
-    grid-template-rows: 0fr;
-}
-
-/* Clips the body as the grid tracks shrink so its content does not reflow during the animation. */
-.asset-summary-collapse-inner {
-    overflow: hidden;
-    min-width: 0;
-    min-height: 0;
-}
-
-/* The metadata content: date, location and labels stacked under the header, with a divider that
-   collapses away with the body. */
-.asset-summary-body {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: fit-content;
-    max-width: 55vw;
-    padding: 8px 6px 4px 8px;
-    margin-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-/* Header of the summary card: titles it, opens the full info panel, and holds the collapse toggle. */
-.asset-summary-panel .summary-header {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    padding-left: 6px;
-}
-
-/* Small uppercase label that titles the summary card. */
-.asset-summary-panel .summary-title {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    opacity: 0.75;
-}
-
-@keyframes photo-enter-from-right {
-    from { transform: translateX(35%); opacity: 0; }
-    to   { transform: translateX(0);   opacity: 1; }
-}
-
-@keyframes photo-exit-to-left {
-    from { transform: translateX(0);    opacity: 1; }
-    to   { transform: translateX(-35%); opacity: 0; }
-}
-
-@keyframes photo-enter-from-left {
-    from { transform: translateX(-35%); opacity: 0; }
-    to   { transform: translateX(0);    opacity: 1; }
-}
-
-@keyframes photo-exit-to-right {
-    from { transform: translateX(0);   opacity: 1; }
-    to   { transform: translateX(35%); opacity: 0; }
-}
-
-.photo-enter-from-right {
-    animation: photo-enter-from-right 0.3s ease-out forwards;
-}
-
-.photo-exit-to-left {
-    animation: photo-exit-to-left 0.3s ease-out forwards;
-    pointer-events: none;
-}
-
-.photo-enter-from-left {
-    animation: photo-enter-from-left 0.3s ease-out forwards;
-}
-
-.photo-exit-to-right {
-    animation: photo-exit-to-right 0.3s ease-out forwards;
-    pointer-events: none;
+/*
+ * A Font Awesome icon in the viewer or the details takes the colour of the control or text it sits
+ * in, such as the viewer control text on a glass button, instead of the muted colour every icon
+ * gets from the base layer.
+ */
+@layer components {
+    .photosphere-viewer i,
+    .photosphere-asset-info i {
+        color: inherit;
+    }
 }
 
 /* Drop down */
@@ -529,13 +367,121 @@ body.mobile .photo-container .full.loaded {
     }
 }
 
-.gallery-thumb-arrived {
-    animation: gallery-thumb-arrive 400ms ease-out;
+@layer components {
+    .gallery-thumb-arrived {
+        animation: gallery-thumb-arrive var(--duration-slow) var(--ease-standard);
+    }
+
+    /* Anyone who has asked not to be shown motion gets the photo, without the movement. */
+    @media (prefers-reduced-motion: reduce) {
+        .gallery-thumb-arrived {
+            animation: none;
+        }
+    }
 }
 
-/* Anyone who has asked not to be shown motion gets the photo, without the movement. */
-@media (prefers-reduced-motion: reduce) {
-    .gallery-thumb-arrived {
-        animation: none;
+/* Sharing and secrets dialogs.
+
+   The motion of the share and receive dialogs, drawn by components/lan-share-parts.tsx: each step
+   slides in from the side it comes from, the pairing code's tiles and the done check pop in, the
+   rings pulse out while one device looks for the other and the check draws itself. The keyframes
+   match the style guide's, so the dialogs move as its mock-up does. */
+
+@keyframes photosphere-dialog-step-in-forward {
+    from {
+        opacity: 0;
+        transform: translateX(var(--dialog-step-shift));
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes photosphere-dialog-step-in-back {
+    from {
+        opacity: 0;
+        transform: translateX(calc(var(--dialog-step-shift) * -1));
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes photosphere-dialog-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    70% {
+        opacity: 1;
+        transform: scale(1.04);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes photosphere-dialog-ring {
+    from {
+        opacity: 0.7;
+        transform: scale(0.45);
+    }
+    to {
+        opacity: 0;
+        transform: scale(1);
+    }
+}
+
+@keyframes photosphere-dialog-check {
+    from {
+        opacity: 0;
+        transform: scale(0.3) rotate(-30deg);
+    }
+    60% {
+        opacity: 1;
+        transform: scale(1.2) rotate(6deg);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* The classes sit in the components layer, so a component's own styles can still override them.
+   A part that staggers its animation sets --photosphere-dialog-delay rather than animation-delay,
+   because the animation shorthand here would reset an animation-delay set beside it. */
+@layer components {
+    .photosphere-dialog-step-in-forward {
+        animation: photosphere-dialog-step-in-forward var(--dialog-step-duration) var(--ease-standard);
+    }
+
+    .photosphere-dialog-step-in-back {
+        animation: photosphere-dialog-step-in-back var(--dialog-step-duration) var(--ease-standard);
+    }
+
+    .photosphere-dialog-pop {
+        animation: photosphere-dialog-pop var(--duration-slow) var(--ease-standard) var(--photosphere-dialog-delay, 0s) both;
+    }
+
+    .photosphere-dialog-ring {
+        animation: photosphere-dialog-ring calc(var(--duration-slow) * 6) var(--ease-standard) var(--photosphere-dialog-delay, 0s) infinite both;
+    }
+
+    .photosphere-dialog-check {
+        animation: photosphere-dialog-check var(--duration-slow) var(--ease-standard) var(--duration-fast) both;
+    }
+
+    /* Under reduced motion each step, tile and check appears at once and the rings stay still. */
+    @media (prefers-reduced-motion: reduce) {
+        .photosphere-dialog-step-in-forward,
+        .photosphere-dialog-step-in-back,
+        .photosphere-dialog-pop,
+        .photosphere-dialog-ring,
+        .photosphere-dialog-check {
+            animation: none;
+        }
     }
 }

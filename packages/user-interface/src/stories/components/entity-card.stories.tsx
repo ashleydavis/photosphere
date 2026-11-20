@@ -31,6 +31,8 @@ export const stories: IStory[] = [
                         { label: "Edit", icon: <Edit fontSize="small" />, onClick: () => {} },
                         { label: "Remove", icon: <Delete fontSize="small" />, danger: true, onClick: () => {} },
                     ]}
+                    monoTitle={false}
+                    subtitleChip={false}
                     />
             </MockProviders>
         ),
@@ -51,6 +53,8 @@ export const stories: IStory[] = [
                         { label: "Edit", icon: <Edit fontSize="small" />, onClick: () => {} },
                         { label: "Delete", icon: <Delete fontSize="small" />, danger: true, onClick: () => {} },
                     ]}
+                    monoTitle={true}
+                    subtitleChip={true}
                     />
             </MockProviders>
         ),
@@ -71,6 +75,8 @@ export const stories: IStory[] = [
                         { label: "View details", icon: <Visibility fontSize="small" />, onClick: () => {} },
                         { label: "Remove", icon: <Delete fontSize="small" />, danger: true, onClick: () => {} },
                     ]}
+                    monoTitle={false}
+                    subtitleChip={false}
                     />
             </MockProviders>
         ),

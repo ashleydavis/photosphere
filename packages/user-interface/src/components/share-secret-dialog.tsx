@@ -1,13 +1,16 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
 import { ResponsiveDialog } from './responsive-dialog';
+import Key from '@mui/icons-material/Key';
+import WifiTethering from '@mui/icons-material/WifiTethering';
+import { DialogIconBadge } from './dialog-icon-badge';
+import { DetailRows, PairingCodeTiles, PulsingSearch, StepDots, StepTransition, SuccessCheck } from './lan-share-parts';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
-import CircularProgress from '@mui/material/CircularProgress';
 import Box from '@mui/material/Box';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
@@ -124,6 +127,12 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
     // Enter does nothing while searching or showing the pairing code (only Cancel is available then).
     const dialogConfirmDisabled = step === "searching" || step === "showing-code";
 
+    // The step dots count the error step as the last step, the place the success step takes.
+    let stepIndex = 3;
+    if (step !== "error") {
+        stepIndex = ["confirm", "searching", "showing-code", "success"].indexOf(step);
+    }
+
     return (
         <ResponsiveDialog
             open={open}
@@ -132,60 +141,94 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
             maxWidth={520}
             onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
             >
-            <DialogTitle>Share Secret</DialogTitle>
+            <DialogTitle><DialogIconBadge icon={<Key />} danger={false} />Share Secret</DialogTitle>
             <DialogContent>
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                    Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
-                </Alert>
-
-                <Typography variant="body2" sx={{ mb: 2 }} color="text.secondary">
-                    Click Receive secret on another device to receive this secret.
-                </Typography>
-
-                {step === "confirm" && (
-                    <>
-                        <Typography variant="body1" sx={{ mb: 1 }}>
-                            <strong>Name:</strong> {entry.name}
-                        </Typography>
-                        <Typography variant="body1">
-                            <strong>Type:</strong> {entry.type}
-                        </Typography>
-                    </>
-                )}
-
-                {step === "searching" && (
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
-                        <CircularProgress size={24} />
-                        <Typography>Searching for receiver on the local network...</Typography>
-                    </Box>
-                )}
-
-                {step === "showing-code" && (
-                    <Box sx={{ textAlign: "center", py: 3 }}>
-                        <Typography variant="body1" sx={{ mb: 1 }}>Pairing Code</Typography>
-                        <Typography data-id="share-pairing-code" variant="h4" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
-                            {pairingCode}
-                        </Typography>
-                        <Typography variant="body2">Tell the receiver to enter this code.</Typography>
-                    </Box>
-                )}
-
-                {step === "success" && (
-                    <Alert severity="success">
-                        Secret sent successfully!
+                <StepDots index={stepIndex} count={4} />
+                <Box
+                    sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "var(--space-4)",
+                    }}
+                    >
+                    <Alert severity="warning">
+                        Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
                     </Alert>
-                )}
 
-                {step === "error" && (
-                    <Alert data-id="share-error-message" severity="error">
-                        {errorMessage}
-                    </Alert>
-                )}
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            color: "var(--color-text-muted)",
+                        }}
+                        >
+                        Click Receive secret on another device to receive this secret.
+                    </Typography>
+
+                    <StepTransition step={step} forward={true}>
+                        {step === "confirm" && (
+                            <DetailRows
+                                details={[
+                                    {
+                                        label: "Name:",
+                                        value: entry.name,
+                                        dataId: undefined,
+                                    },
+                                    {
+                                        label: "Type:",
+                                        value: entry.type,
+                                        dataId: undefined,
+                                    },
+                                ]}
+                                />
+                        )}
+
+                        {step === "searching" && (
+                            <PulsingSearch icon={<WifiTethering />} message="Searching for receiver on the local network..." />
+                        )}
+
+                        {step === "showing-code" && (
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    gap: "var(--space-3)",
+                                    padding: "var(--space-4) 0",
+                                    textAlign: "center",
+                                }}
+                                >
+                                <Typography
+                                    sx={{
+                                        color: "var(--color-text-muted)",
+                                        fontSize: "var(--text-sm)",
+                                        fontWeight: "var(--weight-bold)",
+                                    }}
+                                    >
+                                    Pairing Code
+                                </Typography>
+                                <PairingCodeTiles code={pairingCode} dataId="share-pairing-code" />
+                                <Typography>Tell the receiver to enter this code.</Typography>
+                            </Box>
+                        )}
+
+                        {step === "success" && (
+                            <SuccessCheck dataId={undefined}>
+                                Secret sent successfully!
+                            </SuccessCheck>
+                        )}
+
+                        {step === "error" && (
+                            <Alert data-id="share-error-message" severity="error">
+                                {errorMessage}
+                            </Alert>
+                        )}
+                    </StepTransition>
+                </Box>
             </DialogContent>
             <DialogActions>
                 {step === "confirm" && (
                     <>
-                        <Button data-id="share-secret-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="share-secret-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                         <Button data-id="share-secret-send-button" variant="contained" onClick={() => { handleStartSend(); }}>
                             Send
                         </Button>
@@ -193,11 +236,11 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                 )}
 
                 {step === "searching" && (
-                    <Button data-id="share-secret-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-secret-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {step === "showing-code" && (
-                    <Button data-id="share-secret-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-secret-cancel-button" variant="outlined" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {(step === "success" || step === "error") && (

@@ -28,6 +28,21 @@ export interface IAssetInfoProps {
 }
 
 //
+// The style of the Star or Flag button while it is on: the accent fill with the icon in the colour
+// that pairs with it, since the viewer's starred and flagged colours are paired only with the
+// glass of a control over a photo, not with the panel.
+//
+const PRESSED_BUTTON_SX = {
+    color: "var(--color-on-accent)",
+    backgroundColor: "var(--color-accent)",
+    borderColor: "var(--color-accent)",
+    "&:hover": {
+        color: "var(--color-on-accent)",
+        backgroundColor: "var(--color-accent)",
+    },
+};
+
+//
 // Shows info for a particular asset.
 //
 export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps) {
@@ -147,7 +162,6 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                 key={name}
                 variant="outlined"
                 size="small"
-                className="ml-2 mt-1"
                 label={name}
                 onClick={() => {
                     search(`.labels="${name}"`);
@@ -157,7 +171,7 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                 onDelete={() => {
                     onRemoveLabel(name);
                 }}
-                deleteIcon={<i className="fa-solid fa-close text-xs" title="Remove label" />}
+                deleteIcon={<i className="fa-solid fa-close" title="Remove label" />}
                 />
         );
     }
@@ -166,272 +180,352 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
         return null; // Waiting for asset to be loaded.
     }
 
+    const isStarred = asset.labels?.includes("starred");
+    const isFlagged = asset.labels?.includes("flagged");
+
     return (
         <Box
-            className="info"
-            sx={{ bgcolor: 'background.paper', color: 'text.primary' }}
+            className="photosphere-asset-info flex flex-col"
+            sx={{
+                gap: "var(--space-4)",
+                padding: "var(--space-4)",
+                bgcolor: "var(--color-details-panel-bg)",
+                color: "var(--color-text)",
+            }}
             >
-            <div className="info-header">
-                <div className="flex flex-row items-center pl-3 pt-3 pb-2">
-                    <IconButton
-                        title="Close"
-                        onClick={() => {
-                            onClose();
-                        }}
-                        >
-                        <i className="fa-solid fa-close" />
-                    </IconButton>
+            <div
+                className="flex items-center"
+                style={{
+                    gap: "var(--space-2)",
+                }}
+                >
+                <Typography
+                    component="h4"
+                    className="flex-1"
+                    sx={{
+                        margin: 0,
+                        fontSize: "var(--text-lg)",
+                        fontWeight: "var(--weight-bold)",
+                    }}
+                    >
+                    Detail
+                </Typography>
 
-                    <Typography variant="h6" className="ml-2">Detail</Typography>
-
-                    <div className="flex-grow" />
-
-                    <IconButton
-                        title={asset.labels?.includes("starred") ? "Unstar" : "Star"}
-                        onClick={async () => {
-                            if (asset.labels?.includes("starred")) {
-                                await removeArrayValue("labels", "starred");
-                            }
-                            else {
-                                await addArrayValue("labels", "starred");
-                            }
-                        }}
-                        sx={{ mr: 1 }}
-                        >
-                        {asset.labels?.includes("starred")
-                            ? <Star sx={{ color: "gold" }} />
-                            : <StarBorder />
+                <IconButton
+                    title={isStarred ? "Unstar" : "Star"}
+                    sx={isStarred ? PRESSED_BUTTON_SX : undefined}
+                    onClick={async () => {
+                        if (isStarred) {
+                            await removeArrayValue("labels", "starred");
                         }
-                    </IconButton>
-
-                    <IconButton
-                        title={asset.labels?.includes("flagged") ? "Unflag" : "Flag"}
-                        onClick={async () => {
-                            if (asset.labels?.includes("flagged")) {
-                                await removeArrayValue("labels", "flagged");
-                            }
-                            else {
-                                await addArrayValue("labels", "flagged");
-                            }
-                        }}
-                        sx={{ mr: 1 }}
-                        >
-                        {asset.labels?.includes("flagged")
-                            ? <Flag sx={{ color: "red" }} />
-                            : <FlagOutlined />
+                        else {
+                            await addArrayValue("labels", "starred");
                         }
-                    </IconButton>
-                </div>
+                    }}
+                    >
+                    {isStarred
+                        ? <Star fontSize="inherit" />
+                        : <StarBorder fontSize="inherit" />
+                    }
+                </IconButton>
+
+                <IconButton
+                    title={isFlagged ? "Unflag" : "Flag"}
+                    sx={isFlagged ? PRESSED_BUTTON_SX : undefined}
+                    onClick={async () => {
+                        if (isFlagged) {
+                            await removeArrayValue("labels", "flagged");
+                        }
+                        else {
+                            await addArrayValue("labels", "flagged");
+                        }
+                    }}
+                    >
+                    {isFlagged
+                        ? <Flag fontSize="inherit" />
+                        : <FlagOutlined fontSize="inherit" />
+                    }
+                </IconButton>
+
+                <IconButton
+                    title="Close"
+                    onClick={() => {
+                        onClose();
+                    }}
+                    >
+                    <i className="fa-solid fa-close" />
+                </IconButton>
             </div>
 
-            <div className="info-content flex flex-col">
+            <TextField
+                data-id="asset-description-input"
+                fullWidth
+                multiline
+                minRows={2}
+                size="small"
+                placeholder="Add a description"
+                value={description}
+                onChange={event => onUpdateDescription(event.target.value)}
+                />
 
-                <div className="flex flex-col flex-grow ml-5 mr-5 mt-6 mb-6 justify-center">
-                    <div className="flex flex-row">
-                        <TextField
-                            data-id="asset-description-input"
-                            className="flex-grow"
-                            multiline
+            <DetailRow label="Asset id" icon="fa-solid fa-calendar-day">
+                <span
+                    data-testid="asset-id"
+                    className="break-all"
+                    style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "var(--text-sm)",
+                    }}
+                    >
+                    {asset._id}
+                </span>
+            </DetailRow>
+
+            <DetailRow label="Asset hash" icon="fa-solid fa-calendar-day">
+                <span
+                    className="break-all"
+                    style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "var(--text-sm)",
+                    }}
+                    >
+                    {asset.hash}
+                </span>
+            </DetailRow>
+
+            <DetailRow label={undefined} icon="fa-solid fa-tags">
+                <span
+                    className="flex flex-row flex-wrap items-center"
+                    style={{
+                        gap: "var(--space-2)",
+                    }}
+                    >
+                    {dedupeLabels(asset.labels || []).map(label => {
+                        return renderLabel(label);
+                    })}
+
+                    {addingLabel
+                        ? <TextField
+                            autoFocus
                             size="small"
-                            placeholder="Add a description"
-                            value={description}
-                            onChange={event => onUpdateDescription(event.target.value)}
-                            />
-                    </div>
-
-                    <div className="flex flex-col">
-                        <div className="text-base flex flex-row mt-4 pt-2">
-                            <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-calendar-day" />
-                            </div>
-                            <div className="flex flex-col ml-3">
-                                <Typography variant="body1">Asset id</Typography>
-                                <Typography
-                                	data-testid="asset-id"
-                                    variant="body2"
-                                    >
-                                    {asset._id}
-                                </Typography>
-                            </div>
-                        </div>
-
-                        <div className="text-base flex flex-row mt-4 pt-2">
-                            <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-calendar-day" />
-                            </div>
-                            <div className="flex flex-col ml-3">
-                                <Typography variant="body1">Asset hash</Typography>
-                                <Typography variant="body2">
-                                    {asset.hash}
-                                </Typography>
-                            </div>
-                        </div>
-
-                        <div className="text-lg flex flex-row portrait:mt-10 landscape:mt-4 pt-2">
-                            <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-tags" />
-                            </div>
-                            <div className="flex flex-col ml-3">
-                                <div className="flex flex-row flex-wrap items-center">
-                                    {dedupeLabels(asset.labels || []).map(label => {
-                                        return renderLabel(label);
-                                    })}
-
-                                    {addingLabel
-                                        ? <TextField
-                                            autoFocus
-                                            size="small"
-                                            className="ml-2 mt-1"
-                                            placeholder="Label name"
-                                            value={newLabelName}
-                                            onChange={event => setNewLabelName(event.target.value)}
-                                            onKeyDown={async event => {
-                                                if (event.key === "Enter") {
-                                                    await onConfirmLabel();
-                                                }
-                                                else if (event.key === "Escape") {
-                                                    setNewLabelName("");
-                                                    setAddingLabel(false);
-                                                }
-                                            }}
-                                            onBlur={onConfirmLabel}
-                                            />
-                                        : <IconButton
-                                            className="ml-2"
-                                            title="Add label"
-                                            onClick={() => setAddingLabel(true)}
-                                            >
-                                            <i className="fa-solid fa-square-plus" />
-                                        </IconButton>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="text-base flex flex-row mt-4 pt-2">
-                            <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-calendar-day" />
-                            </div>
-                            <div className="flex flex-col ml-3 flex-grow">
-                                <Typography variant="body1">
-                                    {asset.photoDate ? dayjs(asset.photoDate).format("MMM D, YYYY") : "No date" }
-                                </Typography>
-                                <Typography variant="body2">
-                                    {asset.photoDate ? dayjs(asset.photoDate).format("HH:mm") : "No time" }
-                                </Typography>
-                            </div>
-                            <IconButton
-                                size="small"
-                                title="Edit date"
-                                onClick={() => setEditingDate(true)}
-                                >
-                                <i className="fa-solid fa-pen text-sm" />
-                            </IconButton>
-                        </div>
-
-                        <SetPhotoDateDialog
-                            open={editingDate}
-                            onClose={() => setEditingDate(false)}
-                            currentDate={asset.photoDate}
-                            onSetDate={async (date) => {
-                                await updateAsset({ photoDate: date });
-                                setEditingDate(false);
+                            placeholder="Label name"
+                            value={newLabelName}
+                            onChange={event => setNewLabelName(event.target.value)}
+                            onKeyDown={async event => {
+                                if (event.key === "Enter") {
+                                    await onConfirmLabel();
+                                }
+                                else if (event.key === "Escape") {
+                                    setNewLabelName("");
+                                    setAddingLabel(false);
+                                }
                             }}
+                            onBlur={onConfirmLabel}
                             />
-
-                        <div className="text-base flex flex-row mt-4 pt-2">
-                            <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-regular fa-map" />
-                            </div>
-                            <div className="flex flex-col ml-3 flex-grow">
-                                <Typography variant="body1">
-                                    {asset.location ?? "No location"}
-                                </Typography>
-                                {asset.coordinates && (
-                                    <Typography variant="body2">
-                                        {asset.coordinates.lat.toFixed(6)}, {asset.coordinates.lng.toFixed(6)}
-                                    </Typography>
-                                )}
-                            </div>
-                            <IconButton
-                                size="small"
-                                title="Edit location"
-                                onClick={() => setEditingLocation(true)}
+                        : <IconButton
+                            title="Add label"
+                            onClick={() => setAddingLabel(true)}
                             >
-                                <i className="fa-solid fa-pen text-sm" />
-                            </IconButton>
-                        </div>
+                            <i className="fa-solid fa-square-plus" />
+                        </IconButton>
+                    }
+                </span>
+            </DetailRow>
 
-                        <SetLocationDialog
-                            open={editingLocation}
-                            initialCoordinates={asset.coordinates}
-                            onSetLocation={async (coordinates, location) => {
-                                await updateAsset({ coordinates, location });
-                                setEditingLocation(false);
+            <DetailRow label={undefined} icon="fa-solid fa-calendar-day">
+                <span
+                    className="flex items-center"
+                    style={{
+                        gap: "var(--space-2)",
+                    }}
+                    >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                        <span>
+                            {asset.photoDate ? dayjs(asset.photoDate).format("MMM D, YYYY") : "No date" }
+                        </span>
+                        <span
+                            style={{
+                                color: "var(--color-text-muted)",
+                                fontSize: "var(--text-sm)",
                             }}
-                            onClearLocation={async () => {
-                                await updateAsset({ coordinates: undefined, location: undefined });
-                                setEditingLocation(false);
-                            }}
-                            onClose={() => setEditingLocation(false)}
-                        />
+                            >
+                            {asset.photoDate ? dayjs(asset.photoDate).format("HH:mm") : "No time" }
+                        </span>
+                    </span>
+                    <IconButton
+                        size="small"
+                        title="Edit date"
+                        onClick={() => setEditingDate(true)}
+                        >
+                        <i className="fa-solid fa-pen" />
+                    </IconButton>
+                </span>
+            </DetailRow>
 
-                        {/* <div className="text-base flex flex-row mt-4 pt-2">
-                            <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-camera"></i>
-                            </div>
-                            <div className="flex flex-col ml-3">
-                                <div>
-                                    Google Pixel 6
-                                </div>
-                                <div className="text-sm flex flex-row" >
-                                    <div>ƒ/1.85</div>
-                                    <div className="ml-4">1/177</div>
-                                    <div className="ml-4">6.81mm</div>
-                                    <div className="ml-4">ISO368</div>
-                                </div>
-                            </div>
-                        </div> */}
+            <SetPhotoDateDialog
+                open={editingDate}
+                onClose={() => setEditingDate(false)}
+                currentDate={asset.photoDate}
+                onSetDate={async (date) => {
+                    await updateAsset({ photoDate: date });
+                    setEditingDate(false);
+                }}
+                />
 
-                        <div className="text-base flex flex-row mt-4 pt-2">
-                            <div className="w-6 mt-2 flex flex-col items-center">
-                                <i className="text-2xl fa-regular fa-image" />
-                            </div>
-                            <div className="flex flex-col ml-3">
-                                <Typography variant="body1">
-                                    {asset.origPath} {asset.origFileName}
-                                </Typography>
-                                <Typography variant="body2">
-                                    {asset.width} × {asset.height}
-                                </Typography>
-                            </div>
-                        </div>
-
-                        {/* <div className="text-base flex flex-row mt-4 pt-2">
-                            <div className="w-6 mt-0 flex flex-col items-center">
-                                <i className="text-2xl fa-solid fa-upload"></i>
-                            </div>
-                            <div className="flex flex-col ml-3">
-                                <div>
-                                    Uploaded from Android device
-                                </div>
-                            </div>
-                        </div>
-                        */}
-
-                        <div className="flex flex-row items-center mt-6">
-                            <Button
-                                variant="text"
-                                color="error"
-                                startIcon={<i className="text-xl fa-solid fa-trash" />}
-                                onClick={onDeleteItem}
+            <DetailRow label={undefined} icon="fa-regular fa-map">
+                <span
+                    className="flex items-center"
+                    style={{
+                        gap: "var(--space-2)",
+                    }}
+                    >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                        <span>
+                            {asset.location ?? "No location"}
+                        </span>
+                        {asset.coordinates && (
+                            <span
+                                style={{
+                                    color: "var(--color-text-muted)",
+                                    fontSize: "var(--text-sm)",
+                                }}
                                 >
-                                Delete
-                            </Button>
-                        </div> 
-                    </div>
-                </div>
+                                {asset.coordinates.lat.toFixed(6)}, {asset.coordinates.lng.toFixed(6)}
+                            </span>
+                        )}
+                    </span>
+                    <IconButton
+                        size="small"
+                        title="Edit location"
+                        onClick={() => setEditingLocation(true)}
+                        >
+                        <i className="fa-solid fa-pen" />
+                    </IconButton>
+                </span>
+            </DetailRow>
+
+            <SetLocationDialog
+                open={editingLocation}
+                initialCoordinates={asset.coordinates}
+                onSetLocation={async (coordinates, location) => {
+                    await updateAsset({ coordinates, location });
+                    setEditingLocation(false);
+                }}
+                onClearLocation={async () => {
+                    await updateAsset({ coordinates: undefined, location: undefined });
+                    setEditingLocation(false);
+                }}
+                onClose={() => setEditingLocation(false)}
+            />
+
+            <DetailRow label={undefined} icon="fa-regular fa-image">
+                <span className="break-all">
+                    {asset.origPath} {asset.origFileName}
+                </span>
+                <span
+                    style={{
+                        color: "var(--color-text-muted)",
+                        fontSize: "var(--text-sm)",
+                    }}
+                    >
+                    {asset.width} × {asset.height}
+                </span>
+            </DetailRow>
+
+            <div
+                className="flex justify-end max-md:justify-stretch"
+                style={{
+                    paddingTop: "var(--space-2)",
+                    borderTop: "1px solid var(--color-border)",
+                }}
+                >
+                <Button
+                    variant="outlined"
+                    color="error"
+                    className="max-md:flex-1"
+                    startIcon={<i className="fa-solid fa-trash" />}
+                    onClick={onDeleteItem}
+                    >
+                    Delete
+                </Button>
             </div>
         </Box>
+    );
+}
+
+//
+// Props for one fact row of the details panel.
+//
+interface IDetailRowProps {
+    //
+    // The muted caption above the fact, such as "Asset id", or undefined for a fact whose value
+    // says what it is, such as the date.
+    //
+    label: string | undefined;
+
+    //
+    // The Font Awesome classes of the icon drawn in front of the value.
+    //
+    icon: string;
+
+    //
+    // The value of the fact, stacked in a column when there is more than one part.
+    //
+    children: React.ReactNode;
+}
+
+//
+// Renders one fact of the details panel as the style guide's photo details lay it out: a muted
+// caption, then the icon in front of the value, with the columns and the visibility of the caption
+// and icon set by the --details-* tokens.
+//
+function DetailRow({ label, icon, children }: IDetailRowProps) {
+    return (
+        <div
+            className="grid items-baseline"
+            style={{
+                gridTemplateColumns: "var(--details-columns)",
+                columnGap: "var(--space-3)",
+                rowGap: "var(--space-1)",
+            }}
+            >
+            {label !== undefined && (
+                <span
+                    style={{
+                        display: "var(--details-label-display)",
+                        color: "var(--color-text-muted)",
+                        fontSize: "var(--text-sm)",
+                    }}
+                    >
+                    {label}
+                </span>
+            )}
+            <span
+                className="flex items-baseline"
+                style={{
+                    gap: "var(--space-2)",
+                }}
+                >
+                <i
+                    className={icon}
+                    style={{
+                        display: "var(--details-icon-display)",
+                        color: "var(--color-text-muted)",
+                        fontSize: "var(--icon-md)",
+                        width: "var(--icon-md)",
+                        flex: "none",
+                        textAlign: "center",
+                    }}
+                    />
+                <span
+                    className="flex min-w-0 flex-1 flex-col"
+                    style={{
+                        gap: "var(--space-1)",
+                    }}
+                    >
+                    {children}
+                </span>
+            </span>
+        </div>
     );
 }

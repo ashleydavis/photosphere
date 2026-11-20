@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
+import Chip from '@mui/material/Chip';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
@@ -53,6 +54,14 @@ export interface IEntityCardProps {
 
     // The `data-id` used to find this card's title from the smoke tests.
     titleDataId?: string;
+
+    // Draws the title in the monospace font, for an entity whose name is an identifier, such as a
+    // secret, as the style guide's secret card does.
+    monoTitle: boolean;
+
+    // Draws the subtitle as a small accent chip rather than a line of muted text, for a subtitle
+    // that names the entity's kind, such as a secret's type.
+    subtitleChip: boolean;
 }
 
 //
@@ -64,7 +73,7 @@ export interface IEntityCardProps {
 // makes the whole card a large tap target for the primary action, and hides the remaining actions
 // behind a ⋮ menu with full-height menu rows.
 //
-export function EntityCard({ title, subtitle, detail, icon, onClick, actions, titleDataId }: IEntityCardProps): React.JSX.Element {
+export function EntityCard({ title, subtitle, detail, icon, onClick, actions, titleDataId, monoTitle, subtitleChip }: IEntityCardProps): React.JSX.Element {
     //
     // The ⋮ button the overflow menu hangs from while it is open, or undefined while it is closed.
     //
@@ -74,16 +83,16 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
         <Card
             elevation={0}
             sx={{
-                p: 1.5,
-                mb: 1.5,
-                borderRadius: 3,
-                bgcolor: 'action.hover',
+                padding: 'var(--space-3)',
+                marginBottom: 'var(--space-3)',
+                background: 'var(--color-panel)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-raised)',
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 1.5,
-                // The card's own tap target: comfortably above the 48px minimum.
-                minHeight: 72,
+                gap: 'var(--space-3)',
             }}
             >
             <Box
@@ -91,7 +100,7 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1.5,
+                    gap: 'var(--space-3)',
                     flexGrow: 1,
                     minWidth: 0,
                     cursor: onClick ? 'pointer' : 'default',
@@ -103,11 +112,16 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0,
-                        width: 44,
-                        height: 44,
-                        borderRadius: 2,
-                        backgroundColor: 'action.selected',
-                        color: 'text.secondary',
+                        width: 'calc(var(--space-8) + var(--space-2))',
+                        height: 'calc(var(--space-8) + var(--space-2))',
+                        background: 'var(--color-chip-bg)',
+                        color: 'var(--color-accent)',
+                        border: '1px solid var(--color-chip-border)',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: 'var(--icon-lg)',
+                        '& .MuiSvgIcon-root': {
+                            fontSize: 'inherit',
+                        },
                     }}
                     >
                     {icon}
@@ -117,14 +131,39 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                     <Typography
                         variant="subtitle1"
                         data-id={titleDataId}
-                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        sx={{
+                            fontFamily: monoTitle ? 'var(--font-mono)' : 'var(--font-sans)',
+                            fontSize: 'var(--text-md)',
+                            fontWeight: 'var(--weight-bold)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        }}
                         >
                         {title}
                     </Typography>
-                    {subtitle
+                    {subtitle && subtitleChip
+                        && <Chip
+                            size="small"
+                            label={subtitle}
+                            sx={{
+                                minHeight: 'var(--space-6)',
+                                marginTop: 'var(--space-1)',
+                                fontSize: 'var(--text-xs)',
+                                fontWeight: 'var(--weight-bold)',
+                            }}
+                            />
+                    }
+                    {subtitle && !subtitleChip
                         && <Typography
                             variant="body2"
-                            sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            sx={{
+                                color: 'var(--color-text-muted)',
+                                fontSize: 'var(--text-sm)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
                             >
                             {subtitle}
                         </Typography>
@@ -134,7 +173,9 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                             variant="caption"
                             sx={{
                                 display: 'block',
-                                color: 'text.secondary',
+                                color: 'var(--color-text-muted)',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 'var(--text-xs)',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
@@ -148,7 +189,6 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
 
             <IconButton
                 data-id="entity-actions-menu"
-                size="large"
                 aria-label={`Actions for ${title}`}
                 onClick={event => setMenuAnchor(event.currentTarget)}
                 >
@@ -169,7 +209,7 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                 slotProps={{
                     paper: {
                         sx: {
-                            minWidth: 220,
+                            minWidth: 'calc(var(--space-8) * 7)',
                         },
                     },
                 }}
@@ -183,8 +223,7 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                             action.onClick();
                         }}
                         sx={{
-                            minHeight: 48,
-                            color: action.danger ? 'error.main' : undefined,
+                            color: action.danger ? 'var(--color-danger)' : undefined,
                         }}
                         >
                         <ListItemIcon

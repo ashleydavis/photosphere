@@ -5,6 +5,8 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -18,6 +20,8 @@ import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../co
 import { useApp } from '../context/app-context';
 import { ConfigureSecretsModal, type IDatabaseSecretsSelection } from './configure-secrets-modal';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { DialogIconBadge } from './dialog-icon-badge';
+import { CARD_SX, cardRowSx, FIELD_LABEL_SX } from './create-database-modal';
 
 //
 // Form state for the edit-database modal.
@@ -238,112 +242,191 @@ export function EditDatabaseModal({
                         data-id="edit-database-close"
                         aria-label="Close"
                         onClick={onClose}
-                        sx={{ position: 'absolute', top: 8, right: 8 }}
+                        sx={{
+                            position: 'absolute',
+                            top: 'var(--space-4)',
+                            right: 'var(--space-6)',
+                        }}
                         >
                         <CloseIcon />
                     </IconButton>
-                    <DialogTitle>{entry ? 'Edit Database' : 'Add Database'}</DialogTitle>
+                    <DialogTitle>
+                        <DialogIconBadge icon={<EditIcon />} danger={false} />
+                        {entry ? 'Edit Database' : 'Add Database'}
+                    </DialogTitle>
                     <DialogContent>
-                        <FormControl fullWidth sx={{ mb: 1 }} error={nameError !== undefined}>
-                            <FormLabel>Name</FormLabel>
-                            <OutlinedInput
-                                size="small"
-                                data-id="edit-database-name-input"
-                                value={form.name}
-                                onChange={event => {
-                                    setForm(prev => ({ ...prev, name: event.target.value }));
-                                    setNameError(undefined);
-                                }}
-                            />
-                            {nameError && (
-                                <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
-                                    {nameError}
-                                </Typography>
-                            )}
-                        </FormControl>
-
-                        <FormControl fullWidth sx={{ mb: 1 }}>
-                            <FormLabel>Description</FormLabel>
-                            <OutlinedInput
-                                size="small"
-                                data-id="edit-database-description-input"
-                                value={form.description}
-                                onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
-                            />
-                        </FormControl>
-
-                        <FormControl fullWidth sx={{ mb: 1 }}>
-                            <FormLabel>Path</FormLabel>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--space-4)',
+                                paddingTop: 'var(--space-1)',
+                            }}
+                            >
+                            <FormControl fullWidth error={nameError !== undefined}>
+                                <FormLabel sx={FIELD_LABEL_SX}>Name</FormLabel>
                                 <OutlinedInput
                                     size="small"
-                                    data-id="edit-database-path-input"
-                                    sx={{ flexGrow: 1 }}
-                                    value={form.path}
-                                    onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
+                                    data-id="edit-database-name-input"
+                                    value={form.name}
+                                    onChange={event => {
+                                        setForm(prev => ({ ...prev, name: event.target.value }));
+                                        setNameError(undefined);
+                                    }}
                                 />
-                                {/* A mobile has no folder dialog for a database location: the user types its name instead. */}
-                                {platform.platformKind === "desktop" && (
-                                    <Button data-id="edit-database-browse-button" variant="outlined" onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}>
-                                        Browse
-                                    </Button>
+                                {nameError && (
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            marginTop: 'var(--space-1)',
+                                            color: 'var(--color-danger)',
+                                            fontSize: 'var(--text-sm)',
+                                        }}
+                                        >
+                                        {nameError}
+                                    </Typography>
                                 )}
-                            </Box>
-                        </FormControl>
+                            </FormControl>
 
-                        {/* The picker sits outside the FormControl, not beside the input inside it: a
-                            FormControl takes only one input component, and a Select is one. */}
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end', mb: 2 }}>
-                            <FormControl fullWidth sx={{ flexGrow: 1 }}>
-                                <FormLabel>Origin</FormLabel>
+                            <FormControl fullWidth>
+                                <FormLabel sx={FIELD_LABEL_SX}>Description</FormLabel>
                                 <OutlinedInput
                                     size="small"
-                                    data-id="database-origin-input"
-                                    value={form.origin}
-                                    onChange={event => setForm(prev => ({ ...prev, origin: event.target.value }))}
+                                    data-id="edit-database-description-input"
+                                    value={form.description}
+                                    onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
                                 />
                             </FormControl>
-                            {originCandidates.length > 0
-                                && <Select
-                                    sx={{ minWidth: 160 }}
-                                    size="small"
-                                    value=""
-                                    displayEmpty
-                                    renderValue={() => 'Choose…'}
-                                    onChange={event => {
-                                        if (event.target.value) {
-                                            setForm(prev => ({ ...prev, origin: event.target.value }));
-                                        }
-                                    }}
-                                    data-id="database-origin-select"
-                                >
-                                    {originCandidates.map(candidate => (
-                                        <MenuItem
-                                            data-id={`database-origin-option-${candidate.name}`}
-                                            key={candidate.path}
-                                            value={candidate.path}
-                                            >
-                                            {candidate.name}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            }
-                        </Box>
 
-                        <FormControl fullWidth sx={{ mb: 1 }}>
-                            <FormLabel>Secrets</FormLabel>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography data-id="edit-database-secrets-summary" variant="body2" sx={{ flexGrow: 1 }} color="text.secondary">
-                                    {summariseSecrets()}
-                                </Typography>
-                                <Button data-id="edit-database-configure-secrets-button" variant="outlined" size="small" onClick={() => setSecretsModalOpen(true)}>
-                                    Configure secrets…
-                                </Button>
+                            <FormControl fullWidth>
+                                <FormLabel sx={FIELD_LABEL_SX}>Path</FormLabel>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'stretch',
+                                        gap: 'var(--space-2)',
+                                    }}
+                                    >
+                                    <OutlinedInput
+                                        size="small"
+                                        data-id="edit-database-path-input"
+                                        sx={{
+                                            flexGrow: 1,
+                                            fontFamily: 'var(--font-mono)',
+                                            fontSize: 'var(--text-sm)',
+                                        }}
+                                        value={form.path}
+                                        onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
+                                    />
+                                    {/* A mobile has no folder dialog for a database location: the user types its name instead. */}
+                                    {platform.platformKind === "desktop" && (
+                                        <Button
+                                            data-id="edit-database-browse-button"
+                                            variant="outlined"
+                                            startIcon={<FolderOpenIcon />}
+                                            sx={{
+                                                flex: 'none',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                            onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
+                                            >
+                                            Browse
+                                        </Button>
+                                    )}
+                                </Box>
+                            </FormControl>
+
+                            {/* The picker sits outside the FormControl, not beside the input inside it: a
+                                FormControl takes only one input component, and a Select is one. */}
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'flex-end',
+                                    gap: 'var(--space-2)',
+                                }}
+                                >
+                                <FormControl
+                                    fullWidth
+                                    sx={{
+                                        flexGrow: 1,
+                                    }}
+                                    >
+                                    <FormLabel sx={FIELD_LABEL_SX}>Origin</FormLabel>
+                                    <OutlinedInput
+                                        size="small"
+                                        data-id="database-origin-input"
+                                        sx={{
+                                            fontFamily: 'var(--font-mono)',
+                                            fontSize: 'var(--text-sm)',
+                                        }}
+                                        value={form.origin}
+                                        onChange={event => setForm(prev => ({ ...prev, origin: event.target.value }))}
+                                    />
+                                </FormControl>
+                                {originCandidates.length > 0
+                                    && <Select
+                                        sx={{
+                                            flex: 'none',
+                                            minWidth: 'calc(var(--space-8) * 5)',
+                                        }}
+                                        size="small"
+                                        value=""
+                                        displayEmpty
+                                        renderValue={() => 'Choose…'}
+                                        onChange={event => {
+                                            if (event.target.value) {
+                                                setForm(prev => ({ ...prev, origin: event.target.value }));
+                                            }
+                                        }}
+                                        data-id="database-origin-select"
+                                    >
+                                        {originCandidates.map(candidate => (
+                                            <MenuItem
+                                                data-id={`database-origin-option-${candidate.name}`}
+                                                key={candidate.path}
+                                                value={candidate.path}
+                                                >
+                                                {candidate.name}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                }
                             </Box>
-                        </FormControl>
+
+                            <FormControl fullWidth>
+                                <FormLabel sx={FIELD_LABEL_SX}>Secrets</FormLabel>
+                                <Box sx={CARD_SX}>
+                                    <Box sx={cardRowSx(true)}>
+                                        <Typography
+                                            data-id="edit-database-secrets-summary"
+                                            variant="body2"
+                                            sx={{
+                                                minWidth: 0,
+                                                overflowWrap: 'anywhere',
+                                                color: 'var(--color-text-muted)',
+                                                fontSize: 'var(--text-sm)',
+                                            }}
+                                            >
+                                            {summariseSecrets()}
+                                        </Typography>
+                                        <Button
+                                            data-id="edit-database-configure-secrets-button"
+                                            variant="outlined"
+                                            size="small"
+                                            sx={{
+                                                flex: 'none',
+                                            }}
+                                            onClick={() => setSecretsModalOpen(true)}
+                                            >
+                                            Configure secrets…
+                                        </Button>
+                                    </Box>
+                                </Box>
+                            </FormControl>
+                        </Box>
                     </DialogContent>
                     <DialogActions>
-                        <Button data-id="edit-database-cancel" variant="text" onClick={onClose}>Cancel</Button>
+                        <Button data-id="edit-database-cancel" variant="outlined" onClick={onClose}>Cancel</Button>
                         <Button
                             data-id="save-database-button"
                             variant="contained"

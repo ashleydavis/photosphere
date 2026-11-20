@@ -2,7 +2,8 @@ import Typography from '@mui/material/Typography';
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
-import { useTheme } from '@mui/material/styles';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
@@ -14,7 +15,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import IconButton from '@mui/material/IconButton';
 import Breadcrumbs from '@mui/material/Breadcrumbs';
 import Link from '@mui/material/Link';
-import Divider from '@mui/material/Divider';
+import { SIDEBAR_ROWS_STYLE } from './left-sidebar';
 import { useGalleryLayout } from '../context/gallery-layout-context';
 import { IGalleryLayout } from '../lib/create-layout';
 import { useGallery } from '../context/gallery-context';
@@ -216,34 +217,26 @@ function makeFullMenu(navMenu: IMenuItem[], years: string[], locations: string[]
 export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps) {
     const { recentSearches, removeRecentSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
     const { dbs } = useApp();
-    const theme = useTheme();
 
     //
-    // Drives the mobile layout of the menu: taller rows and larger buttons, because every row here is
-    // a thumb target rather than a mouse target.
+    // Drives the mobile layout of the menu: larger buttons, because every button here is a thumb
+    // target rather than a mouse target.
     //
     const isMobile = useIsMobile();
 
     //
-    // Row sizing shared by every list in the menu. 48px is the smallest comfortable touch target.
-    // The icon column is kept narrow so the text sits close to its icon.
+    // Sizing for the small buttons that hang off the end of a search row (save, remove). Small
+    // buttons sit next to each other and are easy to mis-hit with a thumb, so on a mobile they
+    // take the medium button size.
     //
-    const listSx = {
-        '& .MuiListItemButton-root': {
-            minHeight: isMobile ? '48px' : undefined,
-        },
-        '& .MuiListItemIcon-root': {
-            minWidth: '36px',
+    const endActionSize = isMobile ? "var(--button-height-md)" : "var(--button-height-sm)";
+    const endActionSx = {
+        minHeight: endActionSize,
+        minWidth: endActionSize,
+        "& .MuiSvgIcon-root": {
+            fontSize: "var(--icon-lg)",
         },
     };
-
-    //
-    // Sizing for the small buttons that hang off the end of a search row (save, remove). At 32px
-    // they are half a thumb wide and sit next to each other, which makes them easy to mis-hit.
-    //
-    const endActionSx = isMobile
-        ? { minHeight: '40px', minWidth: '40px' }
-        : { minHeight: '32px', minWidth: '32px' };
     const { databasePath, closeDatabase, downloadAssets } = useAssetDatabase();
     const { search, setSortBy, isLoading, onReset, onNewItems, selectedItems, clearMultiSelection, moveSelectedToDatabase, getItemById } = useGallery();
     const { scrollTo, layout } = useGalleryLayout();
@@ -369,357 +362,401 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
 
     return (
         <>
-            {/* Fills the drawer rather than forcing a full viewport height, and scrolls when the
-                sections (selection, searches, content, close database) run past the bottom. With a
-                fixed 100vh and no scrolling, the lower sections were unreachable on a mobile. */}
-            <div
-                className="flex flex-col h-full overflow-y-auto"
-                style={{
-                    color: (theme.vars ?? theme).palette.text.primary,
-                }}
-                >
-                <div className="flex flex-row items-center" style={{ paddingLeft: "15px", paddingRight: "8px", paddingTop: "8px" }}>
-                    <Typography variant="h6">Menu</Typography>
-                    <div className="flex-grow" />
+            {/* Fills the drawer rather than forcing a full viewport height. The header stays put,
+                the sections (selection, searches, content) scroll when they run past the bottom
+                and Close database stays pinned under them, so every section can be reached on a
+                mobile. */}
+            <div className="flex flex-col h-full">
+                <div
+                    className="flex flex-row items-center"
+                    style={{
+                        gap: "var(--space-3)",
+                        padding: "var(--space-3) var(--space-3) var(--space-2) var(--space-4)",
+                    }}
+                    >
+                    <h2
+                        className="flex-1"
+                        style={{
+                            fontFamily: "var(--font-heading)",
+                            fontSize: "var(--text-lg)",
+                            fontWeight: "var(--weight-bold)",
+                        }}
+                        >
+                        Menu
+                    </h2>
                     <IconButton
-                        size={isMobile ? "large" : "medium"}
                         title="Close menu"
                         aria-label="Close menu"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
-                        sx={{ minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined }}
+                        sx={{
+                            minWidth: isMobile ? "var(--button-height-lg)" : undefined,
+                            minHeight: isMobile ? "var(--button-height-lg)" : undefined,
+                        }}
                         >
-                        <ArrowForward />
+                        <ArrowForward
+                            sx={{
+                                fontSize: "var(--icon-lg)",
+                            }}
+                            />
                     </IconButton>
                 </div>
 
-                {databasePath && selectedItemsCount > 0 &&
-                    <div data-id="right-sidebar-selection-section" className="flex flex-col">
-                        <Divider />
-                        <CollapsibleSection configKey="right-sidebar-collapsed-selection" label="Selection" style={{ paddingLeft: "15px" }}>
-                            <List sx={listSx}>
-                                {dbs.map(dbEntry => {
-                                    if (dbEntry.path === databasePath) {
-                                        return null;
-                                    }
-                                    return (
-                                        <ListItem
-                                            disablePadding
-                                            key={dbEntry.name}
-                                            data-id={`move-to-database-${dbEntry.name}`}
+                <Box
+                    className="flex flex-col min-h-0 flex-1 overflow-y-auto"
+                    sx={{
+                        ...SIDEBAR_ROWS_STYLE,
+                        overscrollBehavior: "contain",
+                    }}
+                    >
+                    {databasePath && selectedItemsCount > 0 &&
+                        <div data-id="right-sidebar-selection-section" className="flex flex-col">
+                            <CollapsibleSection configKey="right-sidebar-collapsed-selection" label="Selection">
+                                <List>
+                                    <ListItem
+                                        disablePadding
+                                        data-id="download-selected-button"
+                                        onClick={async () => {
+                                            setSidebarOpen(false);
+                                            await onDownloadSelected();
+                                        }}
+                                        >
+                                        <ListItemButton>
+                                            <ListItemIcon><Download /></ListItemIcon>
+                                            <ListItemText>Download {selectedItemsCount} assets</ListItemText>
+                                        </ListItemButton>
+                                    </ListItem>
+                                    <ListItem
+                                        disablePadding
+                                        onClick={() => {
+                                            setSidebarOpen(false);
+                                            setSetDateDialogOpen(true);
+                                        }}
+                                        >
+                                        <ListItemButton>
+                                            <ListItemIcon><CalendarMonth /></ListItemIcon>
+                                            <ListItemText>Set date for {selectedItemsCount} assets</ListItemText>
+                                        </ListItemButton>
+                                    </ListItem>
+                                    <ListItem
+                                        disablePadding
+                                        onClick={() => {
+                                            setSidebarOpen(false);
+                                            setSetLocationDialogOpen(true);
+                                        }}
+                                        >
+                                        <ListItemButton>
+                                            <ListItemIcon>
+                                                <i
+                                                    className="fa-regular fa-map"
+                                                    style={{
+                                                        width: "var(--icon-lg)",
+                                                        textAlign: "center",
+                                                    }}
+                                                    />
+                                            </ListItemIcon>
+                                            <ListItemText>Set location for {selectedItemsCount} assets</ListItemText>
+                                        </ListItemButton>
+                                    </ListItem>
+                                    {dbs.map(dbEntry => {
+                                        if (dbEntry.path === databasePath) {
+                                            return null;
+                                        }
+                                        return (
+                                            <ListItem
+                                                disablePadding
+                                                key={dbEntry.name}
+                                                data-id={`move-to-database-${dbEntry.name}`}
+                                                onClick={() => {
+                                                    moveSelectedToDatabase(dbEntry.path);
+                                                    setSidebarOpen(false);
+                                                }}
+                                                >
+                                                <ListItemButton>
+                                                    <ListItemText>Move to {dbEntry.name}</ListItemText>
+                                                </ListItemButton>
+                                            </ListItem>
+                                        );
+                                    })}
+                                    <li
+                                        className="flex justify-end"
+                                        style={{
+                                            marginTop: "var(--space-2)",
+                                            padding: "var(--space-3) var(--space-2) var(--space-1)",
+                                            borderTop: "1px solid var(--color-border)",
+                                        }}
+                                        >
+                                        <Button
+                                            variant="outlined"
+                                            color="error"
+                                            size="small"
+                                            startIcon={<Delete />}
                                             onClick={() => {
-                                                moveSelectedToDatabase(dbEntry.path);
                                                 setSidebarOpen(false);
+                                                setDeleteConfirmationOpen(true);
                                             }}
                                             >
-                                            <ListItemButton>
-                                                <ListItemText>Move to {dbEntry.name}</ListItemText>
-                                            </ListItemButton>
-                                        </ListItem>
-                                    );
-                                })}
+                                            Delete {selectedItemsCount} assets
+                                        </Button>
+                                    </li>
+                                </List>
+                            </CollapsibleSection>
+                        </div>
+                    }
+
+                    <div className="flex flex-col">
+                        <CollapsibleSection configKey="right-sidebar-collapsed-quickSearches" label="Quick Searches">
+                            <List>
                                 <ListItem
                                     disablePadding
                                     onClick={() => {
+                                        search(".labels=starred");
                                         setSidebarOpen(false);
-                                        setDeleteConfirmationOpen(true);
                                     }}
-                                    >
-                                    <ListItemButton
+                                >
+                                    <ListItemButton>
+                                        <ListItemIcon><Star /></ListItemIcon>
+                                        <ListItemText>Starred</ListItemText>
+                                    </ListItemButton>
+                                </ListItem>
+
+                                <ListItem
+                                    disablePadding
+                                    onClick={() => {
+                                        search(".labels=flagged");
+                                        setSidebarOpen(false);
+                                    }}
+                                >
+                                    <ListItemButton>
+                                        <ListItemIcon><Flag /></ListItemIcon>
+                                        <ListItemText>Flagged</ListItemText>
+                                    </ListItemButton>
+                                </ListItem>
+                            </List>
+                        </CollapsibleSection>
+                    </div>
+
+                    {savedSearches.length > 0 &&
+                        <div className="flex flex-col">
+                            <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches">
+                                <List>
+                                    {savedSearches.map(savedSearch => (
+                                        <ListItem
+                                            disablePadding
+                                            key={savedSearch}
+                                            secondaryAction={
+                                                <IconButton
+                                                    size="small"
+                                                    title="Remove saved search"
+                                                    onClick={async (event) => {
+                                                        event.stopPropagation();
+                                                        await unsaveSearch(savedSearch);
+                                                    }}
+                                                    sx={endActionSx}
+                                                >
+                                                    <Star
+                                                        sx={{
+                                                            color: "var(--color-accent)",
+                                                        }}
+                                                        />
+                                                </IconButton>
+                                            }
+                                            >
+                                            <ListItemButton
+                                                onClick={() => {
+                                                    search(savedSearch);
+                                                    setSidebarOpen(false);
+                                                }}
+                                                >
+                                                <ListItemIcon><StarBorder /></ListItemIcon>
+                                                <ListItemText>{savedSearch}</ListItemText>
+                                            </ListItemButton>
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            </CollapsibleSection>
+                        </div>
+                    }
+
+                    {recentSearches.length > 0 &&
+                        <div className="flex flex-col">
+                            <CollapsibleSection configKey="right-sidebar-collapsed-recentSearches" label="Recent Searches">
+                                <List>
+                                    {recentSearches.map(recentSearch => (
+                                        <ListItem
+                                            disablePadding
+                                            key={recentSearch}
+                                            secondaryAction={
+                                                <>
+                                                    <IconButton
+                                                        size="small"
+                                                        title={savedSearches.includes(recentSearch) ? "Unsave search" : "Save search"}
+                                                        onClick={async (event) => {
+                                                            event.stopPropagation();
+                                                            if (savedSearches.includes(recentSearch)) {
+                                                                await unsaveSearch(recentSearch);
+                                                            }
+                                                            else {
+                                                                await saveSearch(recentSearch);
+                                                            }
+                                                        }}
+                                                        sx={endActionSx}
+                                                    >
+                                                        {savedSearches.includes(recentSearch)
+                                                            ? <Star />
+                                                            : <StarBorder />
+                                                        }
+                                                    </IconButton>
+                                                    <IconButton
+                                                        size="small"
+                                                        title="Remove from recent searches"
+                                                        onClick={async (event) => {
+                                                            event.stopPropagation();
+                                                            await removeRecentSearch(recentSearch);
+                                                        }}
+                                                        sx={endActionSx}
+                                                    >
+                                                        <Delete />
+                                                    </IconButton>
+                                                </>
+                                            }
+                                            >
+                                            <ListItemButton
+                                                onClick={() => {
+                                                    search(recentSearch);
+                                                    setSidebarOpen(false);
+                                                }}
+                                                >
+                                                <ListItemIcon><History /></ListItemIcon>
+                                                <ListItemText>{recentSearch}</ListItemText>
+                                            </ListItemButton>
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            </CollapsibleSection>
+                        </div>
+                    }
+
+                    <div className="flex flex-col">
+                        <CollapsibleSection configKey="right-sidebar-collapsed-content" label="Content">
+                            <>
+                                {breadcrumbs.length > 0 &&
+                                    <Breadcrumbs
+                                        separator={<KeyboardArrowRight />}
                                         sx={{
-                                            color: "error.main",
-                                            '& .MuiListItemIcon-root': {
-                                                color: "inherit",
+                                            padding: "var(--space-1) var(--space-3)",
+                                            color: "var(--color-text-muted)",
+                                            "& .MuiTypography-root": {
+                                                fontSize: "var(--text-sm)",
+                                            },
+                                            "& .MuiSvgIcon-root": {
+                                                fontSize: "var(--icon-lg)",
                                             },
                                         }}
-                                        >
-                                        <ListItemIcon><Delete /></ListItemIcon>
-                                        <ListItemText>Delete {selectedItemsCount} assets</ListItemText>
-                                    </ListItemButton>
-                                </ListItem>
-                                <ListItem
-                                    disablePadding
-                                    data-id="download-selected-button"
-                                    onClick={async () => {
-                                        setSidebarOpen(false);
-                                        await onDownloadSelected();
-                                    }}
                                     >
-                                    <ListItemButton>
-                                        <ListItemIcon><Download /></ListItemIcon>
-                                        <ListItemText>Download {selectedItemsCount} assets</ListItemText>
-                                    </ListItemButton>
-                                </ListItem>
-                                <ListItem
-                                    disablePadding
-                                    onClick={() => {
-                                        setSidebarOpen(false);
-                                        setSetDateDialogOpen(true);
-                                    }}
-                                    >
-                                    <ListItemButton>
-                                        <ListItemIcon><CalendarMonth /></ListItemIcon>
-                                        <ListItemText>Set date for {selectedItemsCount} assets</ListItemText>
-                                    </ListItemButton>
-                                </ListItem>
-                                <ListItem
-                                    disablePadding
-                                    onClick={() => {
-                                        setSidebarOpen(false);
-                                        setSetLocationDialogOpen(true);
-                                    }}
-                                    >
-                                    <ListItemButton>
-                                        <ListItemIcon><i className="fa-regular fa-map" style={{ width: "24px", textAlign: "center" }} /></ListItemIcon>
-                                        <ListItemText>Set location for {selectedItemsCount} assets</ListItemText>
-                                    </ListItemButton>
-                                </ListItem>
-                            </List>
-                        </CollapsibleSection>
-                    </div>
-                }
-
-                <div className="flex flex-col">
-                    <Divider />
-                    <CollapsibleSection configKey="right-sidebar-collapsed-quickSearches" label="Quick Searches" style={{ paddingLeft: "15px" }}>
-                        <List sx={listSx}>
-                            <ListItem
-                                disablePadding
-                                onClick={() => {
-                                    search(".labels=starred");
-                                    setSidebarOpen(false);
-                                }}
-                            >
-                                <ListItemButton>
-                                    <ListItemIcon><Star /></ListItemIcon>
-                                    <ListItemText>Starred</ListItemText>
-                                </ListItemButton>
-                            </ListItem>
-
-                            <ListItem
-                                disablePadding
-                                onClick={() => {
-                                    search(".labels=flagged");
-                                    setSidebarOpen(false);
-                                }}
-                            >
-                                <ListItemButton>
-                                    <ListItemIcon><Flag /></ListItemIcon>
-                                    <ListItemText>Flagged</ListItemText>
-                                </ListItemButton>
-                            </ListItem>
-                        </List>
-                    </CollapsibleSection>
-                </div>
-
-                {savedSearches.length > 0 &&
-                    <div className="flex flex-col">
-                        <Divider />
-                        <CollapsibleSection configKey="sidebar-collapsed-savedSearches" label="Saved Searches" style={{ paddingLeft: "15px" }}>
-                            <List sx={listSx}>
-                                {savedSearches.map(savedSearch => (
-                                    <ListItem
-                                        disablePadding
-                                        key={savedSearch}
-                                        secondaryAction={
-                                            <IconButton
-                                                size="small"
-                                                title="Remove saved search"
-                                                onClick={async (event) => {
-                                                    event.stopPropagation();
-                                                    await unsaveSearch(savedSearch);
-                                                }}
-                                                sx={endActionSx}
-                                            >
-                                                <Star fontSize="small" sx={{ color: "gold" }} />
-                                            </IconButton>
-                                        }
-                                        >
-                                        <ListItemButton
-                                            onClick={() => {
-                                                search(savedSearch);
-                                                setSidebarOpen(false);
-                                            }}
-                                            >
-                                            <ListItemIcon><StarBorder /></ListItemIcon>
-                                            <ListItemText>{savedSearch}</ListItemText>
-                                        </ListItemButton>
-                                    </ListItem>
-                                ))}
-                            </List>
-                        </CollapsibleSection>
-                    </div>
-                }
-
-                {recentSearches.length > 0 &&
-                    <div className="flex flex-col">
-                        <Divider />
-                        <CollapsibleSection configKey="right-sidebar-collapsed-recentSearches" label="Recent Searches" style={{ paddingLeft: "15px" }}>
-                            <List sx={listSx}>
-                                {recentSearches.map(recentSearch => (
-                                    <ListItem
-                                        disablePadding
-                                        key={recentSearch}
-                                        secondaryAction={
-                                            <>
-                                                <IconButton
-                                                    size="small"
-                                                    title={savedSearches.includes(recentSearch) ? "Unsave search" : "Save search"}
-                                                    onClick={async (event) => {
-                                                        event.stopPropagation();
-                                                        if (savedSearches.includes(recentSearch)) {
-                                                            await unsaveSearch(recentSearch);
-                                                        }
-                                                        else {
-                                                            await saveSearch(recentSearch);
-                                                        }
-                                                    }}
-                                                    sx={endActionSx}
-                                                >
-                                                    {savedSearches.includes(recentSearch)
-                                                        ? <Star fontSize="small" />
-                                                        : <StarBorder fontSize="small" />
-                                                    }
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    title="Remove from recent searches"
-                                                    onClick={async (event) => {
-                                                        event.stopPropagation();
-                                                        await removeRecentSearch(recentSearch);
-                                                    }}
-                                                    sx={endActionSx}
-                                                >
-                                                    <Delete fontSize="small" />
-                                                </IconButton>
-                                            </>
-                                        }
-                                        >
-                                        <ListItemButton
-                                            onClick={() => {
-                                                search(recentSearch);
-                                                setSidebarOpen(false);
-                                            }}
-                                            >
-                                            <ListItemIcon><History /></ListItemIcon>
-                                            <ListItemText>{recentSearch}</ListItemText>
-                                        </ListItemButton>
-                                    </ListItem>
-                                ))}
-                            </List>
-                        </CollapsibleSection>
-                    </div>
-                }
-
-                <div className="flex flex-col">
-                    <Divider />
-                    <CollapsibleSection configKey="right-sidebar-collapsed-content" label="Content" style={{ paddingLeft: "15px" }}>
-                        <>
-                            {breadcrumbs.length > 0 &&
-                                <Breadcrumbs
-                                    separator={<KeyboardArrowRight />}
-                                >
-                                    <Link
-                                        component="button"
-                                        onClick={() => {
-                                            setMenuPath([]);
-                                            setBreadCrumbs([]);
-                                        }}
-                                    >
-                                        <Home />
-                                    </Link>
-
-                                    {breadcrumbs.length > 2 &&
-                                        <Typography variant="caption">•••</Typography>
-                                    }
-
-                                    {breadcrumbs.length > 1 &&
                                         <Link
                                             component="button"
-                                            sx={{
-                                                display: "inline-flex",
-                                                alignItems: "center",
-                                            }}
                                             onClick={() => {
-                                                setMenuPath(breadcrumbs[breadcrumbs.length - 1].menuPath);
-                                                setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length - 1));
+                                                setMenuPath([]);
+                                                setBreadCrumbs([]);
                                             }}
                                         >
-                                            {breadcrumbs[breadcrumbs.length - 2].icon}
-                                            {breadcrumbs[breadcrumbs.length - 2].text &&
-                                                <Typography>
-                                                    {breadcrumbs[breadcrumbs.length - 2].text}
-                                                </Typography>
-                                            }
+                                            <Home />
                                         </Link>
-                                    }
 
-                                    {breadcrumbs[breadcrumbs.length - 1].icon}
+                                        {breadcrumbs.length > 2 &&
+                                            <Typography variant="caption">•••</Typography>
+                                        }
 
-                                    {breadcrumbs[breadcrumbs.length - 1].text &&
-                                        <Typography>
-                                            {breadcrumbs[breadcrumbs.length - 1].text}
-                                        </Typography>
-                                    }
-                                </Breadcrumbs>
-                            }
-
-                            <List sx={listSx}>
-                                {curMenu.map((menuItem, index) => {
-                                    return (
-                                        <ListItem
-                                            disablePadding
-                                            key={`${index}-${menuItem.text}`}
-                                            onClick={() => {
-                                                if (menuItem.children && menuItem.children.length > 0) {
-                                                    setBreadCrumbs([...breadcrumbs, {
-                                                        text: menuItem.text,
-                                                        menuPath,
-                                                    }]);
-                                                    setMenuPath([...menuPath, menuItem.text]);
+                                        {breadcrumbs.length > 1 &&
+                                            <Link
+                                                component="button"
+                                                sx={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                }}
+                                                onClick={() => {
+                                                    setMenuPath(breadcrumbs[breadcrumbs.length - 1].menuPath);
+                                                    setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length - 1));
+                                                }}
+                                            >
+                                                {breadcrumbs[breadcrumbs.length - 2].icon}
+                                                {breadcrumbs[breadcrumbs.length - 2].text &&
+                                                    <Typography>
+                                                        {breadcrumbs[breadcrumbs.length - 2].text}
+                                                    </Typography>
                                                 }
+                                            </Link>
+                                        }
 
-                                                if (menuItem.onClick) {
-                                                    menuItem.onClick();
-                                                }
-                                            }}
-                                        >
-                                            <ListItemButton>
-                                                <ListItemIcon>{menuItem.icon}</ListItemIcon>
-                                                <ListItemText>{menuItem.text}</ListItemText>
-                                                {menuItem.children && menuItem.children.length > 0 &&
-                                                    <KeyboardArrowRight />
-                                                }
-                                                {menuItem.more &&
-                                                    <MoreHoriz />
-                                                }
-                                            </ListItemButton>
-                                        </ListItem>
-                                    );
-                                })}
-                            </List>
-                        </>
-                    </CollapsibleSection>
-                </div>
+                                        {breadcrumbs[breadcrumbs.length - 1].icon}
 
-                <div className="flex-grow" />
+                                        {breadcrumbs[breadcrumbs.length - 1].text &&
+                                            <Typography>
+                                                {breadcrumbs[breadcrumbs.length - 1].text}
+                                            </Typography>
+                                        }
+                                    </Breadcrumbs>
+                                }
+
+                                <List>
+                                    {curMenu.map((menuItem, index) => {
+                                        return (
+                                            <ListItem
+                                                disablePadding
+                                                key={`${index}-${menuItem.text}`}
+                                                onClick={() => {
+                                                    if (menuItem.children && menuItem.children.length > 0) {
+                                                        setBreadCrumbs([...breadcrumbs, {
+                                                            text: menuItem.text,
+                                                            menuPath,
+                                                        }]);
+                                                        setMenuPath([...menuPath, menuItem.text]);
+                                                    }
+
+                                                    if (menuItem.onClick) {
+                                                        menuItem.onClick();
+                                                    }
+                                                }}
+                                            >
+                                                <ListItemButton>
+                                                    <ListItemIcon>{menuItem.icon}</ListItemIcon>
+                                                    <ListItemText>{menuItem.text}</ListItemText>
+                                                    {menuItem.children && menuItem.children.length > 0 &&
+                                                        <KeyboardArrowRight />
+                                                    }
+                                                    {menuItem.more &&
+                                                        <MoreHoriz />
+                                                    }
+                                                </ListItemButton>
+                                            </ListItem>
+                                        );
+                                    })}
+                                </List>
+                            </>
+                        </CollapsibleSection>
+                    </div>
+
+                </Box>
                 {databasePath &&
-                    <div className="flex flex-col">
-                        <Divider />
-                        <List sx={{ pl: "15px", ...listSx }}>
-                            <ListItem
-                                disablePadding
-                                data-id="close-database-button"
-                                onClick={async () => {
-                                    setSidebarOpen(false);
-                                    await onCloseDatabase();
-                                }}
-                                >
-                                <ListItemButton>
-                                    <ListItemIcon><ExitToApp /></ListItemIcon>
-                                    <ListItemText>Close database</ListItemText>
-                                </ListItemButton>
-                            </ListItem>
-                        </List>
+                    <div
+                        style={{
+                            padding: "var(--space-3) var(--space-4)",
+                            borderTop: "1px solid var(--color-border)",
+                            background: "var(--color-panel)",
+                        }}
+                        >
+                        <Button
+                            data-id="close-database-button"
+                            variant="outlined"
+                            fullWidth={true}
+                            startIcon={<ExitToApp />}
+                            onClick={async () => {
+                                setSidebarOpen(false);
+                                await onCloseDatabase();
+                            }}
+                            >
+                            Close database
+                        </Button>
                     </div>
                 }
             </div>

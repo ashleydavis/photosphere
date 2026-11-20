@@ -119,7 +119,7 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
     return (
         <div
             data-id="gallery-thumb"
-            className={isNewArrival ? "gallery-thumb-container gallery-thumb-arrived" : "gallery-thumb-container"}
+            className={isNewArrival ? "group gallery-thumb-container gallery-thumb-arrived" : "group gallery-thumb-container"}
             style={{
                 position: "absolute",
                 left: `${x}px`,
@@ -127,28 +127,30 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                 width: `${width}px`,
                 height: `${height}px`,
                 overflow: "hidden",
+                borderRadius: "var(--radius-photo)",
+                backgroundColor: "var(--color-raised)",
             }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             {...longPressHandlers}
             >
+            {/* The photo's own dominant colour, shown until its thumbnail loads. */}
             {item.color
-                && <div                    
+                && <div
                     style={{
                         position: "absolute",
                         left: `0px`,
                         top: `0px`,
                         width: `100%`,
                         height: `100%`,
-                        opacity: "0.7",
                         backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
                     }}
-                    >                   
+                    >
                 </div>
-            }    
+            }
 
             {microDataURL
-                && <img 
+                && <img
                     data-testid="gallery-thumb"
                     className="gallery-thumb"
                     src={microDataURL}
@@ -158,15 +160,13 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         top: "0",
                         width: "100%",
                         height: "100%",
-                        objectFit: "contain",
-                        scale: "1.05", // A small tweak to make the image cover the space without gaps.
-                        transformOrigin: "center",
+                        objectFit: "cover",
                     }}
                     />
-            }    
+            }
 
             {thumbObjectURL
-                &&  <img 
+                &&  <img
                     data-testid="gallery-thumb"
                     className="gallery-thumb fade-in-thumb"
                     src={thumbObjectURL}
@@ -176,30 +176,47 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         top: "0",
                         width: "100%",
                         height: "100%",
-                        objectFit: "contain",
-                        scale: "1.05", // A small tweak to make the image cover the space without gaps.
-                        transformOrigin: "center",
+                        objectFit: "cover",
                     }}
                     />
-            }    
+            }
 
-            {/* Selection tick mark. */}
+            {/* Ring of the accent colour inside the edge of a selected photo. */}
+
+            {isSelected
+                && <span
+                    aria-hidden={true}
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        pointerEvents: "none",
+                        borderRadius: "var(--radius-photo)",
+                        boxShadow: "var(--photo-selected-ring)",
+                    }}
+                    />
+            }
+
+            {/* Selection tick mark. It shows under the pointer, and on every photo while a selection is open. */}
 
             <div
                 data-id="gallery-item-checkbox"
-                className="selection-tick"
+                className={(isSelecting || isSelected) ? "flex" : "hidden group-hover:flex"}
                 style={{
                     position: "absolute",
-                    left: "8px",
-                    top: "8px",
-                    width: "24px",
-                    height: "24px",
-                    borderRadius: "50%",
-                    backgroundColor: isSelected ? "rgba(0, 0, 255, 1)" : "rgba(0, 0, 0, 0.25)",
+                    left: "var(--space-2)",
+                    top: "var(--space-2)",
+                    width: "var(--tile-tick-size)",
+                    height: "var(--tile-tick-size)",
+                    boxSizing: "border-box",
+                    borderRadius: "var(--radius-tile-tick)",
+                    backgroundColor: isSelected ? "var(--color-accent)" : "var(--color-tile-tick-fill)",
+                    border: isSelected ? "2px solid var(--color-accent)" : "2px solid var(--color-tile-tick-ring)",
+                    boxShadow: isSelected ? "none" : "var(--tile-tick-shadow)",
+                    color: "var(--color-on-accent)",
                     justifyContent: "center",
                     alignItems: "center",
                     cursor: "pointer",
-                    display: (isSelecting || isSelected) ? "flex" : undefined,
+                    transition: "background-color var(--duration-fast) var(--ease-standard)",
                 }}
                 onMouseDown={event => event.stopPropagation()}
                 onMouseUp={event => event.stopPropagation()}
@@ -220,16 +237,20 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     }
                 }}
                 >
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="white"
-                    width="16px"
-                    height="16px"
-                    >
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                </svg>
-            </div>                  
+                {isSelected
+                    && <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        style={{
+                            width: "var(--icon-sm)",
+                            height: "var(--icon-sm)",
+                        }}
+                        >
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                    </svg>
+                }
+            </div>
 
             {item.contentType.startsWith("video")
                 && <div
@@ -238,11 +259,12 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                         left: "50%",
                         top: "50%",
                         transform: "translate(-50%, -50%)",
-                        width: "48px",
-                        height: "48px",
-                        borderRadius: "50%",
-                        backgroundColor: "rgba(0, 0, 0, 0.5)",
-                        display: "flex",
+                        width: "calc(var(--space-8) + var(--space-2))",
+                        height: "calc(var(--space-8) + var(--space-2))",
+                        borderRadius: "var(--radius-full)",
+                        backgroundColor: "var(--color-video-badge-bg)",
+                        color: "var(--gray-0)",
+                        display: "var(--video-play-display)",
                         justifyContent: "center",
                         alignItems: "center",
                         cursor: "pointer",
@@ -251,9 +273,11 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
-                        fill="white"
-                        width="32px"
-                        height="32px"
+                        fill="currentColor"
+                        style={{
+                            width: "var(--icon-lg)",
+                            height: "var(--icon-lg)",
+                        }}
                         >
                         <path d="M8 5v14l11-7z"/>
                     </svg>
@@ -266,12 +290,15 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                 <div
                     style={{
                         position: "absolute",
-                        right: "6px",
-                        top: "6px",
-                        width: "24px",
-                        height: "24px",
-                        borderRadius: "50%",
-                        backgroundColor: "rgba(0, 0, 0, 0.35)",
+                        right: "var(--space-2)",
+                        top: "var(--space-2)",
+                        width: "calc(var(--icon-lg) + var(--space-1))",
+                        height: "calc(var(--icon-lg) + var(--space-1))",
+                        boxSizing: "border-box",
+                        borderRadius: "var(--radius-full)",
+                        backgroundColor: "var(--color-tile-star-fill)",
+                        border: "2px solid var(--gray-0)",
+                        color: isStarred ? "var(--color-tile-starred)" : "var(--color-tile-star-icon)",
                         display: "flex",
                         justifyContent: "center",
                         alignItems: "center",
@@ -293,9 +320,11 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
-                        fill={isStarred ? "gold" : "rgba(255,255,255,0.7)"}
-                        width="15px"
-                        height="15px"
+                        fill="currentColor"
+                        style={{
+                            width: "var(--icon-sm)",
+                            height: "var(--icon-sm)",
+                        }}
                         >
                         <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
                     </svg>
@@ -308,12 +337,15 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                 <div
                     style={{
                         position: "absolute",
-                        right: "6px",
-                        bottom: "6px",
-                        width: "24px",
-                        height: "24px",
-                        borderRadius: "50%",
-                        backgroundColor: "rgba(0, 0, 0, 0.35)",
+                        right: "var(--space-2)",
+                        bottom: "var(--space-2)",
+                        width: "calc(var(--icon-lg) + var(--space-1))",
+                        height: "calc(var(--icon-lg) + var(--space-1))",
+                        boxSizing: "border-box",
+                        borderRadius: "var(--radius-full)",
+                        backgroundColor: "var(--color-tile-flag-fill)",
+                        border: "2px solid var(--gray-0)",
+                        color: isFlagged ? "var(--color-tile-flagged)" : "var(--color-tile-flag-icon)",
                         display: "flex",
                         justifyContent: "center",
                         alignItems: "center",
@@ -335,71 +367,16 @@ export function GalleryImage({ item, onClick, x, y, width, height }: IGalleryIma
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
-                        fill={isFlagged ? "red" : "rgba(255,255,255,0.7)"}
-                        width="15px"
-                        height="15px"
+                        fill="currentColor"
+                        style={{
+                            width: "var(--icon-sm)",
+                            height: "var(--icon-sm)",
+                        }}
                         >
                         <path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z"/>
                     </svg>
                 </div>
             }
-
-            {/* Image number. */}
-
-            {/* <div
-                style={{
-                    position: "absolute",
-                    left: `8px`,
-                    bottom: `8px`,
-                    padding: "2px",
-                    color: "white",
-                    backgroundColor: "rgba(0, 0, 0, 0.5)",
-                    pointerEvents: "none",
-                    fontSize: "14px",
-                    lineHeight: "14px",
-                }}
-                >
-                #{item.searchIndex!+1}
-            </div> */}
-
-            {/* Renders a debug panel for each image showing it's position and dimensions. */}
-            {/* <div
-                style={{
-                    position: "absolute",
-                    right: `2px`,
-                    bottom: `2px`,
-                    color: "black",
-                    backgroundColor: `rgba(255, 255, 255, 0.75)`,
-                    border: "1px solid black",
-                    padding: "3px",
-                    pointerEvents: "none",
-                    fontSize: "12px",
-                    lineHeight: "14px",
-                }}
-                >
-                <p>
-                    {item.photoDate ? dayjs(item.photoDate).format("DD/MM/YYYY") : "No date"}
-                </p>
-
-                <p>
-                    left = {x.toFixed(2)}  
-                </p>
-                <p>
-                    top = {y.toFixed(2)}
-                </p>
-                <p>
-                    right = {(x+width).toFixed(2)}  
-                </p>
-                <p>
-                    bottom = {(y+height).toFixed(2)}
-                </p>
-                <p>
-                    w = {width.toFixed(2)}
-                </p>
-                <p>
-                    h = {height.toFixed(2)}
-                </p>
-            </div> */}
         </div>
     );
 };

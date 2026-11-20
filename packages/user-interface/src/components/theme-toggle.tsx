@@ -8,6 +8,7 @@ import DarkMode from "@mui/icons-material/DarkMode";
 import SettingsBrightness from "@mui/icons-material/SettingsBrightness";
 import Check from "@mui/icons-material/Check";
 import { ThemeSetting, useThemeSetting } from "../lib/use-theme-setting";
+import { useIsMobile } from "../lib/use-is-mobile";
 
 //
 // The set of theme modes the user can choose between.
@@ -42,6 +43,11 @@ export function ThemeToggle() {
     const [selectedMode, setSelectedMode] = useThemeSetting();
 
     //
+    // Sizes the button as a touch target on a mobile, matching the navbar's other icon buttons.
+    //
+    const isMobile = useIsMobile();
+
+    //
     // The button the menu hangs from while it is open, and undefined while it is closed.
     //
     const [menuAnchor, setMenuAnchor] = useState<HTMLElement | undefined>(undefined);
@@ -60,11 +66,20 @@ export function ThemeToggle() {
                 data-id="theme-toggle-button"
                 title="Change theme"
                 onClick={event => setMenuAnchor(event.currentTarget)}
-                sx={{
-                    mr: 1,
-                    borderRadius: 2,
-                    backgroundColor: 'action.selected',
-                }}
+                sx={isMobile
+                    ? {
+                        width: "var(--button-height-lg)",
+                        height: "var(--button-height-lg)",
+                        "& .MuiSvgIcon-root": {
+                            fontSize: "inherit",
+                        },
+                    }
+                    : {
+                        "& .MuiSvgIcon-root": {
+                            fontSize: "inherit",
+                        },
+                    }
+                }
             >
                 {renderModeIcon(selectedMode)}
             </IconButton>

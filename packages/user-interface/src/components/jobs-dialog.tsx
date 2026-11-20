@@ -4,7 +4,6 @@ import Button from "@mui/material/Button";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
-import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import Close from "@mui/icons-material/Close";
@@ -12,6 +11,9 @@ import { ResponsiveDialog } from "./responsive-dialog";
 import { useJobs } from "../context/jobs-context";
 import { formatElapsed } from "../lib/jobs";
 import { useElapsedTick } from "../lib/use-elapsed-tick";
+import { useIsMobile } from "../lib/use-is-mobile";
+import { DialogIconBadge } from "./dialog-icon-badge";
+import { DialogSection } from "./dialog-section";
 
 //
 // What the user has asked to stop and is being asked to confirm.
@@ -50,6 +52,7 @@ export interface IJobsDialogProps {
 export function JobsDialog({ open, onClose }: IJobsDialogProps) {
     const { jobs, cancelJob, cancelAllJobs, canCancelAny } = useJobs();
     const now = useElapsedTick(open && jobs.length > 0);
+    const isMobile = useIsMobile();
 
     const [pendingCancel, setPendingCancel] = useState<IPendingCancel | undefined>(undefined);
 
@@ -71,6 +74,22 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
             setPendingCancel(undefined);
         }
     }, [jobs, pendingCancel]);
+
+    //
+    // Stop all is the dialog's dangerous action, so it sits at the right end of the row on a
+    // desktop, apart from Close. On a mobile the actions stack with the last on top, so it goes
+    // first there, leaving Close on top within reach and Stop all under it.
+    //
+    const stopAll = canCancelAny
+        && <Button
+            data-id="jobs-cancel-all-button"
+            variant="outlined"
+            color="error"
+            size={isMobile ? "medium" : "small"}
+            onClick={() => setPendingCancel({ jobId: undefined, what: jobs.length === 1 ? "this job" : `all ${jobs.length} jobs` })}
+            >
+            Stop all
+        </Button>;
 
     function confirmCancel(): void {
         if (!pendingCancel) {
@@ -94,7 +113,10 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
             maxWidth={560}
             dataId="jobs-dialog"
             >
-            <DialogTitle>Background jobs</DialogTitle>
+            <DialogTitle>
+                <DialogIconBadge icon={<i className={pendingCancel ? "fa-solid fa-stop" : "fa-solid fa-bars-progress"} />} danger={pendingCancel !== undefined} />
+                Background jobs
+            </DialogTitle>
 
             {pendingCancel
                 && <>
@@ -102,21 +124,27 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
                         <Typography variant="body1" data-id="jobs-cancel-confirm-message">
                             Stop {pendingCancel.what}?
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                marginTop: 'var(--space-2)',
+                                color: 'var(--color-text-muted)',
+                            }}
+                            >
                             Work already finished is kept. Whatever is still in progress is abandoned.
                         </Typography>
                     </DialogContent>
                     <DialogActions>
                         <Button
                             data-id="jobs-cancel-confirm-no"
-                            variant="text"
+                            variant="outlined"
                             onClick={() => setPendingCancel(undefined)}
                             >
                             Keep running
                         </Button>
                         <Button
                             data-id="jobs-cancel-confirm-yes"
-                            variant="contained"
+                            variant="outlined"
                             color="error"
                             onClick={confirmCancel}
                             >
@@ -130,83 +158,138 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
                 && <>
                     <DialogContent>
                         {jobs.length === 0
-                            && <Typography variant="body2" color="text.secondary" data-id="jobs-dialog-empty">
-                                Nothing is running in the background.
-                            </Typography>
+                            && <Box
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: 'var(--space-3)',
+                                    padding: 'var(--space-6) 0px',
+                                    color: 'var(--color-text-muted)',
+                                }}
+                                >
+                                <Box
+                                    component="i"
+                                    className="fa-solid fa-circle-check"
+                                    aria-hidden={true}
+                                    sx={{
+                                        fontSize: 'var(--text-2xl)',
+                                        color: 'var(--color-success)',
+                                    }}
+                                    />
+                                <Typography variant="body2" data-id="jobs-dialog-empty">
+                                    Nothing is running in the background.
+                                </Typography>
+                            </Box>
                         }
 
-                        <Box sx={{ display: 'flex', flexDirection: 'column', py: 1 }}>
-                            {jobs.map((job, jobIndex) => (
-                                <React.Fragment key={job.id}>
-                                    {/*
-                                        A line between rows, so the Stop button at the end of one row
-                                        cannot be read as belonging to the row above or below it.
-                                        Stopping the wrong job is not undoable.
-                                    */}
-                                    {jobIndex > 0 && <Divider sx={{ my: 1.5 }} />}
+                        {jobs.length > 0
+                            && <DialogSection heading="">
+                                {jobs.map(job => (
+                                    <Box
+                                        key={job.id}
+                                        data-id={`job-row-${job.id}`}
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 'var(--space-3)',
+                                            padding: 'var(--space-3)',
+                                            //
+                                            // A line between rows, so the Stop button at the end of one row
+                                            // cannot be read as belonging to the row above or below it.
+                                            // Stopping the wrong job is not undoable.
+                                            //
+                                            '& + &': {
+                                                borderTop: '1px solid var(--color-border)',
+                                            },
+                                        }}
+                                        >
+                                        {/*
+                                            Deliberately not the ring the navbar spins, nor the one used
+                                            for syncing, so a glance tells them apart.
+                                        */}
+                                        <Box
+                                            component="i"
+                                            className="fa-solid fa-spinner fa-spin"
+                                            aria-hidden={true}
+                                            sx={{
+                                                flex: 'none',
+                                                width: 'var(--icon-md)',
+                                                fontSize: 'var(--icon-md)',
+                                                textAlign: 'center',
+                                                color: 'var(--color-text-muted)',
+                                            }}
+                                            />
 
-                                <Box
-                                    data-id={`job-row-${job.id}`}
-                                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}
-                                    >
-                                    {/*
-                                        Deliberately not the ring the navbar spins, nor the one used
-                                        for syncing, so a glance tells them apart.
-                                    */}
-                                    <i
-                                        className="fa-solid fa-spinner fa-spin"
-                                        style={{ opacity: 0.7, width: 16, textAlign: 'center' }}
-                                        />
-
-                                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                        <Typography variant="body2">
-                                            {job.name}
-                                        </Typography>
-                                        {job.progressMessage
-                                            && <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.25 }}>
-                                                {job.progressMessage}
+                                        <Box
+                                            sx={{
+                                                flexGrow: 1,
+                                                minWidth: 0,
+                                            }}
+                                            >
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    fontWeight: 'var(--weight-medium)',
+                                                }}
+                                                >
+                                                {job.name}
                                             </Typography>
+                                            {job.progressMessage
+                                                && <Typography
+                                                    variant="caption"
+                                                    component="p"
+                                                    sx={{
+                                                        marginTop: 'var(--space-1)',
+                                                        color: 'var(--color-text-muted)',
+                                                    }}
+                                                    >
+                                                    {job.progressMessage}
+                                                </Typography>
+                                            }
+                                        </Box>
+
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: 'var(--color-text-muted)',
+                                                whiteSpace: 'nowrap',
+                                                fontVariantNumeric: 'tabular-nums',
+                                            }}
+                                            data-id={`job-elapsed-${job.id}`}
+                                            >
+                                            {formatElapsed(now - job.startedAt)}
+                                        </Typography>
+
+                                        {job.cancelSource
+                                            && <IconButton
+                                                data-id={`job-cancel-${job.id}`}
+                                                size="small"
+                                                color="error"
+                                                aria-label="Stop job"
+                                                title="Stop"
+                                                sx={{
+                                                    borderColor: 'var(--color-danger)',
+                                                }}
+                                                onClick={() => setPendingCancel({ jobId: job.id, what: `"${job.name}"` })}
+                                                >
+                                                <Close
+                                                    sx={{
+                                                        fontSize: 'var(--icon-md)',
+                                                    }}
+                                                    />
+                                            </IconButton>
                                         }
                                     </Box>
-
-                                    <Typography
-                                        variant="caption"
-                                        sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}
-                                        data-id={`job-elapsed-${job.id}`}
-                                        >
-                                        {formatElapsed(now - job.startedAt)}
-                                    </Typography>
-
-                                    {job.cancelSource
-                                        && <IconButton
-                                            data-id={`job-cancel-${job.id}`}
-                                            size="small"
-                                            color="error"
-                                            aria-label="Stop job"
-                                            title="Stop"
-                                            onClick={() => setPendingCancel({ jobId: job.id, what: `"${job.name}"` })}
-                                            >
-                                            <Close fontSize="small" />
-                                        </IconButton>
-                                    }
-                                </Box>
-                                </React.Fragment>
-                            ))}
-                        </Box>
+                                ))}
+                            </DialogSection>
+                        }
                     </DialogContent>
 
                     <DialogActions>
-                        {canCancelAny
-                            && <Button
-                                data-id="jobs-cancel-all-button"
-                                variant="text"
-                                color="error"
-                                onClick={() => setPendingCancel({ jobId: undefined, what: jobs.length === 1 ? "this job" : `all ${jobs.length} jobs` })}
-                                >
-                                Stop all
-                            </Button>
-                        }
+                        {isMobile && stopAll}
                         <Button data-id="jobs-dialog-close" variant="contained" onClick={onClose}>Close</Button>
+                        {!isMobile && stopAll}
                     </DialogActions>
                 </>
             }

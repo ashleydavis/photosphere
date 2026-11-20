@@ -1,22 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { IGalleryLayout } from "../lib/create-layout";
 import useResizeObserver from "@react-hook/resize-observer";
-import { useTheme } from "@mui/material/styles";
-
-//
-// Width of the custom scrollbar on the right of the gallery.
-//
-export const SCROLLBAR_WIDTH = 22;
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 
 //
 // Gutter above and below the scrollbar.
 //
 const VERTICAL_GUTTER = 2;
-
-//
-// Minimum height of the scrollbar thumb.
-//
-const MIN_SCROLLTHUMB_HEIGHT = 42;
 
 export interface IGalleryScrolbarProps {
     //
@@ -51,7 +41,11 @@ export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }
     const [isDraggingTouch, setIsDraggingTouch] = useState(false);
     const [isDraggingMouse, setIsDraggingMouse] = useState(false);
     const deltaY = useRef(0);
-    const theme = useTheme();
+
+    //
+    // The thumb, whose height the --scrubber-thumb-height token sets and the position maths reads.
+    //
+    const thumbRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const container = scrollContainerRef.current;
@@ -92,8 +86,8 @@ export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }
     }
 
     useEffect(() => {
-        if (galleryContainerHeight > 0 && galleryLayout?.galleryHeight > 0 && scrollbarHeight > 0) {
-            setThumbHeight(Math.min(Math.max(MIN_SCROLLTHUMB_HEIGHT, (galleryContainerHeight / galleryLayout?.galleryHeight) * scrollbarHeight), scrollbarHeight - VERTICAL_GUTTER - VERTICAL_GUTTER));
+        if (galleryContainerHeight > 0 && galleryLayout?.galleryHeight > 0 && scrollbarHeight > 0 && thumbRef.current) {
+            setThumbHeight(thumbRef.current.offsetHeight);
         }
         else {
             setThumbHeight(0);
@@ -202,8 +196,7 @@ export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }
                 ref={containerRef}
                 className="gallery-scrollbar"
                 style={{
-                    width: `${SCROLLBAR_WIDTH}px`,
-                    backgroundColor: (theme.vars ?? theme).palette.background.default,
+                    width: "var(--scrubber-thumb-width)",
                     zIndex: 200,
                 }}
                 onMouseUp={event => {
@@ -220,18 +213,36 @@ export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }
                 }}
                 >
 
-                {/* The thumb */}
+                {/* The thumb: an accent tab at the right edge, set by the --scrubber-thumb-* tokens. */}
                 <div
+                    ref={thumbRef}
                     className="gallery-scrollbar-thumb"
                     onMouseDown={onMouseDown}
                     onTouchStart={onTouchStart}
                     style={{
                         position: "absolute",
                         top: `${thumbPos}px`,
-                        height: `${thumbHeight}px`,
-                        width: `${SCROLLBAR_WIDTH}px`,
+                        right: "var(--scrubber-thumb-edge-gap)",
+                        boxSizing: "border-box",
+                        height: "var(--scrubber-thumb-height)",
+                        width: "var(--scrubber-thumb-width)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "var(--color-scrubber-thumb-bg)",
+                        color: "var(--color-scrubber-thumb-text)",
+                        border: "var(--scrubber-thumb-border-width) solid var(--color-scrubber-thumb-border)",
+                        borderRadius: "var(--radius-scrubber-thumb)",
+                        boxShadow: "var(--shadow-scrubber-thumb)",
+                        cursor: (isDraggingMouse || isDraggingTouch) ? "grabbing" : "grab",
                     }}
                     >
+                    <UnfoldMoreIcon
+                        sx={{
+                            display: "var(--scrubber-thumb-icon-display)",
+                            fontSize: "var(--icon-sm)",
+                        }}
+                        />
                 </div>
             </div>
 

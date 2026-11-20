@@ -1,6 +1,7 @@
 // @ts-ignore
 import FPSStats from "react-fps-stats";
 import { useDeveloper } from "../context/developer-context";
+import { useIsMobile } from "../lib/use-is-mobile";
 
 //
 // Renders the FPS indicator overlay when the `showFpsIndicator` value from
@@ -12,6 +13,11 @@ export function Fps() {
 
     const { showFpsIndicator } = useDeveloper();
 
+    //
+    // Lifts the indicator above the tab bar at the foot of the screen on a mobile.
+    //
+    const isMobile = useIsMobile();
+
     return (
         <>
             {showFpsIndicator
@@ -19,8 +25,8 @@ export function Fps() {
                     <FPSStats
                         top="auto"
                         left="auto"
-                        right={70}
-                        bottom={10}
+                        right="calc(var(--space-8) * 2 + var(--space-2))"
+                        bottom={isMobile ? "calc(var(--space-8) * 2 + var(--space-2))" : "var(--space-2)"}
                     />
                 </div>
             }

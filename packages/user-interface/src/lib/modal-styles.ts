@@ -5,7 +5,7 @@ export interface IMobileDialogActionChildSx {
     // Fill the width of the stack.
     width: '100%';
 
-    // Comfortable tap height. Material's minimum touch target is 48px.
+    // Comfortable tap height, the style guide's large button height.
     minHeight: string;
 
     // Material's `DialogActions` spaces a row of actions with a left margin on every action after
@@ -15,12 +15,15 @@ export interface IMobileDialogActionChildSx {
 
 //
 // Styles applied to a sheet's action row on a mobile. The actions become a full-width stack at the
-// bottom of the sheet (the thumb end of the screen) instead of a cramped right-aligned row.
+// bottom of the sheet (the thumb end of the screen) instead of a cramped row.
 //
 export interface IMobileDialogActionsSx {
-    // Stack the actions vertically. Reversed because the desktop's right-aligned row puts the
-    // primary action last, and stacking should leave that primary action on top.
+    // Stack the actions vertically. Reversed because every dialog writes its main action last,
+    // and stacking should leave that main action on top.
     flexDirection: 'column-reverse';
+
+    // Every action stretches across the sheet.
+    alignItems: 'stretch';
 
     // Space between the stacked actions.
     gap: string;
@@ -28,8 +31,50 @@ export interface IMobileDialogActionsSx {
     // The stack spans the sheet.
     width: '100%';
 
+    // The line that sets the actions apart from the scrolling content above them.
+    borderTop: string;
+
+    // Room between that line and the first action.
+    paddingTop: string;
+
     // Every action fills the width, giving a large, unmissable tap target.
     '& > *': IMobileDialogActionChildSx;
+
+    // An icon button in the stack, such as a refresh button.
+    '& > .MuiIconButton-root': IMobileDialogIconActionSx;
+}
+
+//
+// Styles applied to an icon button in a mobile sheet's stack of actions. It keeps its square shape
+// instead of stretching across the sheet like the text buttons.
+//
+export interface IMobileDialogIconActionSx {
+    // As wide as the icon button is tall, not the width of the stack.
+    width: 'auto';
+
+    // As wide as the stack's tap height, so the button is square.
+    minWidth: string;
+
+    // Centred in the stack rather than stretched across it.
+    alignSelf: 'center';
+}
+
+//
+// Styles applied to the first action in a desktop dialog's action row.
+//
+export interface IDesktopDialogFirstActionSx {
+    // Takes up the row's free space, so the first action (Cancel) sits alone at the left end and
+    // every action after it groups at the right end, even when there are more than two.
+    marginRight: 'auto';
+}
+
+//
+// Styles applied to the only action in a desktop dialog's action row.
+//
+export interface IDesktopDialogOnlyActionSx {
+    // Takes up the row's free space before it, so a lone action, which is the dialog's main
+    // action, sits at the right end where the main action always sits.
+    marginLeft: 'auto';
 }
 
 //
@@ -37,21 +82,20 @@ export interface IMobileDialogActionsSx {
 //
 export interface IDesktopDialogActionChildSx {
     // Material's `DialogActions` spaces its actions with a left margin on every action after the
-    // first. In a reversed row that margin lands on the outer side of the action, so the row's `gap`
-    // spaces the actions instead.
+    // first, so the row's `gap` spaces the actions instead.
     marginLeft: string;
 }
 
 //
-// Styles applied to a desktop dialog's action row. The row runs right to left, so the first action
-// in the markup sits at the right-hand end, the order every dialog's actions are written in.
+// Styles applied to a desktop dialog's action row. Every dialog writes Cancel first and its main
+// action last, and the row spreads them to its two ends, as the style guide's dialogs do.
 //
 export interface IDesktopDialogActionsSx {
-    // Lay the actions out from the right-hand end.
-    flexDirection: 'row-reverse';
+    // Lay the actions out left to right, in the order they are written.
+    flexDirection: 'row';
 
-    // In a reversed row the start is the right-hand edge, so this keeps the actions right-aligned.
-    justifyContent: 'flex-start';
+    // Spread the actions to the ends of the row, as the style guide's token sets.
+    justifyContent: string;
 
     // Space between the actions.
     gap: string;
@@ -59,6 +103,12 @@ export interface IDesktopDialogActionsSx {
     // Clears Material's own spacing between the actions. The selector is Material's own, so it
     // overrides Material's margin even when this is the `sx` of a `DialogActions` itself.
     '& > :not(style) ~ :not(style)': IDesktopDialogActionChildSx;
+
+    // The first action, when it is not the only one.
+    '& > :first-of-type:not(:last-of-type)': IDesktopDialogFirstActionSx;
+
+    // The action, when it is the only one.
+    '& > :first-of-type:last-of-type': IDesktopDialogOnlyActionSx;
 }
 
 //
@@ -77,12 +127,6 @@ export interface IMobileDialogTitleSx {
 
     // Opaque, so content scrolling underneath does not show through.
     backgroundColor: string;
-
-    // Larger than the desktop title: on a small screen the sheet's heading is the main landmark.
-    fontSize: string;
-
-    // Breathing room under the heading.
-    paddingBottom: string;
 }
 
 //
@@ -90,7 +134,7 @@ export interface IMobileDialogTitleSx {
 // panel came up from the bottom edge.
 //
 export interface ISheetHandleSx {
-    // Drawn with a pseudo-element, so no markup changes are needed across twenty dialogs.
+    // Drawn with a pseudo-element, so no markup changes are needed across every dialog.
     content: '""';
 
     // Block, so it can be centred with auto margins.
@@ -108,16 +152,16 @@ export interface ISheetHandleSx {
     // Fully rounded ends.
     borderRadius: string;
 
-    // Muted, so it reads as an affordance rather than as content.
+    // The handle colour the style guide sets for a sheet on a mobile.
     backgroundColor: string;
 
-    // Centred, with space below it before the title.
+    // Centred, with space above it.
     margin: string;
 }
 
 //
 // Places a dialog's close button (an `IconButton` placed directly in the dialog, beside its title)
-// in the dialog's top-right corner, out of the title's way, so every dialog shows it in the same place.
+// at the right end of the title row, so every dialog shows it in the same place.
 //
 export interface ICloseButtonSx {
     // Taken out of the flow, so the title keeps the full width of the dialog.
@@ -128,6 +172,18 @@ export interface ICloseButtonSx {
 
     // Distance from the right edge of the dialog.
     right: string;
+
+    // Sits above a sticky title, which would otherwise cover it on a mobile sheet.
+    zIndex: number;
+}
+
+//
+// Styles applied to a dialog title that follows a close button, so a long title wraps before it
+// runs under the button.
+//
+export interface ITitleBesideCloseButtonSx {
+    // Room at the right end of the title for the close button.
+    paddingRight: string;
 }
 
 //
@@ -146,7 +202,10 @@ export interface IMobileSheetContentSx {
     // Rounded at the top only, because the bottom edge runs off the screen.
     borderRadius: string;
 
-    // Room above the grab handle. The title, content and actions bring their own side padding.
+    // The theme draws a right edge on every drawer, which a sheet spanning the screen does not need.
+    borderRight: string;
+
+    // The title, content and actions bring their own padding.
     padding: string;
 
     // Bottom padding clears the system navigation bar / home indicator.
@@ -155,10 +214,13 @@ export interface IMobileSheetContentSx {
     // The grab handle.
     '&::before': ISheetHandleSx;
 
-    // The close button, inset to suit the sheet's rounded corner.
+    // The close button, at the right end of the title row.
     '& > .MuiIconButton-root': ICloseButtonSx;
 
-    // The sticky, larger title.
+    // A title that shares its row with the close button.
+    '& > .MuiIconButton-root ~ .MuiDialogTitle-root': ITitleBesideCloseButtonSx;
+
+    // The sticky title.
     '& .MuiDialogTitle-root': IMobileDialogTitleSx;
 
     // Full-width stacked actions.
@@ -204,40 +266,53 @@ export interface IDesktopDialogSx {
     // wider than the gap the width and height limits above leave for it.
     margin: string;
 
-    // The close button in the dialog's top-right corner.
+    // The close button at the right end of the title row.
     '& > .MuiIconButton-root': ICloseButtonSx;
 
-    // The right-to-left action row.
+    // A title that shares its row with the close button.
+    '& > .MuiIconButton-root ~ .MuiDialogTitle-root': ITitleBesideCloseButtonSx;
+
+    // The action row, spread to its two ends.
     '& .MuiDialogActions-root': IDesktopDialogActionsSx;
 }
 
 //
-// Gap (in pixels) kept between a modal dialog and each edge of the viewport so
-// the dialog never touches or overflows the screen edges on small form factors.
+// The gap kept between a modal dialog and each edge of the viewport, so the dialog never touches or
+// overflows the screen edges on small form factors. Used by both the width and height limits and
+// the margin, which have to agree.
 //
-const VIEWPORT_GAP_PX = 16;
+const VIEWPORT_GAP = 'var(--space-4)';
 
 //
-// How long (in milliseconds) the mobile sheet takes to slide up from the bottom edge, passed to the
-// Material `Drawer`'s `transitionDuration`. Material's own default is 225ms in and 195ms out, which
-// reads as slow when a sheet is opened repeatedly: the sheet should feel like it is already there,
-// not like something the user waits for. Slightly longer than the desktop dialog's fade because the
-// sheet travels the height of the panel rather than fading in place.
+// Where the close button sits: level with the middle of the title's first line, and in from the
+// dialog's right edge by the same amount. Shared by the dialog and the sheet so the button sits in
+// the same place on both.
 //
-export const SHEET_TRANSITION_DURATION_MS = 200;
+const CLOSE_BUTTON_INSET = 'var(--space-3)';
 
 //
-// The easing of the sheet's slide. Decelerating: the sheet leaves the bottom edge quickly and eases
-// into place, so it arrives settled rather than stopping dead. Passed to the `easing` of the Material
-// `Drawer`'s slide transition.
+// The easing of the sheet's slide, passed to the `easing` of the Material `Drawer`'s slide
+// transition. Material writes it into the paper's CSS `transition`, so a token works here.
 //
-export const SHEET_TRANSITION_EASING = 'cubic-bezier(0.32, 0.72, 0, 1)';
+export const SHEET_TRANSITION_EASING = 'var(--ease-standard)';
 
 //
-// The corner radius of the sheet's top edge, shared with the inset of the sheet's close button so the
-// button sits evenly in the rounded corner.
+// Converts a CSS time such as "250ms" or "0.25s", as read from a duration token, to milliseconds,
+// so ResponsiveDialog can hand the sheet's slide a token's duration through the Material `Drawer`'s
+// `transitionDuration`, which takes a number. Returns undefined when the value is not a CSS time,
+// so the caller falls back to Material's own duration.
 //
-const SHEET_CORNER_RADIUS = '20px';
+export function cssTimeToMs(cssTime: string): number | undefined {
+    const match = /^\s*([0-9]*\.?[0-9]+)(ms|s)\s*$/.exec(cssTime);
+    if (!match) {
+        return undefined;
+    }
+    const amount = Number(match[1]);
+    if (match[2] === 's') {
+        return amount * 1000;
+    }
+    return amount;
+}
 
 //
 // Builds the `sx` for the Material `Drawer` that presents a dialog as a bottom sheet on a mobile.
@@ -254,41 +329,52 @@ export function mobileSheetDrawerSx(): IMobileSheetDrawerSx {
     return {
         '& .MuiDrawer-paper': {
             height: 'auto',
-            maxHeight: 'calc(92vh - env(safe-area-inset-top))',
-            borderRadius: `${SHEET_CORNER_RADIUS} ${SHEET_CORNER_RADIUS} 0px 0px`,
-            padding: '12px 0px 0px 0px',
-            paddingBottom: 'calc(20px + env(safe-area-inset-bottom))',
+            maxHeight: 'calc(var(--dialog-sheet-max-height) - env(safe-area-inset-top))',
+            borderRadius: 'var(--dialog-sheet-radius)',
+            borderRight: 'none',
+            padding: '0px',
+            paddingBottom: 'env(safe-area-inset-bottom)',
             '&::before': {
                 content: '""',
                 display: 'block',
-                width: '36px',
-                height: '4px',
+                width: 'calc(var(--space-8) + var(--space-1))',
+                height: 'var(--space-1)',
                 flexShrink: 0,
-                borderRadius: '2px',
-                backgroundColor: 'var(--mui-palette-divider)',
-                margin: '0px auto 12px auto',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'var(--dialog-phone-handle-color)',
+                margin: 'var(--space-2) auto 0px auto',
             },
             '& > .MuiIconButton-root': {
                 position: 'absolute',
-                top: `calc(${SHEET_CORNER_RADIUS} / 2)`,
-                right: `calc(${SHEET_CORNER_RADIUS} / 2)`,
+                top: `calc(var(--space-2) + var(--space-1) + ${CLOSE_BUTTON_INSET})`,
+                right: CLOSE_BUTTON_INSET,
+                zIndex: 3,
+            },
+            '& > .MuiIconButton-root ~ .MuiDialogTitle-root': {
+                paddingRight: `calc(${CLOSE_BUTTON_INSET} + var(--button-height-md))`,
             },
             '& .MuiDialogTitle-root': {
                 position: 'sticky',
                 top: '0px',
                 zIndex: 2,
                 backgroundColor: 'inherit',
-                fontSize: '1.5rem',
-                paddingBottom: '12px',
             },
             '& .MuiDialogActions-root': {
                 flexDirection: 'column-reverse',
-                gap: '8px',
+                alignItems: 'stretch',
+                gap: 'var(--space-2)',
                 width: '100%',
+                borderTop: '1px solid var(--color-border)',
+                paddingTop: 'var(--space-3)',
                 '& > *': {
                     width: '100%',
-                    minHeight: '48px',
+                    minHeight: 'var(--button-height-lg)',
                     marginLeft: '0px',
+                },
+                '& > .MuiIconButton-root': {
+                    width: 'auto',
+                    minWidth: 'var(--button-height-lg)',
+                    alignSelf: 'center',
                 },
             },
         },
@@ -297,45 +383,55 @@ export function mobileSheetDrawerSx(): IMobileSheetDrawerSx {
 
 //
 // Builds the `sx` for a Material `Dialog`'s paper on a desktop-sized screen: the dialog keeps its
-// comfortable size (between `minWidth` and `maxWidth`), centred, with its actions in a right-aligned
-// row and its close button in the top-right corner. The dialog fades in and out with Material's own
-// transition.
+// comfortable size (between `minWidth` and `maxWidth`), centred, with Cancel and its main action at
+// the two ends of the action row and its close button at the right end of the title row. The dialog
+// fades in and out with Material's own transition.
 //
 export function desktopDialogSx(minWidth: number, maxWidth: number): IDesktopDialogSx {
     return {
         // Shrink below the desktop minimum when the viewport is too narrow to hold it.
-        minWidth: `min(${minWidth}px, calc(100vw - ${VIEWPORT_GAP_PX * 2}px))`,
+        minWidth: `min(${minWidth}px, calc(100vw - 2 * ${VIEWPORT_GAP}))`,
         // Cap at the desktop maximum, but never exceed the viewport width.
-        maxWidth: `min(${maxWidth}px, calc(100vw - ${VIEWPORT_GAP_PX * 2}px))`,
+        maxWidth: `min(${maxWidth}px, calc(100vw - 2 * ${VIEWPORT_GAP}))`,
         // Never taller than the visible viewport, accounting for mobile safe-area insets.
-        maxHeight: `calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - ${VIEWPORT_GAP_PX * 2}px)`,
+        maxHeight: `calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2 * ${VIEWPORT_GAP})`,
         // Scroll vertically when the content is tall; never scroll horizontally.
         overflowY: 'auto',
         overflowX: 'hidden',
         // Keep the viewport gap the width and height limits above allow for.
-        margin: `${VIEWPORT_GAP_PX}px`,
-        // The close button sits in the top-right corner, clear of the title.
+        margin: VIEWPORT_GAP,
         '& > .MuiIconButton-root': {
             position: 'absolute',
-            top: '8px',
-            right: '8px',
+            top: CLOSE_BUTTON_INSET,
+            right: CLOSE_BUTTON_INSET,
+            zIndex: 3,
+        },
+        '& > .MuiIconButton-root ~ .MuiDialogTitle-root': {
+            paddingRight: `calc(${CLOSE_BUTTON_INSET} + var(--button-height-md))`,
         },
         '& .MuiDialogActions-root': desktopDialogActionsSx(),
     };
 }
 
 //
-// Builds the `sx` for a desktop dialog's action row, laid out right to left. desktopDialogSx applies
-// it to every dialog shown through ResponsiveDialog, and a dialog built on Material's `Dialog`
-// directly passes it to its own `DialogActions`, so the actions sit in the same order in both.
+// Builds the `sx` for a desktop dialog's action row: Cancel at the left end and the main action at
+// the right end. desktopDialogSx applies it to every dialog shown through ResponsiveDialog, and a
+// dialog built on Material's `Dialog` directly passes it to its own `DialogActions`, so the actions
+// sit the same way in both.
 //
 export function desktopDialogActionsSx(): IDesktopDialogActionsSx {
     return {
-        flexDirection: 'row-reverse',
-        justifyContent: 'flex-start',
-        gap: '8px',
+        flexDirection: 'row',
+        justifyContent: 'var(--dialog-actions-justify)',
+        gap: 'var(--space-2)',
         '& > :not(style) ~ :not(style)': {
             marginLeft: '0px',
+        },
+        '& > :first-of-type:not(:last-of-type)': {
+            marginRight: 'auto',
+        },
+        '& > :first-of-type:last-of-type': {
+            marginLeft: 'auto',
         },
     };
 }

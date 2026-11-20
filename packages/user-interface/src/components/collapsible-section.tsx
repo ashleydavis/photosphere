@@ -1,5 +1,5 @@
 import React, { ReactNode, useEffect, useState } from "react";
-import Typography from "@mui/material/Typography";
+import ListItemButton from "@mui/material/ListItemButton";
 import { ExpandMore, KeyboardArrowRight } from "@mui/icons-material";
 import { useStateStore } from "../context/state-store-context";
 
@@ -15,21 +15,34 @@ export interface ICollapsibleSectionProps {
     label: string;
 
     //
-    // Optional style applied to the header row.
-    //
-    style?: React.CSSProperties;
-
-    //
     // The content to show when the section is expanded.
     //
     children: ReactNode | ReactNode[];
 }
 
 //
+// The look of a sidebar section's heading, from the sidebar heading tokens: muted, small and bold
+// over its group of rows. It keeps a row's hover colour, since picking it folds the group away.
+//
+const sectionHeadingSx = {
+    minHeight: "var(--button-height-md)",
+    color: "var(--color-sidebar-heading-text)",
+    backgroundColor: "var(--color-sidebar-heading-bg)",
+    fontSize: "var(--sidebar-heading-size)",
+    fontWeight: "var(--weight-bold)",
+    "&:hover": {
+        backgroundColor: "var(--color-hover)",
+    },
+    "& .MuiSvgIcon-root": {
+        fontSize: "var(--icon-lg)",
+    },
+};
+
+//
 // A sidebar section with a clickable header that collapses/expands its content.
 // Whether it is collapsed is remembered in the state store under the given key.
 //
-export function CollapsibleSection({ configKey, label, style, children }: ICollapsibleSectionProps) {
+export function CollapsibleSection({ configKey, label, children }: ICollapsibleSectionProps) {
     const state = useStateStore();
 
     //
@@ -59,26 +72,17 @@ export function CollapsibleSection({ configKey, label, style, children }: IColla
 
     return (
         <>
-            <div
-                className="flex flex-row items-center mt-4 cursor-pointer"
-                style={style}
+            <ListItemButton
+                aria-expanded={!collapsed}
                 onClick={toggle}
+                sx={sectionHeadingSx}
                 >
-                <Typography
-                    variant="caption"
-                    sx={{
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                    }}
-                    >
-                    {label}
-                </Typography>
-                <div className="flex-grow" />
+                <span className="flex-1">{label}</span>
                 {collapsed
-                    ? <KeyboardArrowRight fontSize="small" />
-                    : <ExpandMore fontSize="small" />
+                    ? <KeyboardArrowRight />
+                    : <ExpandMore />
                 }
-            </div>
+            </ListItemButton>
 
             {!collapsed && children}
         </>

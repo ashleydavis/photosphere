@@ -4,7 +4,6 @@ import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useTheme } from "@mui/material/styles";
 import { log } from "utils";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
@@ -54,9 +53,33 @@ interface IArrowScroll {
 }
 
 //
-// Renders a row of items in the gallery.
+// The look of a month heading, shared by the heading rows and the heading that stays at the top
+// while its photos scroll under it: a frosted bar set by the --date-heading-* tokens.
 //
-function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn | undefined) {
+const DATE_HEADING_STYLE: React.CSSProperties = {
+    boxSizing: "border-box",
+    padding: "var(--date-heading-padding)",
+    fontFamily: "var(--date-heading-font)",
+    fontSize: "var(--date-heading-size)",
+    fontWeight: "var(--weight-bold)",
+    lineHeight: "var(--leading-tight)",
+    color: "var(--color-text)",
+    background: "var(--color-date-heading-bg)",
+    borderRadius: "var(--radius-date-heading)",
+    boxShadow: "var(--shadow-date-heading)",
+    backdropFilter: "blur(var(--date-heading-blur))",
+    WebkitBackdropFilter: "blur(var(--date-heading-blur))",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+};
+
+//
+// Renders a row of items in the gallery. Each photo but the last is drawn up to where the next one
+// starts, less `galleryGap`, so the space the layout adds between photos to fit a row to the
+// gallery's width goes into the photos instead of opening a seam wider than the gap between them.
+//
+function renderRow(row: IGalleryRow, rowIndex: number, galleryGap: number, onItemClick: ItemClickFn | undefined) {
     if (row.type === "heading") {
         //
         // Renders a heading row.
@@ -65,11 +88,7 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
             <div 
                 key={rowIndex}
                 style={{
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                    lineHeight: "1.25rem",
-                    letterSpacing: ".0178571429em",
-                    padding: "1em",
+                    ...DATE_HEADING_STYLE,
                     position: "sticky",
                     zIndex: 100,
                     top: `${row.offsetY}px`,
@@ -95,7 +114,11 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                 height: `${row.height}px`,
             }}
             >
-            {row.items.map(item => {
+            {row.items.map((item, itemIndex) => {
+                let width = item.thumbWidth!;
+                if (itemIndex < row.items.length - 1) {
+                    width = row.items[itemIndex + 1].offsetX! - galleryGap - item.offsetX!;
+                }
                 return (
                     <GalleryImage
                         key={item._id}
@@ -107,7 +130,7 @@ function renderRow(row: IGalleryRow, rowIndex: number, onItemClick: ItemClickFn 
                         }}
                         x={item.offsetX!}
                         y={0}
-                        width={item.thumbWidth!}
+                        width={Math.max(item.thumbWidth!, width)}
                         height={item.thumbHeight!}
                         />
                 );
@@ -128,7 +151,7 @@ export interface IGalleryLayoutProps {
 //
 export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
 
-    const { galleryWidth, layout, setScrollToHandler } = useGalleryLayout();
+    const { galleryWidth, galleryGap, layout, setScrollToHandler } = useGalleryLayout();
 
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -136,8 +159,6 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
     // Tracks the active arrow key scroll loop, if any.
     //
     const arrowScrollRef = useRef<IArrowScroll | undefined>(undefined);
-
-    const theme = useTheme();
 
     //
     // Handles scrolling.
@@ -288,19 +309,12 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                 <div
                     className={`gallery-sticky-heading ` + (stickHeadingVisible.current ? "fade-in" : "fade-out")}
                     style={{
+                        ...DATE_HEADING_STYLE,
                         position: "absolute",
                         top: 0,
                         zIndex: 100,
-                        backgroundColor: (theme.vars ?? theme).palette.background.default,
-                        color: (theme.vars ?? theme).palette.text.primary,
-                        borderBottom: "1px solid rgba(0,0,0,0.1)",
                         height: `${stickyHeading.current.height}px`,
-                        width: "100%",
-                        fontSize: "0.9rem",
-                        fontWeight: 600,
-                        lineHeight: "1.25rem",
-                        letterSpacing: ".0178571429em",
-                        padding: "1em",
+                        width: `${galleryWidth}px`,
                     }}                    
                     >                            
                     {stickyHeading.current.heading}
@@ -328,22 +342,24 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                     >
 
                     {virtualRows.map(virtualRow => {
-                        return renderRow(layout!.rows[virtualRow.index], virtualRow.index, onItemClick);
+                        return renderRow(layout!.rows[virtualRow.index], virtualRow.index, galleryGap, onItemClick);
                     })}
                     
                 </div>
 
-                {layout
-                    && <GalleryScrollbar
-                        scrollContainerRef={containerRef}
-                        galleryLayout={layout}
-                        scrollTo={scrollPosition => {
-                            containerRef.current!.scrollTo({ top: scrollPosition, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
-                        }}
-                        />
-                }
-
             </div>
+
+            {/* The fast-scroll handle sits beside the scroller rather than in it, so it stays put
+                at the right edge of the page area while the photos scroll. */}
+            {layout
+                && <GalleryScrollbar
+                    scrollContainerRef={containerRef}
+                    galleryLayout={layout}
+                    scrollTo={scrollPosition => {
+                        containerRef.current!.scrollTo({ top: scrollPosition, behavior: "instant" } as any); //TODO: Remove the "as any" when the types are updated in TS 5.1+.
+                    }}
+                    />
+            }
         </>
     );
 }

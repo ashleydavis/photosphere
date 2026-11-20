@@ -1,16 +1,23 @@
 import React, { useEffect } from "react";
-import Alert, { type AlertColor } from "@mui/material/Alert";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
+import SnackbarContent from "@mui/material/SnackbarContent";
 import Close from "@mui/icons-material/Close";
 import { useToast, type IToast } from "../context/toast-context";
+import { useIsMobile } from "../lib/use-is-mobile";
 
 //
-// Picks the MUI Alert colour for a toast's colour, so each toast keeps the colour its sender chose.
-// MUI's Alert has no neutral colour, so a neutral toast is drawn as info and painted grey by
-// neutralToastSx.
+// The kind of toast the style guide draws: plain for a message with no status, or the status it
+// reports. The theme styles each status kind through its photosphere-toast-<kind> class.
 //
-export function alertColor(toastColor: IToast["color"]): AlertColor {
+export type ToastKind = "plain" | "info" | "success" | "warning" | "error";
+
+//
+// Picks the style guide's toast kind for a toast's colour, so each toast keeps the meaning its
+// sender chose: a neutral toast is plain, a primary one is information and a danger one is an error.
+//
+export function toastKind(toastColor: IToast["color"]): ToastKind {
     if (toastColor === 'success') {
         return 'success';
     }
@@ -23,15 +30,21 @@ export function alertColor(toastColor: IToast["color"]): AlertColor {
         return 'error';
     }
 
-    return 'info';
+    if (toastColor === 'primary') {
+        return 'info';
+    }
+
+    return 'plain';
 }
 
 //
-// The dark grey a neutral toast is painted, which keeps it apart from the coloured toasts.
+// The Font Awesome icon each status kind shows before its message, as the style guide's toasts do.
 //
-const neutralToastSx = {
-    backgroundColor: 'grey.800',
-    color: 'common.white',
+const STATUS_ICON_CLASSES: Record<Exclude<ToastKind, "plain">, string> = {
+    info: "fa-circle-info",
+    success: "fa-circle-check",
+    warning: "fa-triangle-exclamation",
+    error: "fa-circle-exclamation",
 };
 
 //
@@ -39,6 +52,7 @@ const neutralToastSx = {
 //
 function ToastItem({ toast }: { toast: IToast }) {
     const { removeToast } = useToast();
+    const kind = toastKind(toast.color);
 
     useEffect(() => {
         if (toast.duration > 0) {
@@ -50,26 +64,20 @@ function ToastItem({ toast }: { toast: IToast }) {
     }, [toast.id, toast.duration, removeToast]);
 
     return (
-        <Alert
-            color={alertColor(toast.color)}
-            variant="filled"
-            icon={false}
+        <SnackbarContent
+            className={kind === "plain" ? "photosphere-toast-arrive" : `photosphere-toast-arrive photosphere-toast-${kind}`}
+            role={kind === "error" || kind === "warning" ? "alert" : "status"}
             sx={{
-                mb: 1,
-                minWidth: 300,
-                maxWidth: 480,
-                boxShadow: 6,
-                alignItems: 'center',
-                ...(toast.color === 'neutral' ? neutralToastSx : {}),
+                flexWrap: 'nowrap',
+                pointerEvents: 'auto',
             }}
             action={
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+                <>
                     {toast.action && (
                         <Button
                             data-id="toast-action"
                             size="small"
                             variant="outlined"
-                            color="inherit"
                             onClick={() => {
                                 toast.action!.onClick();
                                 removeToast(toast.id);
@@ -80,8 +88,8 @@ function ToastItem({ toast }: { toast: IToast }) {
                     )}
                     <IconButton
                         size="small"
-                        color="inherit"
                         title="Dismiss"
+                        className="photosphere-toast-close"
                         data-id="toast-dismiss"
                         onClick={() => {
                             if (toast.onDismiss) {
@@ -90,55 +98,99 @@ function ToastItem({ toast }: { toast: IToast }) {
                             removeToast(toast.id);
                         }}
                     >
-                        <Close />
+                        <Close
+                            sx={{
+                                fontSize: 'calc(var(--toast-close-size) / 2)',
+                            }}
+                            />
                     </IconButton>
-                </div>
+                </>
             }
-        >
-            <div>
-                <div data-id="toast-message">{toast.message}</div>
-                {toast.link && (
-                    <a
-                        data-id="toast-link"
-                        href={toast.link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ display: 'inline-block', marginTop: 4, color: 'inherit', textDecoration: 'underline' }}
+            message={
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 'var(--space-2)',
+                    }}
                     >
-                        {toast.link.label}
-                    </a>
-                )}
-            </div>
-        </Alert>
+                    {kind !== "plain"
+                        && <Box
+                            component="i"
+                            aria-hidden={true}
+                            className={`fa-solid ${STATUS_ICON_CLASSES[kind]} photosphere-toast-icon`}
+                            sx={{
+                                flex: 'none',
+                                fontSize: 'var(--icon-md)',
+                                lineHeight: 'var(--leading-normal)',
+                            }}
+                            />
+                    }
+                    <div>
+                        <div data-id="toast-message">{toast.message}</div>
+                        {toast.link && (
+                            <Box
+                                component="a"
+                                data-id="toast-link"
+                                href={toast.link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{
+                                    display: 'inline-block',
+                                    marginTop: 'var(--space-1)',
+                                    color: 'inherit',
+                                    textDecoration: 'underline',
+                                }}
+                            >
+                                {toast.link.label}
+                            </Box>
+                        )}
+                    </div>
+                </Box>
+            }
+        />
     );
 }
 
 //
-// Container that renders all active toast notifications fixed to the bottom-right of the screen.
+// Container that renders all active toast notifications, stacked where the style guide's toast
+// stack tokens place them: centred at the foot of the screen, and across its width on a mobile.
 //
 export function ToastContainer() {
     const { toasts } = useToast();
+    const isMobile = useIsMobile();
 
     if (toasts.length === 0) {
         return null;
     }
 
     return (
-        <div
-            style={{
+        <Box
+            sx={{
                 position: 'fixed',
-                bottom: '16px',
-                left: '50%',
-                transform: 'translateX(-50%)',
+                top: 'var(--toast-stack-top)',
+                bottom: 'calc(var(--toast-stack-bottom) + env(safe-area-inset-bottom))',
+                left: 'var(--space-4)',
+                right: 'var(--space-4)',
                 zIndex: 9999,
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
+                alignItems: 'var(--toast-stack-align)',
+                gap: 'var(--space-2)',
+                pointerEvents: 'none',
             }}
         >
             {toasts.map(toast => (
-                <ToastItem key={toast.id} toast={toast} />
+                <Box
+                    key={toast.id}
+                    sx={{
+                        width: isMobile ? '100%' : 'auto',
+                        maxWidth: 'calc(var(--space-8) * 16)',
+                    }}
+                    >
+                    <ToastItem toast={toast} />
+                </Box>
             ))}
-        </div>
+        </Box>
     );
 }

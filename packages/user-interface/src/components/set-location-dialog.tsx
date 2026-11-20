@@ -11,6 +11,10 @@ import "leaflet/dist/leaflet.css";
 import { reverseGeocode } from "../lib/reverse-geocode";
 import { useDebounce } from "../lib/use-debounce";
 import { createDialogKeyHandler } from "../lib/dialog-keys";
+import { useIsMobile } from "../lib/use-is-mobile";
+import { DialogIconBadge } from "./dialog-icon-badge";
+import { Place } from "@mui/icons-material";
+import { useColorScheme } from "@mui/material/styles";
 
 //
 // A geographic coordinate.
@@ -93,15 +97,17 @@ const DEFAULT_ZOOM = 3;
 const PIN_ZOOM = 13;
 
 //
-// Creates a pin marker icon using an inline SVG so it works correctly with Vite bundling.
+// Creates a pin marker icon using an inline SVG so it works correctly with Vite bundling. The pin is
+// the accent colour edged in the panel colour, as the style guide's location pin is, so it reads
+// on light and dark map tiles alike.
 //
 function createPinIcon(): L.DivIcon {
     return L.divIcon({
         html: `
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40">
                 <path d="M14 0C6.27 0 0 6.27 0 14c0 9.33 14 26 14 26S28 23.33 28 14C28 6.27 21.73 0 14 0z"
-                      fill="#1976d2" stroke="white" stroke-width="1.5"/>
-                <circle cx="14" cy="14" r="5" fill="white"/>
+                      fill="var(--color-accent)" stroke="var(--color-panel)" stroke-width="1.5"/>
+                <circle cx="14" cy="14" r="5" fill="var(--color-panel)"/>
             </svg>
         `,
         iconSize: [28, 40],
@@ -318,6 +324,29 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
 
     const pinIcon = createPinIcon();
 
+    //
+    // On a mobile Clear location leads the row of buttons; on a desktop it sits apart at the right
+    // end, away from OK, as the style guide places a dangerous action.
+    //
+    const isMobile = useIsMobile();
+
+    //
+    // The theme the dialog is drawn in. The map's tiles are pictures that cannot take the theme's
+    // colours, so the dark theme loads CARTO's dark tiles in place of its light ones.
+    //
+    const { mode, systemMode } = useColorScheme();
+    const isDark = (mode === 'system' ? systemMode : mode) === 'dark';
+
+    const clearButton = (
+        <Button
+            variant="outlined"
+            color="error"
+            onClick={onClearLocation}
+        >
+            Clear location
+        </Button>
+    );
+
     return (
         <Dialog
             open={open}
@@ -329,15 +358,26 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
                     sx: {
                         width: "85vw",
                         height: "85vh",
+                        maxWidth: "none",
                         display: "flex",
                         flexDirection: "column",
-                        p: 2,
-                        gap: 1,
+                        padding: "var(--space-4) var(--space-6)",
+                        gap: "var(--space-3)",
                     },
                 },
             }}
             >
-                <Typography variant="subtitle1">Set Location</Typography>
+                <Typography
+                    variant="subtitle1"
+                    sx={{
+                        fontSize: "var(--text-lg)",
+                        fontWeight: "var(--weight-bold)",
+                        lineHeight: "var(--leading-tight)",
+                    }}
+                    >
+                    <DialogIconBadge icon={<Place />} danger={false} />
+                    Set Location
+                </Typography>
 
                 <TextField
                     size="small"
@@ -368,15 +408,31 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
                     }}
                 />
 
-                <div style={{ flex: 1, borderRadius: "8px", overflow: "hidden" }}>
+                <div
+                    className="photosphere-map"
+                    style={{
+                        flex: 1,
+                        minHeight: 0,
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--color-border)",
+                        overflow: "hidden",
+                    }}
+                    >
                     <MapContainer
                         center={[DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]}
                         zoom={DEFAULT_ZOOM}
-                        style={{ width: "100%", height: "100%" }}
+                        style={{
+                            width: "100%",
+                            height: "100%",
+                            background: "var(--color-map-water)",
+                        }}
                     >
                         <TileLayer
+                            key={isDark ? "dark" : "light"}
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                            url={isDark
+                                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                                : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"}
                         />
                         <MapClickHandler onMapClick={onMapClick} />
                         <MapFlyTo target={flyTarget} zoom={flyZoom} />
@@ -391,7 +447,14 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
 
                 {pinCoords && (
                     <Stack spacing={0}>
-                        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: "var(--color-text-muted)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "var(--text-xs)",
+                            }}
+                            >
                             {pinCoords.lat.toFixed(6)}, {pinCoords.lng.toFixed(6)}
                         </Typography>
                         <Typography variant="body2">
@@ -404,27 +467,27 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
                 )}
 
                 {!pinCoords && (
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    <Typography variant="caption" sx={{ color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
                         Click on the map to place a pin.
                     </Typography>
                 )}
 
                 <Stack
                     direction="row"
-                    spacing={1}
                     sx={{
+                        flexWrap: "wrap",
                         justifyContent: "space-between",
+                        gap: "var(--space-2)",
                     }}
                     >
-                    <Button
-                        variant="text"
-                        color="error"
-                        onClick={onClearLocation}
-                    >
-                        Clear location
-                    </Button>
-                    <Stack direction="row" spacing={1}>
-                        <Button variant="outlined" color="inherit" onClick={onClose}>
+                    {isMobile && clearButton}
+                    <Stack
+                        direction="row"
+                        sx={{
+                            gap: "var(--space-2)",
+                        }}
+                        >
+                        <Button variant="outlined" onClick={onClose}>
                             Cancel
                         </Button>
                         <Button
@@ -437,6 +500,7 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
                             OK
                         </Button>
                     </Stack>
+                    {!isMobile && clearButton}
                 </Stack>
         </Dialog>
     );

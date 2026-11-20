@@ -6,7 +6,8 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const rows = computePartialLayout(undefined, [], galleryWidth, targetRowHeight, () => [], () => "");
+        const gap = 4;
+        const rows = computePartialLayout(undefined, [], galleryWidth, targetRowHeight, gap, () => [], () => "");
         expect(rows).toEqual({
             galleryHeight: 0,
             rows: []
@@ -25,7 +26,8 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, gallery, galleryWidth, targetRowHeight, () => [], () => "");
+        const gap = 4;
+        const layout = computePartialLayout(undefined, gallery, galleryWidth, targetRowHeight, gap, () => [], () => "");
 
         expect(layout.rows.length).toBe(1);
 
@@ -56,7 +58,8 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, () => [], () => "");
+        const gap = 4;
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, gap, () => [], () => "");
         expect(layout.rows.length).toBe(1);
 
         const row = layout.rows[0];
@@ -88,7 +91,8 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, () => [], () => "");
+        const gap = 4;
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, gap, () => [], () => "");
         expect(layout.rows.length).toBe(2);
 
         const firstRow = layout.rows[0];
@@ -120,7 +124,8 @@ describe("layout", () => {
 
         const galleryWidth = 600;
         const targetRowHeight = 200;
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, () => [], () => "");
+        const gap = 4;
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, gap, () => [], () => "");
 
         expect(layout.rows.length).toBe(2);
 
@@ -145,12 +150,69 @@ describe("layout", () => {
         expect(item3.thumbWidth).toBeCloseTo(items[2].width);
         expect(item3.thumbHeight).toBeCloseTo(items[2].height);
     });
+
+    test("photos in a row are spaced by the gap and rows are spaced by the gap", () => {
+
+        const items: any[] = [
+            { _id: 1, width: 240, height: 200 },
+            { _id: 2, width: 220, height: 200 },
+            { _id: 3, width: 230, height: 200 },
+        ];
+
+        const galleryWidth = 600;
+        const targetRowHeight = 200;
+        const gap = 10;
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, gap, () => [], () => "");
+
+        expect(layout.rows.length).toBe(2);
+
+        const firstRow = layout.rows[0];
+        const firstItem = firstRow.items[0];
+        const secondItem = firstRow.items[1];
+        const spacing = secondItem.offsetX! - (firstItem.offsetX! + firstItem.thumbWidth!);
+
+        //
+        // The layout fits the row to whole pixels of height, then widens the gap by the fraction of
+        // a pixel step that is left, so the space is the gap plus less than one height step's width.
+        //
+        expect(spacing).toBeGreaterThanOrEqual(gap);
+        expect(spacing).toBeLessThan(gap + 3);
+        expect(secondItem.offsetX! + secondItem.thumbWidth!).toBeCloseTo(galleryWidth);
+        expect(layout.rows[1].offsetY).toBeCloseTo(firstRow.offsetY + firstItem.thumbHeight! + gap);
+    });
+
+    test("a gap of zero leaves no space between rows and only the fitting remainder across a row", () => {
+
+        const items: any[] = [
+            { _id: 1, width: 240, height: 200 },
+            { _id: 2, width: 220, height: 200 },
+            { _id: 3, width: 230, height: 200 },
+        ];
+
+        const galleryWidth = 600;
+        const targetRowHeight = 200;
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, 0, () => [], () => "");
+
+        expect(layout.rows.length).toBe(2);
+
+        const firstRow = layout.rows[0];
+        const firstItem = firstRow.items[0];
+        const secondItem = firstRow.items[1];
+        const spacing = secondItem.offsetX! - firstItem.thumbWidth!;
+        expect(firstItem.offsetX).toBe(0);
+        expect(spacing).toBeGreaterThanOrEqual(0);
+        expect(spacing).toBeLessThan(3);
+        expect(secondItem.offsetX! + secondItem.thumbWidth!).toBeCloseTo(galleryWidth);
+        expect(layout.rows[1].offsetY).toBeCloseTo(firstItem.thumbHeight!);
+        expect(layout.galleryHeight).toBeCloseTo(firstItem.thumbHeight! + layout.rows[1].height);
+    });
 });
 
 describe("deleteFromLayout", () => {
 
     const galleryWidth = 600;
     const targetRowHeight = 200;
+    const gap = 4;
     const noGroup = () => [];
     const noHeading = () => "";
 
@@ -158,7 +220,7 @@ describe("deleteFromLayout", () => {
     // Builds a layout from items using computePartialLayout.
     //
     function buildLayout(items: any[]) {
-        return computePartialLayout(undefined, items, galleryWidth, targetRowHeight, noGroup, noHeading);
+        return computePartialLayout(undefined, items, galleryWidth, targetRowHeight, gap, noGroup, noHeading);
     }
 
     test("returns the same layout when none of the deleted IDs are present", () => {
@@ -168,7 +230,7 @@ describe("deleteFromLayout", () => {
             { _id: "b", width: 100, height: 200 },
         ];
         const layout = buildLayout(items);
-        const result = deleteFromLayout(layout, ["z"], galleryWidth, targetRowHeight, noGroup, noHeading);
+        const result = deleteFromLayout(layout, ["z"], galleryWidth, targetRowHeight, gap, noGroup, noHeading);
 
         expect(result).toBe(layout);
     });
@@ -179,7 +241,7 @@ describe("deleteFromLayout", () => {
             { _id: "a", width: 100, height: 200 },
         ];
         const layout = buildLayout(items);
-        const result = deleteFromLayout(layout, ["a"], galleryWidth, targetRowHeight, noGroup, noHeading);
+        const result = deleteFromLayout(layout, ["a"], galleryWidth, targetRowHeight, gap, noGroup, noHeading);
 
         expect(result.rows.length).toBe(0);
         expect(result.galleryHeight).toBe(0);
@@ -193,7 +255,7 @@ describe("deleteFromLayout", () => {
             { _id: "c", width: 100, height: 200 },
         ];
         const layout = buildLayout(items);
-        const result = deleteFromLayout(layout, ["b"], galleryWidth, targetRowHeight, noGroup, noHeading);
+        const result = deleteFromLayout(layout, ["b"], galleryWidth, targetRowHeight, gap, noGroup, noHeading);
 
         const allResultItems = result.rows.flatMap(row => row.items);
         const resultIds = allResultItems.map(item => item._id);
@@ -215,7 +277,7 @@ describe("deleteFromLayout", () => {
         expect(layout.rows.length).toBeGreaterThan(1);
 
         // Delete one item from the first row — "c" should reflow up.
-        const result = deleteFromLayout(layout, ["a"], galleryWidth, targetRowHeight, noGroup, noHeading);
+        const result = deleteFromLayout(layout, ["a"], galleryWidth, targetRowHeight, gap, noGroup, noHeading);
 
         const allResultItems = result.rows.flatMap(row => row.items);
         expect(allResultItems.map(item => item._id)).toEqual(["b", "c"]);
@@ -234,14 +296,14 @@ describe("deleteFromLayout", () => {
             { _id: "b2", width: 100, height: 200 },
         ];
 
-        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, groupB, heading);
+        const layout = computePartialLayout(undefined, items, galleryWidth, targetRowHeight, gap, groupB, heading);
 
         // Confirm headings were inserted.
         const headingRows = layout.rows.filter(row => row.type === "heading");
         expect(headingRows.length).toBeGreaterThan(0);
 
         // Delete an item from group B.
-        const result = deleteFromLayout(layout, ["b1"], galleryWidth, targetRowHeight, groupB, heading);
+        const result = deleteFromLayout(layout, ["b1"], galleryWidth, targetRowHeight, gap, groupB, heading);
 
         const resultHeadings = result.rows.filter(row => row.type === "heading");
         const resultItemIds = result.rows.flatMap(row => row.items).map(item => item._id);

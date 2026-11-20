@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, type ReactNode } from 'react';
 import { log } from 'utils';
 import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
-import { desktopDialogActionsSx } from '../lib/modal-styles';
+import { ResponsiveDialog } from './responsive-dialog';
+import { DialogIconBadge } from './dialog-icon-badge';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -24,6 +25,59 @@ export interface IResetDeviceDialogProps {
 
     // Called when the dialog should close (after the reset, cancel, or backdrop click).
     onClose: () => void;
+}
+
+//
+// Props for WarningRow.
+//
+interface IWarningRowProps {
+    // The Font Awesome icon class of what the warning is about, such as "fa-key".
+    iconClass: string;
+
+    // The warning's text.
+    children: ReactNode;
+}
+
+//
+// Draws one warning of the reset's first step beside a small icon in the danger colour, so each
+// thing the reset takes away reads as its own warning, as the style guide's reset dialog shows them.
+//
+function WarningRow({ iconClass, children }: IWarningRowProps): React.ReactElement {
+    return (
+        <Box
+            sx={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 'var(--space-3)',
+                marginTop: 'var(--space-3)',
+            }}
+            >
+            <Box
+                component="span"
+                aria-hidden={true}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flex: 'none',
+                    width: 'var(--button-height-sm)',
+                    height: 'var(--button-height-sm)',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: 'var(--icon-sm)',
+                    color: 'var(--color-danger)',
+                    backgroundColor: 'color-mix(in srgb, var(--color-danger) 12%, transparent)',
+                    '& i': {
+                        color: 'inherit',
+                    },
+                }}
+                >
+                <i className={`fa-solid ${iconClass}`} />
+            </Box>
+            <Typography variant="body2">
+                {children}
+            </Typography>
+        </Box>
+    );
 }
 
 //
@@ -96,16 +150,17 @@ export function ResetDeviceDialog({ open, onClose }: IResetDeviceDialogProps) {
     }
 
     return (
-        <Dialog
+        <ResponsiveDialog
             open={open}
             onClose={handleClose}
-            slotProps={{
-                paper: {
-                    'data-id': 'reset-device-dialog',
-                },
-            }}
+            minWidth={340}
+            maxWidth={444}
+            dataId="reset-device-dialog"
             >
-            <DialogTitle>{finalConfirmation ? 'Reset this device?' : 'Reset device'}</DialogTitle>
+            <DialogTitle>
+                <DialogIconBadge icon={<i className={finalConfirmation ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-rotate-left'} />} danger={true} />
+                {finalConfirmation ? 'Reset this device?' : 'Reset device'}
+            </DialogTitle>
             {!finalConfirmation
                 && <>
                     <DialogContent>
@@ -115,25 +170,25 @@ export function ResetDeviceDialog({ open, onClose }: IResetDeviceDialogProps) {
                             {' '}and <strong data-id="reset-device-secret-count">{secrets.length}</strong> secret{secrets.length === 1 ? '' : 's'},
                             {' '}along with its settings and its caches.
                         </Typography>
-                        <Typography variant="body2" sx={{ mt: 1 }}>
+                        <WarningRow iconClass="fa-images">
                             <strong>Your photos go with it.</strong> The databases the app keeps
                             on this device are deleted, and every photo in them. If you have used
                             Free up space on this device, they are the only copy of those photos.
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 1 }}>
+                        </WarningRow>
+                        <WarningRow iconClass="fa-key">
                             <strong>Your encryption keys go too.</strong> They are stored as
                             secrets on this device, and an encrypted database cannot be opened
                             again without them.
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 1 }}>
+                        </WarningRow>
+                        <WarningRow iconClass="fa-triangle-exclamation">
                             This cannot be undone.
-                        </Typography>
+                        </WarningRow>
                     </DialogContent>
-                    <DialogActions sx={desktopDialogActionsSx()}>
-                        <Button data-id="reset-device-cancel" variant="text" onClick={handleClose}>Cancel</Button>
+                    <DialogActions>
+                        <Button data-id="reset-device-cancel" variant="outlined" onClick={handleClose}>Cancel</Button>
                         <Button
                             data-id="reset-device-continue"
-                            variant="contained"
+                            variant="outlined"
                             color="error"
                             onClick={() => setFinalConfirmation(true)}
                         >
@@ -145,20 +200,24 @@ export function ResetDeviceDialog({ open, onClose }: IResetDeviceDialogProps) {
             {finalConfirmation
                 && <>
                     <DialogContent>
-                        <Typography>
+                        <Typography
+                            sx={{
+                                color: 'var(--color-text-muted)',
+                            }}
+                            >
                             Last chance. Resetting deletes the app's databases and the photos in
                             them, its secrets including your encryption keys, its settings and
                             its caches. None of it can be brought back.
                         </Typography>
                     </DialogContent>
-                    <DialogActions sx={desktopDialogActionsSx()}>
-                        <Button data-id="reset-device-final-cancel" variant="text" onClick={handleClose} disabled={resetting}>Cancel</Button>
+                    <DialogActions>
+                        <Button data-id="reset-device-final-cancel" variant="outlined" onClick={handleClose} disabled={resetting}>Cancel</Button>
                         <Button
                             data-id="reset-device-confirm"
-                            variant="contained"
+                            variant="outlined"
                             color="error"
                             disabled={resetting}
-                            startIcon={resetting ? <CircularProgress size={16} color="inherit" /> : undefined}
+                            startIcon={resetting ? <CircularProgress size="var(--icon-md)" color="inherit" /> : undefined}
                             onClick={() => { void handleReset(); }}
                         >
                             Reset device
@@ -166,6 +225,6 @@ export function ResetDeviceDialog({ open, onClose }: IResetDeviceDialogProps) {
                     </DialogActions>
                 </>
             }
-        </Dialog>
+        </ResponsiveDialog>
     );
 }

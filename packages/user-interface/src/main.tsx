@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { log } from "utils";
-import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
+import { Route, Routes, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
-import classNames from "classnames";
 import { usePlatform } from "./context/platform-context";
 import { useIsMobile, MOBILE_BREAKPOINT_PX } from "./lib/use-is-mobile";
 import { useAssetDatabase } from "./context/asset-database-source";
-import { useSearch } from "./context/search-context";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
-import { useColorScheme, useTheme } from "@mui/material/styles";
+import { useColorScheme } from "@mui/material/styles";
 import Drawer from "@mui/material/Drawer";
 import { PhotosphereThemeProvider } from "./components/photosphere-theme-provider";
 import { LeftSidebar } from "./components/left-sidebar";
@@ -16,6 +14,7 @@ import { RightSidebar } from "./components/right-sidebar";
 import { JobsDialog } from "./components/jobs-dialog";
 import { DatabaseSummaryDialog } from "./components/database-summary-dialog";
 import { Navbar } from "./components/navbar";
+import { MobileTabBar } from "./components/mobile-tab-bar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
 import { DeveloperPage } from "./pages/developer";
@@ -92,15 +91,12 @@ function __Main() {
     //
     const [addDatabaseModalOpen, setAddDatabaseModalOpen] = useState<boolean>(false);
 
-    const { openSearch } = useSearch();
-
     const platform = usePlatform();
 
     //
-    // The MUI theme. Its `vars` are CSS variables that follow the light or dark scheme, so the page
-    // colours below switch with the scheme.
+    // The open route, whose first part keys the page area below.
     //
-    const theme = useTheme();
+    const location = useLocation();
 
     const { setMode } = useColorScheme();
     const [themeSetting] = useThemeSetting();
@@ -353,18 +349,114 @@ function __Main() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount
 
+    //
+    // The first part of the route, which keys the page area so the page moves in when another
+    // page opens, but not when the same page opens another photo.
+    //
+    const pageKey = location.pathname.split("/")[1];
+
     return (
         <>
-            <Navbar
-                sidebarOpen={sidebarOpen}
-                setSidebarOpen={setSidebarOpen}
-                setRightSidebarOpen={setRightSidebarOpen}
-                onOpenConfiguration={() => setConfigurationOpen(true)}
-            />
+            {/* The frame: the navbar across the top, the page under it and, on a mobile, the tab
+                bar at the foot of the screen with the page buttons. */}
+            <div className="flex flex-col h-full">
+                <Navbar
+                    sidebarOpen={sidebarOpen}
+                    setSidebarOpen={setSidebarOpen}
+                    setRightSidebarOpen={setRightSidebarOpen}
+                    onOpenConfiguration={() => setConfigurationOpen(true)}
+                />
+
+                <div
+                    id="main"
+                    className="select-none flex-1"
+                    style={{
+                        backgroundColor: "var(--color-bg)",
+                        color: "var(--color-text)",
+                    }}
+                    >
+                    <div
+                        id="content"
+                        key={pageKey}
+                        className="photosphere-page-change"
+                        >
+                        <Routes>
+                            {/* TODO: Move to a DatabaseView component. */}
+                            <Route
+                                path="/gallery/:assetId?"
+                                element={
+                                    <GalleryPage
+                                        />
+                                }
+                                />
+
+                            <Route
+                                path="/map/:assetId?"
+                                element={<MapPage />}
+                                />
+
+                            <Route
+                                path="/about"
+                                element={<AboutPage />}
+                                />
+
+                            <Route
+                                path="/developer"
+                                element={<DeveloperPage />}
+                                />
+
+                            <Route
+                                path="/news"
+                                element={<NewsPage />}
+                                />
+
+                            <Route
+                                path="/import"
+                                element={<ImportPage />}
+                                />
+
+                            <Route
+                                path="/database-summary"
+                                element={<DatabaseSummaryPage />}
+                                />
+
+                            <Route
+                                path="/databases"
+                                element={<DatabasesPage />}
+                                />
+
+                            <Route
+                                path="/secrets"
+                                element={<SecretsPage />}
+                                />
+
+                            <Route
+                                path="/"
+                                element={
+                                    <Navigate
+                                        replace
+                                        to="/gallery"
+                                        />
+                                }
+                                />
+
+                        </Routes>
+                    </div>
+                </div>
+
+                {isMobile && <MobileTabBar />}
+            </div>
 
             <Drawer
                 open={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
+                slotProps={{
+                    paper: {
+                        sx: {
+                            width: isMobile ? "85%" : "calc(var(--space-8) * 9)",
+                        },
+                    },
+                }}
                 >
                 <LeftSidebar
                     sidebarOpen={sidebarOpen}
@@ -379,6 +471,15 @@ function __Main() {
                 anchor="right"
                 open={rightSidebarOpen}
                 onClose={() => setRightSidebarOpen(false)}
+                slotProps={{
+                    paper: {
+                        sx: {
+                            width: isMobile ? "85%" : "calc(var(--space-8) * 10)",
+                            borderRight: "none",
+                            borderLeft: "1px solid var(--color-border)",
+                        },
+                    },
+                }}
                 >
                 <RightSidebar
                     sidebarOpen={rightSidebarOpen}
@@ -395,79 +496,6 @@ function __Main() {
                 open={databaseSummaryDialogOpen}
                 onClose={() => setDatabaseSummaryDialogOpen(false)}
                 />
-
-            <div
-                id="main"
-                className={`select-none ` + classNames({ "search": openSearch })}
-                style={{
-                    backgroundColor: (theme.vars ?? theme).palette.background.default,
-                    color: (theme.vars ?? theme).palette.text.primary,
-                }}
-                >
-                <div id="content" >
-                    <Routes>
-                        {/* TODO: Move to a DatabaseView component. */}
-                        <Route
-                            path="/gallery/:assetId?"
-                            element={
-                                <GalleryPage
-                                    />
-                            }
-                            />
-
-                        <Route
-                            path="/map/:assetId?"
-                            element={<MapPage />}
-                            />
-
-                        <Route
-                            path="/about"
-                            element={<AboutPage />}
-                            />
-
-                        <Route
-                            path="/developer"
-                            element={<DeveloperPage />}
-                            />
-
-                        <Route
-                            path="/news"
-                            element={<NewsPage />}
-                            />
-
-                        <Route
-                            path="/import"
-                            element={<ImportPage />}
-                            />
-
-                        <Route
-                            path="/database-summary"
-                            element={<DatabaseSummaryPage />}
-                            />
-
-                        <Route
-                            path="/databases"
-                            element={<DatabasesPage />}
-                            />
-
-                        <Route
-                            path="/secrets"
-                            element={<SecretsPage />}
-                            />
-
-                        <Route
-                            path="/"
-                            element={
-                                <Navigate
-                                    replace
-                                    to="/gallery"
-                                    />
-                            }
-                            />
-                            
-                    </Routes>
-                </div>
-            </div>
 
 
             <ConfigurationDialog

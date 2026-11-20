@@ -24,33 +24,61 @@ export function NavbarJobsIndicator() {
             {indicator
                 && <Chip
                     data-id="navbar-jobs-indicator"
-                    color="primary"
-                    size="small"
                     title="Show background jobs"
                     onClick={() => window.dispatchEvent(new CustomEvent("photosphere:show-jobs"))}
                     //
                     // Always spinning, never filling. This says "something is running", and a ring
                     // creeping round once over a minute reads as a stuck app rather than a busy one.
                     //
-                    icon={<CircularProgress size={14} color="inherit" />}
+                    icon={<CircularProgress size="var(--icon-sm)" color="inherit" />}
                     //
                     // The count is desktop only. A mobile's navbar has no room to spare, and the
                     // spinner alone still says work is happening; how much and what it is are one
                     // tap away in the dialog.
                     //
                     label={isMobile ? undefined : indicator.label}
-                    sx={{
-                        mx: 1,
-                        whiteSpace: 'nowrap',
-                        color: 'primary.main',
-                        '& .MuiChip-icon': {
-                            color: 'primary.main',
+                    sx={[
+                        {
+                            whiteSpace: 'nowrap',
+                            color: 'var(--color-navbar-chip-text)',
+                            backgroundColor: 'var(--color-navbar-chip-bg)',
+                            borderColor: 'var(--color-navbar-chip-border)',
+                            '& .MuiChip-icon': {
+                                color: 'var(--color-accent)',
+                                marginLeft: 'var(--space-3)',
+                                marginRight: 0,
+                            },
+                            '&:hover': {
+                                backgroundColor: 'var(--color-hover)',
+                            },
+                            '&.Mui-focusVisible': {
+                                backgroundColor: 'var(--color-hover)',
+                                outline: 'var(--focus-ring-width) solid var(--color-focus)',
+                                outlineOffset: 'var(--focus-ring-offset)',
+                            },
                         },
-                        backgroundColor: 'rgba(var(--mui-palette-primary-mainChannel) / 0.12)',
-                        '&:hover': {
-                            backgroundColor: 'rgba(var(--mui-palette-primary-mainChannel) / 0.2)',
-                        },
-                    }}
+                        //
+                        // On a mobile the chip is a square the size of the navbar's other icon
+                        // buttons, holding the spinner alone, as the style guide's mobile navbar
+                        // draws the background jobs.
+                        //
+                        isMobile
+                            ? {
+                                width: 'var(--button-height-lg)',
+                                height: 'var(--button-height-lg)',
+                                justifyContent: 'center',
+                                borderColor: 'var(--color-icon-button-border)',
+                                borderRadius: 'var(--radius-icon-button)',
+                                backgroundColor: 'var(--color-icon-button-fill)',
+                                '& .MuiChip-icon': {
+                                    margin: 0,
+                                },
+                                '& .MuiChip-label': {
+                                    display: 'none',
+                                },
+                            }
+                            : {},
+                    ]}
                     />
             }
 

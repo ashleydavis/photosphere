@@ -59,14 +59,13 @@ export function FullImage({ asset }: IImageProps) {
                 && <img 
                     src={microDataURL}
                     style={{
-                        padding: "2px",
                         position: "absolute",
                         top: "0",
                         left: "0",
                         right: "0",
                         bottom: "0",
-                        width: "80%",
-                        height: "80%",
+                        width: "100%",
+                        height: "100%",
                         margin: "auto",
                         objectFit: "contain",
                     }}
@@ -78,14 +77,13 @@ export function FullImage({ asset }: IImageProps) {
                     className="fade-in-thumb"
                     src={thumbnailObjectURL}
                     style={{
-                        padding: "2px",
                         position: "absolute",
                         top: "0",
                         left: "0",
                         right: "0",
                         bottom: "0",
-                        width: "80%",
-                        height: "80%",
+                        width: "100%",
+                        height: "100%",
                         margin: "auto",
                         objectFit: "contain",
                     }}
@@ -98,14 +96,13 @@ export function FullImage({ asset }: IImageProps) {
                     className="fade-in-thumb"
                     src={objectURL}
                     style={{
-                        padding: "2px",
                         position: "absolute",
                         top: "0",
                         left: "0",
                         right: "0",
                         bottom: "0",
-                        width: "80%",
-                        height: "80%",
+                        width: "100%",
+                        height: "100%",
                         margin: "auto",
                         objectFit: "contain",
                     }}

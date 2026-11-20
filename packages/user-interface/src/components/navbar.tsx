@@ -2,7 +2,10 @@ import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Spinner } from "./spinner";
 import IconButton from '@mui/material/IconButton';
+import Button from '@mui/material/Button';
 import Box from '@mui/material/Box';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import ArrowCircleUp from "@mui/icons-material/ArrowCircleUp";
 import MoreVert from '@mui/icons-material/MoreVert';
 import Star from "@mui/icons-material/Star";
 import StarBorder from "@mui/icons-material/StarBorder";
@@ -12,8 +15,7 @@ import Search from "@mui/icons-material/Search";
 import PhotoLibrary from "@mui/icons-material/PhotoLibrary";
 import Map from "@mui/icons-material/Map";
 import OutlinedInput from "@mui/material/OutlinedInput";
-import { useTheme } from "@mui/material/styles";
-import classNames from "classnames";
+import type { SxProps, Theme } from "@mui/material/styles";
 import { useSearch } from "../context/search-context";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useDebounce } from "../lib/use-debounce";
@@ -48,6 +50,119 @@ export interface INavbarProps {
 }
 
 //
+// The look of a page button in the desktop navbar, from the navbar tab tokens: muted text with no
+// fill, running the full height of the bar so the open page's line sits along its foot.
+//
+const PAGE_BUTTON_SX = {
+    flex: "none",
+    alignSelf: "stretch",
+    minWidth: "var(--button-height-md)",
+    minHeight: 0,
+    padding: "var(--navbar-button-padding)",
+    gap: "var(--navbar-tab-gap)",
+    color: "var(--color-navbar-tab-text)",
+    fontSize: "var(--navbar-tab-label-size)",
+    borderRadius: "var(--navbar-tab-radius)",
+    boxShadow: "inset 0 0 0 1px var(--color-navbar-tab-border)",
+    whiteSpace: "nowrap",
+    "& .MuiSvgIcon-root": {
+        fontSize: "var(--icon-md)",
+    },
+};
+
+//
+// The page buttons on a desktop window too narrow for each label beside its icon: the label
+// stacks under the icon in the tab bar's smaller size, as the style guide asks.
+//
+const STACKED_PAGE_BUTTON_SX = {
+    flexDirection: "column",
+    gap: "var(--space-1)",
+    padding: "0 var(--space-3)",
+    fontSize: "var(--text-xs)",
+};
+
+//
+// The look the open page's button takes, from the navbar's current-page tokens: its fill, its
+// text, the ring round its edge and the line along its foot.
+//
+const CURRENT_PAGE_BUTTON_SX = {
+    backgroundColor: "var(--color-navbar-current-bg)",
+    color: "var(--color-navbar-current-text)",
+    boxShadow: "inset 0 0 0 1px var(--color-navbar-current-ring), inset 0 var(--navbar-current-line-y) 0 0 var(--color-navbar-current-line)",
+    "&:hover": {
+        backgroundColor: "var(--color-navbar-current-bg)",
+        color: "var(--color-navbar-current-text)",
+    },
+};
+
+//
+// The look of an icon button for the open page or the open search on a mobile, where the
+// button has no label: a tinted fill inside a ring, as any current icon button.
+//
+const CURRENT_ICON_BUTTON_SX = {
+    backgroundColor: "var(--color-nav-current-bg)",
+    color: "var(--color-nav-current-text)",
+    borderColor: "var(--color-nav-current-text)",
+    "&:hover": {
+        backgroundColor: "var(--color-nav-current-bg)",
+        color: "var(--color-nav-current-text)",
+    },
+};
+
+//
+// The look of the photo count, from the navbar's chip tokens, so it matches the jobs chip beside
+// it and can differ from the chips on a photo.
+//
+const PHOTO_COUNT_SX = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "var(--space-1)",
+    minHeight: "var(--button-height-sm)",
+    padding: "0 var(--space-3)",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    fontFamily: "var(--font-sans)",
+    fontSize: "var(--text-sm)",
+    color: "var(--color-navbar-chip-text)",
+    backgroundColor: "var(--color-navbar-chip-bg)",
+    border: "1px solid var(--color-navbar-chip-border)",
+    borderRadius: "var(--radius-chip)",
+    transition: "background-color var(--duration-fast) var(--ease-standard)",
+    "&:hover": {
+        backgroundColor: "var(--color-hover)",
+    },
+    "&:focus-visible": {
+        outline: "var(--focus-ring-width) solid var(--color-focus)",
+        outlineOffset: "var(--focus-ring-offset)",
+    },
+    "& .MuiSvgIcon-root": {
+        fontSize: "var(--icon-sm)",
+    },
+};
+
+//
+// The look of the update pill, from the navbar's update tokens: filled in the success colour, as
+// the one piece of good news in the navbar.
+//
+const UPDATE_PILL_SX = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "var(--space-1)",
+    minHeight: "var(--button-height-sm)",
+    padding: "0 var(--space-3)",
+    whiteSpace: "nowrap",
+    fontSize: "var(--text-sm)",
+    fontWeight: "var(--weight-bold)",
+    color: "var(--color-navbar-update-text)",
+    backgroundColor: "var(--color-navbar-update-bg)",
+    borderRadius: "var(--radius-full)",
+    textDecoration: "none",
+    "& .MuiSvgIcon-root": {
+        fontSize: "var(--icon-sm)",
+    },
+};
+
+//
 // The navbar component for the Photosphere app.
 //
 export function Navbar({
@@ -56,7 +171,6 @@ export function Navbar({
     setRightSidebarOpen,
     onOpenConfiguration,
 }: INavbarProps) {
-    const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
 
     //
@@ -65,28 +179,36 @@ export function Navbar({
     const isMobile = useIsMobile();
 
     //
-    // Sizing shared by every control in the bar. On a mobile each one is a 44px square, which is the
-    // smallest comfortable touch target; on desktop the buttons keep their natural size and their
-    // labels, so the bar is unchanged there.
+    // Stacks the desktop page buttons' labels under their icons on a window too narrow to show
+    // them side by side, as the style guide's navbar does below 900px.
     //
-    const navButtonSx = isMobile
+    const isStacked = useMediaQuery("(max-width: 899px)");
+
+    //
+    // Sizing shared by every icon button in the bar: a square of the large button height on a
+    // mobile, the smallest comfortable touch target, and of the medium height on desktop.
+    //
+    const iconButtonSx = isMobile
         ? {
-            minWidth: 44,
-            minHeight: 44,
-            borderRadius: 2,
+            width: "var(--button-height-lg)",
+            height: "var(--button-height-lg)",
         }
         : {
-            borderRadius: 2,
+            width: "var(--button-height-md)",
+            height: "var(--button-height-md)",
         };
 
     //
-    // The tinted background that marks the active page's button on a mobile, where the button has
-    // no label to show which page is open.
+    // The look of a desktop page button, with its label stacked under its icon when the window
+    // is narrow, and marked when it is the open page.
     //
-    const activeNavButtonSx = {
-        ...navButtonSx,
-        backgroundColor: 'rgba(var(--mui-palette-primary-mainChannel) / 0.12)',
-    };
+    function pageButtonSx(isCurrent: boolean): SxProps<Theme> {
+        return [
+            PAGE_BUTTON_SX,
+            isStacked ? STACKED_PAGE_BUTTON_SX : {},
+            isCurrent ? CURRENT_PAGE_BUTTON_SX : {},
+        ];
+    }
 
     //
     // Local input state so keystrokes don't re-render all context consumers.
@@ -155,115 +277,204 @@ export function Navbar({
     const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import"]);
     const TemporaryNavPageIcon = temporaryNavPage?.icon;
 
+    const isGalleryCurrent = location.pathname === "/gallery" || location.pathname.startsWith("/gallery/");
+    const isMapCurrent = location.pathname === "/map" || location.pathname.startsWith("/map/");
+    const isImportCurrent = location.pathname === "/import" || location.pathname.startsWith("/import/");
+
+    //
+    // The navbar sits above the page so its shadow falls on the page, and below the sidebars and
+    // the dialogs, which MUI puts at higher layers.
+    //
     return (
-        <div 
-            id="navbar" 
-            className={"select-none " + classNames({ "search": openSearch })}
+        <div
+            id="navbar"
+            className="select-none relative flex-none"
             style={{
-                backgroundColor: (theme.vars ?? theme).palette.background.default,
-                color: (theme.vars ?? theme).palette.text.primary,
+                zIndex: 30,
+                backgroundColor: "var(--color-navbar-bg)",
+                color: "var(--color-text)",
+                borderBottom: "1px solid var(--color-navbar-border)",
+                boxShadow: "var(--shadow-navbar)",
             }}
         >
             <div className="flex flex-col">
-                {/* The bar's controls are 44px targets with real gaps between them on a mobile. The
-                    old bar packed four ~32px icons together with a 4px gap and pushed the right-hand
-                    buttons against the screen edge, which is fine with a mouse and awful with a
-                    thumb. Labels still appear from the `sm` breakpoint up. */}
-                <div className={classNames("flex flex-row items-center pt-2 pb-2", isMobile ? "pl-2 pr-2 gap-1" : "pl-4")}>
+                {/* The bar's controls are touch-sized squares with real gaps between them on a
+                    mobile. On desktop the page buttons run the full height of the bar, so the open
+                    page's line sits along its foot. */}
+                <div
+                    className="flex flex-row items-center"
+                    style={{
+                        height: isMobile ? "calc(var(--button-height-lg) + var(--space-4))" : "calc(var(--button-height-md) + var(--space-4))",
+                        gap: isMobile ? "var(--space-1)" : "var(--space-2)",
+                        padding: isMobile ? "0 var(--space-2)" : "0 var(--space-4)",
+                    }}
+                >
                     <IconButton
                         data-id="sidebar-toggle-button"
                         color="default"
-                        size={isMobile ? "large" : "medium"}
                         title="Toggle sidebar"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
-                        sx={{ ...navButtonSx, flexShrink: 0 }}
+                        sx={iconButtonSx}
                     >
-                        <Menu />
+                        <Menu fontSize="inherit" />
                     </IconButton>
 
                     {/* Everything between the two sidebar buttons scrolls sideways when it does not
                         fit, so neither button can be pushed off the screen. See .navbar-scroll. */}
-                    <div className={classNames("navbar-scroll flex flex-row items-center", isMobile ? "gap-1" : "")}>
-
-                    {!isMobile && <h1 className="ml-3 sm:ml-4">Photosphere</h1>}
-
-                    <IconButton
-                        color="default"
-                        size={isMobile ? "large" : "medium"}
-                        title="Search"
-                        onClick={event => {
-                            navigate("/gallery");
-                            setOpenSearch(true);
+                    <div
+                        className="navbar-scroll flex flex-row items-center self-stretch"
+                        style={{
+                            gap: isMobile ? "var(--space-1)" : "var(--space-2)",
                         }}
-                        sx={{ ...navButtonSx, ml: isMobile ? 0 : 3 }}
                     >
-                        <Search />
-                        {!isMobile && <span className="hidden sm:block ml-2">Search</span>}
-                    </IconButton>
 
-                    <NavLink to="/gallery" title="Gallery">
-                        {({ isActive }) => (
-                            <IconButton
-                                color={isActive ? "primary" : "default"}
-                                size={isMobile ? "large" : "medium"}
-                                sx={isActive && isMobile ? activeNavButtonSx : navButtonSx}
-                                >
+                    {!isMobile
+                        && <div
+                            className="flex items-center"
+                            style={{
+                                gap: "var(--space-2)",
+                                marginLeft: "var(--space-1)",
+                                marginRight: "var(--space-3)",
+                            }}
+                        >
+                            <span
+                                aria-hidden={true}
+                                className="flex items-center justify-center"
+                                style={{
+                                    width: "var(--space-6)",
+                                    height: "var(--space-6)",
+                                    borderRadius: "var(--radius-sm)",
+                                    background: "var(--empty-icon-bg)",
+                                    color: "var(--color-empty-icon)",
+                                    fontSize: "var(--icon-sm)",
+                                }}
+                            >
+                                <PhotoLibrary fontSize="inherit" />
+                            </span>
+                            <h1
+                                style={{
+                                    margin: 0,
+                                    fontFamily: "var(--font-heading)",
+                                    fontSize: "var(--text-lg)",
+                                    fontWeight: "var(--weight-bold)",
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                Photosphere
+                            </h1>
+                        </div>
+                    }
+
+                    {isMobile
+                        && <IconButton
+                            color="default"
+                            title="Search"
+                            aria-current={openSearch ? "page" : undefined}
+                            onClick={() => {
+                                navigate("/gallery");
+                                setOpenSearch(true);
+                            }}
+                            sx={[
+                                iconButtonSx,
+                                openSearch ? CURRENT_ICON_BUTTON_SX : {},
+                            ]}
+                        >
+                            <Search fontSize="inherit" />
+                        </IconButton>
+                    }
+
+                    {!isMobile
+                        && <>
+                            <Button
+                                variant="text"
+                                title="Search"
+                                aria-current={openSearch ? "page" : undefined}
+                                onClick={() => {
+                                    navigate("/gallery");
+                                    setOpenSearch(true);
+                                }}
+                                sx={pageButtonSx(openSearch)}
+                            >
+                                <Search />
+                                <span>Search</span>
+                            </Button>
+
+                            <Button
+                                variant="text"
+                                component={NavLink}
+                                to="/gallery"
+                                title="Gallery"
+                                sx={pageButtonSx(isGalleryCurrent)}
+                            >
                                 <PhotoLibrary />
-                                {!isMobile && <span className="hidden sm:block ml-2">Gallery</span>}
-                            </IconButton>
-                        )}
-                    </NavLink>
+                                <span>Gallery</span>
+                            </Button>
 
-                    <NavLink to="/map" title="Map">
-                        {({ isActive }) => (
-                            <IconButton
-                                color={isActive ? "primary" : "default"}
-                                size={isMobile ? "large" : "medium"}
-                                sx={isActive && isMobile ? activeNavButtonSx : navButtonSx}
-                                >
+                            <Button
+                                variant="text"
+                                component={NavLink}
+                                to="/map"
+                                title="Map"
+                                sx={pageButtonSx(isMapCurrent)}
+                            >
                                 <Map />
-                                {!isMobile && <span className="hidden sm:block ml-2">Map</span>}
-                            </IconButton>
-                        )}
-                    </NavLink>
+                                <span>Map</span>
+                            </Button>
 
-                    {databasePath && (
-                        <NavLink to="/import" title="Import">
-                            {({ isActive }) => (
-                                <IconButton
-                                    color={isActive ? "primary" : "default"}
-                                    size={isMobile ? "large" : "medium"}
-                                    sx={isActive && isMobile ? activeNavButtonSx : navButtonSx}
+                            {databasePath && (
+                                <Button
+                                    variant="text"
+                                    component={NavLink}
+                                    to="/import"
+                                    title="Import"
                                     data-id="navbar-import-button"
-                                    >
+                                    sx={pageButtonSx(isImportCurrent)}
+                                >
                                     <FileUpload />
-                                    {!isMobile && <span className="hidden sm:block ml-2">Import</span>}
-                                </IconButton>
+                                    <span>Import</span>
+                                </Button>
                             )}
-                        </NavLink>
-                    )}
+                        </>
+                    }
 
                     {temporaryNavPage && TemporaryNavPageIcon && (
-                        <NavLink to={temporaryNavPage.path} title={temporaryNavPage.label}>
-                            <IconButton
-                                color="primary"
-                                size={isMobile ? "large" : "medium"}
-                                sx={isMobile ? activeNavButtonSx : navButtonSx}
-                                >
-                                <TemporaryNavPageIcon />
-                                {!isMobile && <span className="hidden sm:block ml-2">{temporaryNavPage.label}</span>}
+                        isMobile
+                            ? <IconButton
+                                component={NavLink}
+                                to={temporaryNavPage.path}
+                                title={temporaryNavPage.label}
+                                sx={[
+                                    iconButtonSx,
+                                    CURRENT_ICON_BUTTON_SX,
+                                ]}
+                            >
+                                <TemporaryNavPageIcon fontSize="inherit" />
                             </IconButton>
-                        </NavLink>
+                            : <Button
+                                variant="text"
+                                component={NavLink}
+                                to={temporaryNavPage.path}
+                                title={temporaryNavPage.label}
+                                sx={pageButtonSx(true)}
+                            >
+                                <TemporaryNavPageIcon />
+                                <span>{temporaryNavPage.label}</span>
+                            </Button>
                     )}
 
                     <div className="ml-auto"></div>
 
                     {(isLoading)
-                        && <div className="flex flex-row items-center ml-1 mr-2">
-                            <span className="text-sm hidden sm:block mr-1">Loading</span>
-                            <div className="mx-1 sm:mx-2">
-                                <Spinner show={true} />
-                            </div>
+                        && <div
+                            className="flex flex-row items-center"
+                            style={{
+                                gap: "var(--space-2)",
+                                fontSize: "var(--text-sm)",
+                                color: "var(--color-text-muted)",
+                            }}
+                        >
+                            {!isMobile && <span>Loading</span>}
+                            <Spinner show={true} />
                         </div>
                     }
 
@@ -271,19 +482,41 @@ export function Navbar({
 
 
                     {databasePath && (
-                        <div
-                            className="flex flex-row items-center mr-2 text-xs sm:text-sm"
-                        >
-                            {selectedItemsCount > 0 
-                                && <div className="flex flex-row items-center">
-                                    <button
-                                        className="w-6 text-sm"
+                        <div className="flex flex-row items-center">
+                            {selectedItemsCount > 0
+                                && <div
+                                    className="flex flex-row items-center"
+                                    style={{
+                                        gap: "var(--space-1)",
+                                    }}
+                                >
+                                    <IconButton
+                                        size="small"
                                         title="Clear selection"
                                         onClick={clearMultiSelection}
+                                        sx={{
+                                            "& i": {
+                                                color: "inherit",
+                                            },
+                                        }}
                                     >
                                         <i className="fa-solid fa-close"></i>
-                                    </button>
-                                    {selectedItemsCount} selected
+                                    </IconButton>
+                                    <span
+                                        className="flex items-center"
+                                        style={{
+                                            minHeight: "var(--button-height-sm)",
+                                            padding: "0 var(--space-3)",
+                                            whiteSpace: "nowrap",
+                                            fontSize: "var(--text-sm)",
+                                            fontWeight: "var(--weight-bold)",
+                                            color: "var(--color-on-accent)",
+                                            backgroundColor: "var(--color-accent)",
+                                            borderRadius: "var(--radius-chip)",
+                                        }}
+                                    >
+                                        {selectedItemsCount} selected
+                                    </span>
                                 </div>
                                 /*
                                     A real <button> carrying the data-id, because the smoke-test
@@ -296,48 +529,28 @@ export function Navbar({
                                     data-id="database-photo-count"
                                     title="Show database summary"
                                     onClick={() => window.dispatchEvent(new CustomEvent("photosphere:show-database-summary"))}
-                                    sx={{
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap',
-                                        border: 'none',
-                                        font: 'inherit',
-                                        color: 'text.primary',
-                                        borderRadius: 1.5,
-                                        px: 1,
-                                        py: 0.5,
-                                        backgroundColor: 'action.selected',
-                                        '&:hover': {
-                                            backgroundColor: 'action.focus',
-                                        },
-                                    }}
+                                    sx={PHOTO_COUNT_SX}
                                     >
+                                    <PhotoLibrary />
                                     {sortedItemsCount} photos
                                 </Box>
-                            }                        
+                            }
                         </div>
                     )}
 
                     {updateVersion && (
-                        <a
+                        <Box
+                            component="a"
                             data-id="update-available-badge"
-                            className="mr-2"
                             href="https://github.com/ashleydavis/photosphere/releases/latest"
                             target="_blank"
                             rel="noreferrer"
                             title="A new version of Photosphere is available"
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                padding: '2px 8px',
-                                borderRadius: '999px',
-                                fontSize: '0.75rem',
-                                backgroundColor: 'var(--mui-palette-Alert-successStandardBg)',
-                                color: 'var(--mui-palette-Alert-successColor)',
-                                textDecoration: 'none',
-                            }}
+                            sx={UPDATE_PILL_SX}
                         >
+                            <ArrowCircleUp />
                             v{updateVersion} available
-                        </a>
+                        </Box>
                     )}
 
                     <ThemeToggle />
@@ -361,29 +574,37 @@ export function Navbar({
 
                     <IconButton
                         data-id="right-sidebar-button"
-                        sx={{
-                            ...navButtonSx,
-                            flexShrink: 0,
-                            backgroundColor: 'action.selected',
-                        }}
+                        sx={iconButtonSx}
                         color="default"
-                        size={isMobile ? "large" : "medium"}
                         title="Open menu"
                         onClick={() => setRightSidebarOpen(true)}
                     >
-                        <MoreVert />
+                        <MoreVert fontSize="inherit" />
                     </IconButton>
                 </div>
 
                 {openSearch
-                    && <div className="flex flex-row items-center pl-4 pr-1">
-                        <div>
-                            <i className="fa-solid fa-search"></i>
-                        </div>
+                    && <div
+                        className="flex flex-row items-center"
+                        style={{
+                            gap: isMobile ? "var(--space-1)" : "var(--space-2)",
+                            padding: isMobile ? "var(--space-2)" : "var(--space-2) var(--space-4)",
+                            backgroundColor: "var(--color-toolbar-bg)",
+                            borderTop: "1px solid var(--color-toolbar-border)",
+                        }}
+                    >
+                        <i
+                            className="fa-solid fa-search"
+                            style={{
+                                color: "var(--color-text-muted)",
+                                fontSize: "var(--icon-md)",
+                                marginRight: "var(--space-1)",
+                            }}
+                        ></i>
                         <OutlinedInput
                             size="small"
                             autoFocus
-                            className="flex-grow ml-4 outline-none"
+                            className="flex-grow"
                             placeholder="Type to search..."
                             value={draftSearchInput}
                             onChange={event => {
@@ -410,7 +631,6 @@ export function Navbar({
                         />
                         {draftSearchInput.trim().length > 0 && (
                             <IconButton
-                                size="small"
                                 color="default"
                                 title={savedSearches.includes(draftSearchInput.trim()) ? "Unsave search" : "Save search"}
                                 onClick={async () => {
@@ -421,37 +641,52 @@ export function Navbar({
                                         await saveSearch(draftSearchInput.trim());
                                     }
                                 }}
+                                sx={savedSearches.includes(draftSearchInput.trim())
+                                    ? {
+                                        color: "var(--color-accent)",
+                                        borderColor: "var(--color-accent)",
+                                    }
+                                    : undefined
+                                }
                             >
                                 {savedSearches.includes(draftSearchInput.trim())
-                                    ? <Star fontSize="small" />
-                                    : <StarBorder fontSize="small" />
+                                    ? <Star fontSize="inherit" />
+                                    : <StarBorder fontSize="inherit" />
                                 }
                             </IconButton>
                         )}
-                        <a
-                            className="w-10 text-xl text-center"
+                        <IconButton
+                            component="a"
                             href="https://github.com/ashleydavis/photosphere/wiki/Gallery-Search"
                             target="_blank"
                             rel="noreferrer"
                             title="Search help"
+                            sx={{
+                                "& i": {
+                                    color: "inherit",
+                                },
+                            }}
                         >
                             <i className="fa-solid fa-circle-question"></i>
-                        </a>
-                        <button
-                            className="w-10 text-xl"
+                        </IconButton>
+                        <IconButton
                             title="Close search"
                             onClick={() => {
                                 searchDebounce.cancel();
                                 onCloseSearch();
                             }}
+                            sx={{
+                                "& i": {
+                                    color: "inherit",
+                                },
+                            }}
                         >
                             <i className="fa-solid fa-close"></i>
-                        </button>
+                        </IconButton>
                     </div>
-                }                    
+                }
             </div>
 
         </div>
     );
 }
-

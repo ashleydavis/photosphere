@@ -15,6 +15,11 @@ import { usePlatform } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { useDebounce } from '../lib/use-debounce';
 import { ResponsiveDialog } from './responsive-dialog';
+import CloudIcon from '@mui/icons-material/Cloud';
+import FolderIcon from '@mui/icons-material/Folder';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import { DialogIconBadge } from './dialog-icon-badge';
+import { FIELD_LABEL_SX } from './create-database-modal';
 
 export interface IS3BrowserModalProps {
     // Whether the modal is visible.
@@ -135,13 +140,35 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
     function renderBreadcrumbs(): React.ReactNode {
         const segments = prefix.split('/').filter(segment => segment.length > 0);
         return (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 'var(--space-1)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--text-sm)',
+                    '& .MuiButton-root': {
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 'var(--text-sm)',
+                        textTransform: 'none',
+                    },
+                }}
+                >
                 <Button size="small" variant="text" onClick={handleGoRoot}>
                     {bucket || 'root'}
                 </Button>
                 {segments.map((segment, index) => (
                     <React.Fragment key={index}>
-                        <Typography variant="body2" sx={{ alignSelf: 'center' }}>/</Typography>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: 'var(--color-text-muted)',
+                                fontFamily: 'var(--font-mono)',
+                            }}
+                            >
+                            /
+                        </Typography>
                         <Button size="small" variant="text" onClick={() => handleBreadcrumb(index)}>
                             {segment}
                         </Button>
@@ -159,50 +186,111 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
             maxWidth={740}
             onKeyDown={createDialogKeyHandler(handleSelectLocation, !bucket)}
             >
-            <DialogTitle>Browse S3</DialogTitle>
+            <DialogTitle>
+                <DialogIconBadge icon={<CloudIcon />} danger={false} />
+                Browse S3
+            </DialogTitle>
             <DialogContent>
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                    <FormLabel>Bucket</FormLabel>
-                    <OutlinedInput
-                        size="small"
-                        data-id="s3-browser-bucket-input"
-                        value={bucket}
-                        onChange={event => handleBucketChange(event.target.value)}
-                        placeholder="my-bucket-name"
-                    />
-                </FormControl>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-3)',
+                        paddingTop: 'var(--space-1)',
+                    }}
+                    >
+                    <FormControl fullWidth>
+                        <FormLabel sx={FIELD_LABEL_SX}>Bucket</FormLabel>
+                        <OutlinedInput
+                            size="small"
+                            data-id="s3-browser-bucket-input"
+                            sx={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 'var(--text-sm)',
+                            }}
+                            value={bucket}
+                            onChange={event => handleBucketChange(event.target.value)}
+                            placeholder="my-bucket-name"
+                        />
+                    </FormControl>
 
-                {bucket && renderBreadcrumbs()}
+                    {bucket && renderBreadcrumbs()}
 
-                {listError && (
-                    <Typography data-id="s3-browser-error" variant="body2" color="error" sx={{ mb: 1 }}>
-                        {listError}
-                    </Typography>
-                )}
+                    {listError && (
+                        <Typography
+                            data-id="s3-browser-error"
+                            variant="body2"
+                            sx={{
+                                color: 'var(--color-danger)',
+                            }}
+                            >
+                            {listError}
+                        </Typography>
+                    )}
 
-                {entries.length > 0 && (
-                    <List dense sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                        {entries.map((dirName, entryIndex) => (
-                            <ListItem key={dirName} disablePadding>
-                                <ListItemButton
-                                    data-id={`s3-browser-dir-${entryIndex}`}
-                                    onClick={() => handleNavigate(dirName)}
-                                    >
-                                    {dirName}/
-                                </ListItemButton>
-                            </ListItem>
-                        ))}
-                    </List>
-                )}
+                    {entries.length > 0 && (
+                        <List
+                            sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--space-1)',
+                                padding: 0,
+                                maxHeight: 'calc(var(--menu-item-height) * 6)',
+                                overflowY: 'auto',
+                            }}
+                            >
+                            {entries.map((dirName, entryIndex) => (
+                                <ListItem key={dirName} disablePadding>
+                                    <ListItemButton
+                                        data-id={`s3-browser-dir-${entryIndex}`}
+                                        onClick={() => handleNavigate(dirName)}
+                                        sx={{
+                                            padding: 'var(--space-2) var(--space-3)',
+                                            fontFamily: 'var(--font-mono)',
+                                            fontSize: 'var(--text-sm)',
+                                            '& .MuiSvgIcon-root': {
+                                                flex: 'none',
+                                                fontSize: 'var(--icon-md)',
+                                                color: 'var(--color-text-muted)',
+                                            },
+                                        }}
+                                        >
+                                        <FolderIcon />
+                                        <Box
+                                            component="span"
+                                            sx={{
+                                                flex: 1,
+                                                minWidth: 0,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                            >
+                                            {dirName}/
+                                        </Box>
+                                        <ChevronRightIcon />
+                                    </ListItemButton>
+                                </ListItem>
+                            ))}
+                        </List>
+                    )}
 
-                {bucket && entries.length === 0 && !listError && (
-                    <Typography variant="body2" sx={{ mt: 1 }}>
-                        No sub-directories found here.
-                    </Typography>
-                )}
+                    {bucket && entries.length === 0 && !listError && (
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                padding: 'var(--space-4)',
+                                color: 'var(--color-text-muted)',
+                                textAlign: 'center',
+                            }}
+                            >
+                            No sub-directories found here.
+                        </Typography>
+                    )}
+                </Box>
             </DialogContent>
             <DialogActions>
-                <Button data-id="s3-browser-cancel" variant="text" onClick={onClose}>Cancel</Button>
+                <Button data-id="s3-browser-cancel" variant="outlined" onClick={onClose}>Cancel</Button>
                 <Button
                     variant="contained"
                     disabled={!bucket}

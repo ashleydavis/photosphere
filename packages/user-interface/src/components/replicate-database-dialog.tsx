@@ -24,6 +24,10 @@ import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../co
 import { S3BrowserModal } from './s3-browser-modal';
 import { ConfigureSecretsModal } from './configure-secrets-modal';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import { DialogIconBadge } from './dialog-icon-badge';
+import { CARD_SX, cardRowSx, FIELD_LABEL_SX } from './create-database-modal';
 import { applyDestinationTypeChange, emptyReplicateFormState, type IReplicateFormState, type ReplicateMode } from '../lib/replicate-form';
 
 //
@@ -181,19 +185,48 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
             dataId="replicate-database-dialog"
             onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
             >
-            <DialogTitle>Replicate Database</DialogTitle>
+            <DialogTitle>
+                <DialogIconBadge icon={<ContentCopyIcon />} danger={false} />
+                Replicate Database
+            </DialogTitle>
             <DialogContent sx={{ overflowX: 'hidden' }}>
                 {step === "configure" && (
-                    <>
-                        <Typography variant="body1" sx={{ mb: 1 }}>
-                            <strong>Source:</strong> {sourceEntry.name}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            {sourceEntry.path}
-                        </Typography>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--space-4)',
+                            paddingTop: 'var(--space-1)',
+                        }}
+                        >
+                        <Box>
+                            <Typography variant="body1">
+                                <Box
+                                    component="strong"
+                                    sx={{
+                                        color: 'var(--color-text-muted)',
+                                        fontSize: 'var(--text-sm)',
+                                        fontWeight: 'var(--weight-bold)',
+                                    }}
+                                    >
+                                    Source:
+                                </Box> {sourceEntry.name}
+                            </Typography>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    overflowWrap: 'anywhere',
+                                    color: 'var(--color-text-muted)',
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 'var(--text-sm)',
+                                }}
+                                >
+                                {sourceEntry.path}
+                            </Typography>
+                        </Box>
 
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <FormLabel>Destination type</FormLabel>
+                        <FormControl fullWidth>
+                            <FormLabel sx={FIELD_LABEL_SX}>Destination type</FormLabel>
                             <Select
                                 value={form.storageType}
                                 size="small"
@@ -205,30 +238,54 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                             </Select>
                         </FormControl>
 
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <FormLabel>Destination secrets</FormLabel>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography data-id="replicate-dest-secrets-summary" variant="body2" sx={{ flexGrow: 1 }} color="text.secondary">
-                                    {summariseDestSecrets()}
-                                </Typography>
-                                <Button
-                                    data-id="replicate-configure-secrets-button"
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={() => setSecretsModalOpen(true)}
-                                >
-                                    Configure secrets…
-                                </Button>
+                        <FormControl fullWidth>
+                            <FormLabel sx={FIELD_LABEL_SX}>Destination secrets</FormLabel>
+                            <Box sx={CARD_SX}>
+                                <Box sx={cardRowSx(true)}>
+                                    <Typography
+                                        data-id="replicate-dest-secrets-summary"
+                                        variant="body2"
+                                        sx={{
+                                            minWidth: 0,
+                                            overflowWrap: 'anywhere',
+                                            color: 'var(--color-text-muted)',
+                                            fontSize: 'var(--text-sm)',
+                                        }}
+                                        >
+                                        {summariseDestSecrets()}
+                                    </Typography>
+                                    <Button
+                                        data-id="replicate-configure-secrets-button"
+                                        variant="outlined"
+                                        size="small"
+                                        sx={{
+                                            flex: 'none',
+                                        }}
+                                        onClick={() => setSecretsModalOpen(true)}
+                                    >
+                                        Configure secrets…
+                                    </Button>
+                                </Box>
                             </Box>
                         </FormControl>
 
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <FormLabel>Destination path</FormLabel>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
+                        <FormControl fullWidth>
+                            <FormLabel sx={FIELD_LABEL_SX}>Destination path</FormLabel>
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'stretch',
+                                    gap: 'var(--space-2)',
+                                }}
+                                >
                                 <OutlinedInput
                                     size="small"
                                     data-id="replicate-dest-path-input"
-                                    sx={{ flexGrow: 1 }}
+                                    sx={{
+                                        flexGrow: 1,
+                                        fontFamily: 'var(--font-mono)',
+                                        fontSize: 'var(--text-sm)',
+                                    }}
                                     value={form.destPath}
                                     placeholder={showBrowse ? undefined : 'Type a name for the copy'}
                                     onChange={event => setForm(prev => ({ ...prev, destPath: event.target.value }))}
@@ -238,6 +295,11 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                                         data-id="replicate-dest-browse-button"
                                         variant="outlined"
                                         disabled={browseDisabled}
+                                        startIcon={<FolderOpenIcon />}
+                                        sx={{
+                                            flex: 'none',
+                                            whiteSpace: 'nowrap',
+                                        }}
                                         onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
                                     >
                                         {isS3Dest ? 'Browse S3' : 'Browse'}
@@ -246,18 +308,26 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                             </Box>
                         </FormControl>
 
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <FormLabel>Mode</FormLabel>
+                        <FormControl fullWidth>
+                            <FormLabel sx={FIELD_LABEL_SX}>Mode</FormLabel>
                             <RadioGroup
                                 value={form.mode}
                                 onChange={event => setForm(prev => ({ ...prev, mode: event.target.value as ReplicateMode }))}
+                                sx={{
+                                    '& .replicate-mode-hint': {
+                                        marginLeft: 'var(--space-8)',
+                                        marginBottom: 'var(--space-2)',
+                                        color: 'var(--color-text-muted)',
+                                        fontSize: 'var(--text-sm)',
+                                    },
+                                }}
                             >
                                 <FormControlLabel
                                     value="partial"
                                     control={<Radio data-id="replicate-mode-partial" size="small" />}
                                     label="Partial"
                                 />
-                                <Typography variant="caption" color="text.secondary" sx={{ ml: 4, mb: 1 }}>
+                                <Typography variant="caption" className="replicate-mode-hint">
                                     Copies only metadata and structure. Original photos and videos are fetched on demand from the source. Choose this when you want a small, browsable replica.
                                 </Typography>
                                 <FormControlLabel
@@ -265,25 +335,45 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                                     control={<Radio data-id="replicate-mode-full" size="small" />}
                                     label="Full"
                                 />
-                                <Typography variant="caption" color="text.secondary" sx={{ ml: 4 }}>
+                                <Typography variant="caption" className="replicate-mode-hint">
                                     Copies everything — every original, display, and thumbnail file. Choose this when you want a complete, standalone copy that does not depend on the source.
                                 </Typography>
                             </RadioGroup>
                         </FormControl>
 
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                display: 'block',
+                                color: 'var(--color-text-muted)',
+                                fontSize: 'var(--text-sm)',
+                            }}
+                            >
                             To replicate to an existing encrypted database, register it on this page first and the replica will inherit its credentials.
                         </Typography>
-                    </>
+                    </Box>
                 )}
 
                 {step === "running" && (
                     <>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-                            <CircularProgress size={24} />
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 'var(--space-4)',
+                                padding: 'var(--space-6) 0',
+                            }}
+                            >
+                            <CircularProgress size="var(--icon-lg)" />
                             <Typography>{progress}</Typography>
                         </Box>
-                        <Typography variant="body2" color="text.secondary" data-id="replicate-background-hint">
+                        <Typography
+                            variant="body2"
+                            data-id="replicate-background-hint"
+                            sx={{
+                                color: 'var(--color-text-muted)',
+                            }}
+                            >
                             Replication runs in the background. You can close this dialog and it will keep going; watch it and stop it from the Background jobs list in the menu.
                         </Typography>
                     </>
@@ -306,7 +396,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                     <>
                         <Button
                             data-id="replicate-cancel-button"
-                            variant="text"
+                            variant="outlined"
                             onClick={onClose}
                         >
                             Cancel
@@ -327,7 +417,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                 {step === "running" && (
                     <Button
                         data-id="replicate-run-in-background-button"
-                        variant="text"
+                        variant="contained"
                         onClick={onClose}
                     >
                         Run in background

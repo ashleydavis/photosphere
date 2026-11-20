@@ -8,7 +8,7 @@ import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
-import { FileUpload, CheckCircle, Cancel, HourglassEmpty, RemoveCircle } from "@mui/icons-material";
+import { FileUpload, CheckCircle, Cancel, HourglassEmpty, RemoveCircle, Close, FolderOpen, CleaningServices } from "@mui/icons-material";
 import { useIsMobile } from "../../lib/use-is-mobile";
 import type { IImportItem } from "../../context/import-context";
 import { ImportProgress } from "../../components/import-progress";
@@ -18,8 +18,8 @@ import { ImportProgress } from "../../components/import-progress";
 //
 function NoDatabaseLoaded() {
     return (
-        <Box className="flex items-center justify-center" sx={{ height: "calc(100vh - 60px)" }}>
-            <Typography variant="body1" sx={{ color: "text.secondary" }}>
+        <Box className="flex items-center justify-center" sx={{ height: "100%" }}>
+            <Typography variant="body1" sx={{ color: "var(--color-text-muted)" }}>
                 Open a database to import photos.
             </Typography>
         </Box>
@@ -31,16 +31,16 @@ function NoDatabaseLoaded() {
 //
 function ItemStatusIcon({ status }: { status: IImportItem['status'] }) {
     if (status === 'pending') {
-        return <HourglassEmpty fontSize="small" sx={{ color: "text.secondary" }} />;
+        return <HourglassEmpty sx={{ color: "var(--color-text-muted)", fontSize: "var(--icon-md)" }} />;
     }
     else if (status === 'success') {
-        return <CheckCircle fontSize="small" sx={{ color: "success.main" }} />;
+        return <CheckCircle sx={{ color: "var(--color-success)", fontSize: "var(--icon-md)" }} />;
     }
     else if (status === 'failure') {
-        return <Cancel fontSize="small" sx={{ color: "error.main" }} />;
+        return <Cancel sx={{ color: "var(--color-danger)", fontSize: "var(--icon-md)" }} />;
     }
     else {
-        return <RemoveCircle fontSize="small" sx={{ color: "text.secondary" }} />;
+        return <RemoveCircle sx={{ color: "var(--color-text-muted)", fontSize: "var(--icon-md)" }} />;
     }
 }
 
@@ -50,21 +50,32 @@ function ItemStatusIcon({ status }: { status: IImportItem['status'] }) {
 function ImportItemRow({ item }: { item: IImportItem }) {
     return (
         <Box
-            className="flex flex-row items-center py-1 px-2 gap-2"
-            sx={{ borderBottom: "1px solid", borderColor: "divider" }}
+            className="flex flex-row items-center"
+            sx={{
+                gap: "var(--space-3)",
+                padding: "var(--space-2) var(--space-4)",
+                borderBottom: "1px solid var(--color-border)",
+                background: "var(--color-import-item-bg)",
+            }}
         >
-            <Box sx={{ width: 20, flexShrink: 0 }}>
+            <Box
+                sx={{
+                    display: "flex",
+                    width: "var(--icon-md)",
+                    flexShrink: 0,
+                }}
+                >
                 <ItemStatusIcon status={item.status} />
             </Box>
 
             <Box
                 sx={{
-                    width: 32,
-                    height: 32,
+                    width: "var(--button-height-sm)",
+                    height: "var(--button-height-sm)",
                     flexShrink: 0,
-                    borderRadius: 1.5,
+                    borderRadius: "var(--radius-photo)",
                     overflow: "hidden",
-                    bgcolor: "action.selected",
+                    background: "var(--color-raised)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -80,7 +91,18 @@ function ImportItemRow({ item }: { item: IImportItem }) {
                 }
             </Box>
 
-            <Typography data-id="import-item-path" variant="body2" sx={{ flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <Typography
+                data-id="import-item-path"
+                variant="body2"
+                sx={{
+                    flexGrow: 1,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-sm)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                }}
+                >
                 {item.logicalPath}
             </Typography>
         </Box>
@@ -189,131 +211,171 @@ export function ImportPage() {
     const pendingCount = importItems.filter(item => item.status === 'pending').length;
 
     return (
-        <Box className="flex flex-col" sx={{ height: "calc(100vh - 60px)" }}>
-
-            {/* What automatic import is doing, when it is doing anything. */}
-            <Box sx={{ px: 2, pt: 2, flexShrink: 0 }}>
-                <ImportProgress />
-            </Box>
-
-            {/* Header bar */}
-            <Box
-                className="flex flex-row items-center px-4 py-3 gap-3"
-                sx={{ borderBottom: "1px solid", borderColor: "divider", flexShrink: 0 }}
+        <Box
+            className="flex flex-col"
+            sx={{
+                height: "100%",
+                overflowY: "auto",
+            }}
             >
-                {status === 'running' && (
-                    <>
-                        <CircularProgress size={24} />
-                        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Importing…</Typography>
-                        <Button
-                            data-id="import-cancel-button"
-                            variant="outlined"
-                            color="error"
-                            size="small"
-                            onClick={cancelImport}
-                        >
-                            Cancel
-                        </Button>
-                    </>
-                )}
+            <Box
+                className="flex flex-col"
+                sx={{
+                    flexGrow: 1,
+                    minHeight: 0,
+                    width: "100%",
+                    maxWidth: "calc(var(--space-8) * 28)",
+                    mx: "auto",
+                    gap: "var(--space-4)",
+                    padding: isMobile ? "var(--space-3)" : "var(--space-6)",
+                }}
+                >
 
-                {status === 'completed' && (
-                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Import complete</Typography>
-                )}
+                {/* What automatic import is doing, when it is doing anything. */}
+                <ImportProgress />
 
-                {status === 'cancelled' && (
-                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Import cancelled</Typography>
-                )}
+                {/* Header bar: where the import is up to, with Cancel at the right while it runs. */}
+                <Box
+                    className="flex flex-row items-center"
+                    sx={{
+                        flexShrink: 0,
+                        gap: "var(--space-3)",
+                        minHeight: "var(--button-height-md)",
+                        "& .MuiTypography-subtitle1": {
+                            fontSize: "var(--text-lg)",
+                            fontWeight: "var(--weight-bold)",
+                        },
+                    }}
+                    >
+                    {status === 'running' && (
+                        <>
+                            <CircularProgress size="var(--icon-lg)" />
+                            <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Importing…</Typography>
+                            <Button
+                                data-id="import-cancel-button"
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                startIcon={<Close />}
+                                onClick={cancelImport}
+                            >
+                                Cancel
+                            </Button>
+                        </>
+                    )}
 
-                {status === 'idle' && (
-                    <Typography variant="subtitle1">Import photos</Typography>
-                )}
-            </Box>
+                    {status === 'completed' && (
+                        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Import complete</Typography>
+                    )}
 
-            {/* Body */}
-            <Box className="flex flex-col flex-grow overflow-hidden">
+                    {status === 'cancelled' && (
+                        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Import cancelled</Typography>
+                    )}
+
+                    {status === 'idle' && (
+                        <Typography variant="subtitle1">Import photos</Typography>
+                    )}
+                </Box>
 
                 {/* Idle state */}
                 {status === 'idle' && (
                     <Box
                         data-id="import-drop-zone"
-                        className="flex flex-col items-center justify-center flex-grow"
+                        className="flex flex-col items-center justify-center"
                         onDragOver={allowDragAndDrop ? handleDragOver : undefined}
                         onDragLeave={allowDragAndDrop ? handleDragLeave : undefined}
                         onDrop={allowDragAndDrop ? handleDrop : undefined}
                         sx={{
-                            border: isDragOver ? "2px dashed" : "2px dashed transparent",
-                            borderColor: isDragOver ? "primary.light" : "transparent",
-                            borderRadius: 2,
-                            transition: "border-color 0.15s",
-                            bgcolor: isDragOver ? "rgba(var(--mui-palette-primary-mainChannel) / 0.08)" : undefined,
+                            flexShrink: 0,
+                            textAlign: "center",
+                            gap: "var(--space-3)",
+                            padding: isMobile ? "var(--space-6) var(--space-4)" : "var(--space-8) var(--space-6)",
+                            background: isDragOver ? "color-mix(in srgb, var(--color-accent) 18%, var(--dropzone-fill))" : "var(--dropzone-fill)",
+                            border: "var(--dropzone-border)",
+                            borderStyle: isDragOver ? "solid" : undefined,
+                            borderRadius: "var(--radius-lg)",
+                            transition: "background var(--duration-fast) var(--ease-standard)",
                         }}
                     >
+                        <Box
+                            aria-hidden={true}
+                            sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: "calc(var(--space-8) * 2)",
+                                height: "calc(var(--space-8) * 2)",
+                                borderRadius: "var(--radius-full)",
+                                background: "var(--empty-icon-bg)",
+                                color: "var(--color-empty-icon)",
+                                fontSize: "var(--space-6)",
+                                transform: isDragOver ? "translateY(calc(var(--space-1) * -1)) scale(1.08)" : "none",
+                                transition: "transform var(--duration-normal) var(--ease-standard)",
+                                "@media (prefers-reduced-motion: reduce)": {
+                                    transition: "none",
+                                },
+                            }}
+                            >
+                            <FileUpload fontSize="inherit" />
+                        </Box>
+                        <Typography
+                            variant={isMobile ? "h3" : "h4"}
+                            sx={{
+                                fontFamily: "var(--font-heading)",
+                                fontSize: "var(--text-xl)",
+                                fontWeight: "var(--weight-bold)",
+                                lineHeight: "var(--leading-tight)",
+                            }}
+                            >
+                            Import photos
+                        </Typography>
+                        <Typography
+                            variant="body1"
+                            sx={{
+                                color: "var(--color-text-muted)",
+                                maxWidth: "calc(var(--space-8) * 12)",
+                            }}
+                            >
+                            {allowDragAndDrop
+                                ? "Drop files or directories here, or use the buttons below."
+                                : "Choose photos and videos from your device."}
+                        </Typography>
                         {/* On a mobile the import buttons stack and run the full width of the
-                            screen: a row of two large buttons is what clipped this page's actions
+                            drop zone: a row of two large buttons is what clipped this page's actions
                             at the edges before, and a single obvious target beats two small ones. */}
-                        <Box sx={{ textAlign: "center", width: "100%", px: isMobile ? 3 : 0 }}>
-                            <Box
-                                sx={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    width: isMobile ? 96 : 80,
-                                    height: isMobile ? 96 : 80,
-                                    borderRadius: "50%",
-                                    backgroundColor: "action.selected",
-                                    mb: 2,
-                                }}
-                                >
-                                <FileUpload sx={{ fontSize: isMobile ? 48 : 40, color: "text.secondary" }} />
-                            </Box>
-                            <Typography variant={isMobile ? "h3" : "h4"} sx={{ mb: 1 }}>Import photos</Typography>
-                            <Typography variant="body1" sx={{ mb: 4, color: "text.secondary" }}>
-                                {allowDragAndDrop
-                                    ? "Drop files or directories here, or use the buttons below."
-                                    : "Choose photos and videos from your device."}
-                            </Typography>
-                            <Box
-                                sx={{
-                                    display: "flex",
-                                    flexDirection: isMobile ? "column" : "row",
-                                    gap: 1.5,
-                                    justifyContent: "center",
-                                    width: "100%",
-                                    maxWidth: isMobile ? 420 : undefined,
-                                    mx: "auto",
-                                }}
-                                >
+                        <Box
+                            sx={{
+                                display: "flex",
+                                flexDirection: isMobile ? "column" : "row",
+                                flexWrap: "wrap",
+                                gap: "var(--space-3)",
+                                justifyContent: "center",
+                                width: "100%",
+                                marginTop: "var(--space-2)",
+                            }}
+                            >
+                            <Button
+                                data-id="import-files-button"
+                                variant="contained"
+                                size={isMobile ? "large" : "medium"}
+                                startIcon={<FileUpload />}
+                                onClick={handleImportFiles}
+                                disabled={isPicking}
+                            >
+                                {platform.platformKind === "desktop" ? "Import files" : "Select photos"}
+                            </Button>
+                            {platform.platformKind === "desktop" && (
                                 <Button
-                                    data-id="import-files-button"
-                                    variant={isMobile ? "contained" : "outlined"}
-                                    color={isMobile ? "primary" : "inherit"}
-                                    size="large"
-                                    startIcon={<FileUpload />}
-                                    onClick={handleImportFiles}
+                                    data-id="import-directory-button"
+                                    variant="outlined"
+                                    size={isMobile ? "large" : "medium"}
+                                    startIcon={<FolderOpen />}
+                                    onClick={handleImportDirectories}
                                     disabled={isPicking}
-                                    sx={{
-                                        minHeight: isMobile ? 52 : undefined,
-                                        borderRadius: isMobile ? 2 : undefined,
-                                    }}
                                 >
-                                    {platform.platformKind === "desktop" ? "Import files" : "Select photos"}
+                                    Import directory
                                 </Button>
-                                {platform.platformKind === "desktop" && (
-                                    <Button
-                                        data-id="import-directory-button"
-                                        variant="outlined"
-                                        color="inherit"
-                                        size="large"
-                                        startIcon={<FileUpload />}
-                                        onClick={handleImportDirectories}
-                                        disabled={isPicking}
-                                        sx={{ minHeight: isMobile ? 52 : undefined }}
-                                    >
-                                        Import directory
-                                    </Button>
-                                )}
-                            </Box>
+                            )}
                         </Box>
                     </Box>
                 )}
@@ -323,7 +385,18 @@ export function ImportPage() {
                     case is the point of the record: opening a database should answer "what came in?"
                     without the user having to import something first. */}
                 {(status === 'running' || status === 'completed' || status === 'cancelled' || importItems.length > 0) && (
-                    <Box className="flex flex-col flex-grow overflow-hidden">
+                    <Box
+                        component="section"
+                        aria-label="Imported files"
+                        className="flex flex-col overflow-hidden"
+                        sx={{
+                            flexGrow: 1,
+                            minHeight: "calc(var(--space-8) * 6)",
+                            background: "var(--color-panel)",
+                            border: "1px solid var(--color-border)",
+                            borderRadius: "var(--radius-md)",
+                        }}
+                        >
 
                         {/* Summary (only when done). Chips in a wrapping row, so the outcome reads at
                             a glance on a mobile instead of as four stacked lines of small text. */}
@@ -332,23 +405,54 @@ export function ImportPage() {
                                 sx={{
                                     display: "flex",
                                     flexWrap: "wrap",
-                                    gap: 1,
-                                    px: 2,
-                                    py: 1.5,
-                                    borderBottom: "1px solid",
-                                    borderColor: "divider",
+                                    gap: "var(--space-2)",
+                                    padding: "var(--space-3) var(--space-4)",
+                                    borderBottom: "1px solid var(--color-border)",
                                     flexShrink: 0,
+                                    "& .MuiChip-icon": {
+                                        fontSize: "var(--icon-sm)",
+                                        color: "inherit",
+                                        marginLeft: "var(--space-2)",
+                                    },
                                 }}
                             >
-                                <Chip color="success" size="medium" label={`${successCount} added`} />
-                                <Chip color="default" size="medium" label={`${skippedCount} skipped`} />
                                 <Chip
-                                    color={failedCount > 0 ? "error" : "default"}
-                                    size="medium"
+                                    icon={<CheckCircle />}
+                                    label={`${successCount} added`}
+                                    sx={{
+                                        color: "var(--color-success)",
+                                        borderColor: "color-mix(in srgb, var(--color-success) 45%, transparent)",
+                                        background: "color-mix(in srgb, var(--color-success) 14%, transparent)",
+                                    }}
+                                    />
+                                <Chip
+                                    icon={<RemoveCircle />}
+                                    label={`${skippedCount} skipped`}
+                                    sx={{
+                                        color: "var(--color-text-muted)",
+                                        borderColor: "var(--color-border)",
+                                        background: "var(--color-raised)",
+                                    }}
+                                    />
+                                <Chip
+                                    icon={<Cancel />}
                                     label={`${failedCount} failed`}
+                                    sx={{
+                                        color: failedCount > 0 ? "var(--color-danger)" : "var(--color-text-muted)",
+                                        borderColor: failedCount > 0 ? "var(--color-danger)" : "var(--color-border)",
+                                        background: failedCount > 0 ? "color-mix(in srgb, var(--color-danger) 10%, transparent)" : "var(--color-raised)",
+                                    }}
                                     />
                                 {pendingCount > 0 && (
-                                    <Chip color="warning" size="medium" label={`${pendingCount} pending`} />
+                                    <Chip
+                                        icon={<HourglassEmpty />}
+                                        label={`${pendingCount} pending`}
+                                        sx={{
+                                            color: "var(--color-warning)",
+                                            borderColor: "color-mix(in srgb, var(--color-warning) 45%, transparent)",
+                                            background: "color-mix(in srgb, var(--color-warning) 14%, transparent)",
+                                        }}
+                                        />
                                 )}
                             </Box>
                         )}
@@ -370,9 +474,10 @@ export function ImportPage() {
                                     data-id="import-record-truncated"
                                     sx={{
                                         display: 'block',
-                                        color: 'text.secondary',
+                                        color: 'var(--color-text-muted)',
+                                        fontSize: 'var(--text-sm)',
                                         textAlign: 'center',
-                                        py: 1.5,
+                                        padding: 'var(--space-3)',
                                     }}
                                 >
                                     Imports older than these are not remembered.
@@ -386,23 +491,18 @@ export function ImportPage() {
                                 sx={{
                                     display: "flex",
                                     justifyContent: isMobile ? "stretch" : "flex-end",
-                                    px: 2,
-                                    py: 1.5,
-                                    borderTop: "1px solid",
-                                    borderColor: "divider",
+                                    padding: "var(--space-3) var(--space-4)",
+                                    borderTop: "1px solid var(--color-border)",
                                     flexShrink: 0,
                                 }}
                             >
                                 <Button
                                     data-id="import-clear-button"
                                     variant="outlined"
-                                    color="inherit"
                                     size={isMobile ? "large" : "medium"}
+                                    startIcon={<CleaningServices />}
                                     onClick={clearImport}
-                                    sx={{
-                                        width: isMobile ? "100%" : undefined,
-                                        minHeight: isMobile ? 48 : undefined,
-                                    }}
+                                    fullWidth={isMobile}
                                     >
                                     Clear
                                 </Button>
