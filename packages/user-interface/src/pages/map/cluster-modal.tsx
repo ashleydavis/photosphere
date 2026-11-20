@@ -6,11 +6,11 @@ import { GalleryContextProvider } from "../../context/gallery-context";
 import { GalleryLayoutContextProvider } from "../../context/gallery-layout-context";
 import { Gallery } from "../../components/gallery";
 import { Observable } from "../../lib/subscription";
-import Modal from "@mui/joy/Modal";
-import ModalDialog from "@mui/joy/ModalDialog";
-import ModalClose from "@mui/joy/ModalClose";
-import Typography from "@mui/joy/Typography";
-import Box from "@mui/joy/Box";
+import Dialog from "@mui/material/Dialog";
+import IconButton from "@mui/material/IconButton";
+import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
+import CloseIcon from "@mui/icons-material/Close";
 
 export interface IClusterModalProps {
     //
@@ -173,36 +173,62 @@ export function ClusterModal({ items, lat, lng, onClose }: IClusterModalProps) {
     const title = locationName ? `${countLabel} at ${locationName}` : countLabel;
 
     return (
-        <Modal open onClose={onClose}>
-            <ModalDialog
-                sx={{
-                    width: '95vw',
-                    height: '95vh',
-                    maxWidth: '95vw',
-                    maxHeight: '95vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    p: 2,
-                }}
+        <Dialog
+            open
+            onClose={onClose}
+            maxWidth={false}
+            slotProps={{
+                paper: {
+                    sx: {
+                        width: '95vw',
+                        height: '95vh',
+                        maxWidth: '95vw',
+                        maxHeight: '95vh',
+                        m: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        p: 2,
+                    },
+                },
+            }}
             >
-                <ModalClose />
-                <Typography level="title-md" sx={{ mb: 1, pr: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {title}
-                </Typography>
-                <Box
-                    className="cluster-modal-gallery"
-                    sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', transform: 'translateZ(0)' }}
+            <IconButton
+                aria-label="Close"
+                size="small"
+                onClick={onClose}
+                sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                }}
                 >
-                    <StaticGallerySourceProvider items={items}>
-                        <GalleryContextProvider>
-                            <GalleryLayoutContextProvider>
-                                <Gallery />
-                            </GalleryLayoutContextProvider>
-                        </GalleryContextProvider>
-                    </StaticGallerySourceProvider>
-                </Box>
-            </ModalDialog>
-        </Modal>
+                <CloseIcon />
+            </IconButton>
+            <Typography
+                variant="subtitle1"
+                sx={{
+                    mb: 1,
+                    pr: 4,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                }}
+                >
+                {title}
+            </Typography>
+            <Box
+                className="cluster-modal-gallery"
+                sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', transform: 'translateZ(0)' }}
+            >
+                <StaticGallerySourceProvider items={items}>
+                    <GalleryContextProvider>
+                        <GalleryLayoutContextProvider>
+                            <Gallery />
+                        </GalleryLayoutContextProvider>
+                    </GalleryContextProvider>
+                </StaticGallerySourceProvider>
+            </Box>
+        </Dialog>
     );
 }

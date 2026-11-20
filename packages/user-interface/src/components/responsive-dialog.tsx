@@ -1,9 +1,34 @@
 import React, { ReactNode, KeyboardEvent } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import Drawer from '@mui/joy/Drawer';
+import Dialog from '@mui/material/Dialog';
+import Drawer from '@mui/material/Drawer';
 import { useIsMobile } from '../lib/use-is-mobile';
-import { desktopDialogSx, mobileSheetDrawerSx } from '../lib/modal-styles';
+import { desktopDialogSx, mobileSheetDrawerSx, SHEET_TRANSITION_DURATION_MS, SHEET_TRANSITION_EASING } from '../lib/modal-styles';
+
+declare module '@mui/material/Dialog' {
+    //
+    // Lets a dialog's paper take the `data-id` the smoke tests find the dialog by. Material types
+    // its slot props strictly, so an attribute it does not list has to be added here.
+    //
+    interface DialogPaperSlotPropsOverrides {
+        //
+        // Identifies the dialog to the smoke tests.
+        //
+        'data-id'?: string;
+    }
+}
+
+declare module '@mui/material/Drawer' {
+    //
+    // Lets a drawer's paper take the `data-id` the smoke tests find the sheet by. Material types its
+    // slot props strictly, so an attribute it does not list has to be added here.
+    //
+    interface DrawerPaperSlotPropsOverrides {
+        //
+        // Identifies the sheet to the smoke tests.
+        //
+        'data-id'?: string;
+    }
+}
 
 export interface IProps {
     //
@@ -52,10 +77,14 @@ export interface IProps {
 // from the bottom edge, which uses the full width, puts the actions under the thumb, and reads as
 // native.
 //
-// The two forms are different Joy components (a Modal and a Drawer) rather than one component
-// restyled by a media query, because Joy's Drawer brings the slide animation and Joy's Modal has no
-// transition of its own. The cost is that crossing the breakpoint remounts the dialog, which in
+// The two forms are different Material components (a Dialog and a Drawer) rather than one component
+// restyled by a media query, because the Drawer brings the slide from the bottom edge where the
+// Dialog fades in place. The cost is that crossing the breakpoint remounts the dialog, which in
 // practice only happens when a desktop window is resized across it.
+//
+// The `data-id` goes on the paper, the dialog's visible surface. The key handler goes on the root,
+// because Material focuses the dialog's container rather than its paper when the dialog opens, and a
+// key press there reaches the root but not the paper.
 //
 export function ResponsiveDialog({ open, onClose, minWidth, maxWidth, onKeyDown, dataId, children }: IProps) {
 
@@ -68,8 +97,16 @@ export function ResponsiveDialog({ open, onClose, minWidth, maxWidth, onKeyDown,
                 open={open}
                 onClose={onClose}
                 onKeyDown={onKeyDown}
-                data-id={dataId}
+                transitionDuration={SHEET_TRANSITION_DURATION_MS}
                 sx={mobileSheetDrawerSx()}
+                slotProps={{
+                    paper: {
+                        'data-id': dataId,
+                    },
+                    transition: {
+                        easing: SHEET_TRANSITION_EASING,
+                    },
+                }}
                 >
                 {children}
             </Drawer>
@@ -77,17 +114,20 @@ export function ResponsiveDialog({ open, onClose, minWidth, maxWidth, onKeyDown,
     }
 
     return (
-        <Modal
+        <Dialog
             open={open}
             onClose={onClose}
+            onKeyDown={onKeyDown}
+            maxWidth={false}
+            fullWidth={false}
+            slotProps={{
+                paper: {
+                    'data-id': dataId,
+                    sx: desktopDialogSx(minWidth, maxWidth),
+                },
+            }}
             >
-            <ModalDialog
-                onKeyDown={onKeyDown}
-                data-id={dataId}
-                sx={desktopDialogSx(minWidth, maxWidth)}
-                >
-                {children}
-            </ModalDialog>
-        </Modal>
+            {children}
+        </Dialog>
     );
 }

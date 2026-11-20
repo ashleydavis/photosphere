@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import Box from "@mui/joy/Box";
-import Button from "@mui/joy/Button/Button";
-import Card from "@mui/joy/Card";
-import IconButton from "@mui/joy/IconButton/IconButton";
-import Switch from "@mui/joy/Switch/Switch";
-import Typography from "@mui/joy/Typography/Typography";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import IconButton from "@mui/material/IconButton";
+import Switch from "@mui/material/Switch";
+import Typography from "@mui/material/Typography";
 import { Add, CloudUpload, Delete } from "@mui/icons-material";
 // Imported from the module rather than the package barrel, which reaches Node-only code.
 import { IAutoImportSettings, IFolderAutoImportSource } from "api/src/lib/auto-import-settings";
@@ -163,8 +163,15 @@ export function AutoImportSettings() {
 
     return (
         <Card
-            variant="soft"
-            sx={{ borderRadius: 'lg', p: 1.5, gap: 1.5 }}
+            elevation={0}
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                borderRadius: '12px',
+                p: 1.5,
+                gap: 1.5,
+                bgcolor: 'action.hover',
+            }}
             data-id="auto-import-card"
             >
             <Box
@@ -178,20 +185,20 @@ export function AutoImportSettings() {
                 }}
                 >
                 <CloudUpload sx={{ color: 'text.secondary' }} />
-                <Typography level="title-md" sx={{ flexGrow: 1 }}>Automatic import</Typography>
+                <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Automatic import</Typography>
                 <Switch readOnly checked={settings.enabled} sx={{ pointerEvents: 'none' }} />
             </Box>
-            <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Watches the folders below and imports new photos as they appear. The first time this
                 is switched on, a private photo database is created for you.
             </Typography>
-            <Typography level="body-sm" sx={{ color: 'text.tertiary' }} data-id="auto-import-background-description">
+            <Typography variant="body2" sx={{ color: 'text.secondary' }} data-id="auto-import-background-description">
                 {platform.backgroundImportDescription}
             </Typography>
 
-            <Typography level="title-sm">Folders watched</Typography>
+            <Typography variant="subtitle2">Folders watched</Typography>
             {folderSources.length === 0
-                && <Typography level="body-sm" sx={{ color: 'text.tertiary' }} data-id="auto-import-no-folders">
+                && <Typography variant="body2" sx={{ color: 'text.secondary' }} data-id="auto-import-no-folders">
                     None yet. This machine's own photo folders are used until you add one.
                 </Typography>
             }
@@ -201,13 +208,12 @@ export function AutoImportSettings() {
                     sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
                     data-id={`auto-import-folder-${source.path}`}
                     >
-                    <Typography level="body-sm" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>
+                    <Typography variant="body2" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>
                         {source.path}
                     </Typography>
                     <IconButton
-                        size="sm"
-                        variant="plain"
-                        color="danger"
+                        size="small"
+                        color="error"
                         data-id="auto-import-remove-folder"
                         onClick={() => {
                             removeFolder(source.path)
@@ -219,9 +225,9 @@ export function AutoImportSettings() {
                 </Box>
             ))}
             <Button
-                size="sm"
+                size="small"
                 variant="outlined"
-                startDecorator={<Add />}
+                startIcon={<Add />}
                 data-id="auto-import-add-folder"
                 onClick={() => {
                     addFolder().catch(error => log.exception("Failed to add a folder to watch", error as Error));
@@ -230,15 +236,15 @@ export function AutoImportSettings() {
                 Add a folder
             </Button>
 
-            <Typography level="title-sm">Free up space on this device</Typography>
-            <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+            <Typography variant="subtitle2">Free up space on this device</Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 Deletes photos from this device that your database already holds. Your database
                 becomes the only copy of them, so only do this if you also keep a remote copy.
             </Typography>
             <Button
-                size="sm"
+                size="small"
                 variant="outlined"
-                color={cleanupCounted === undefined ? "neutral" : "danger"}
+                color={cleanupCounted === undefined ? "inherit" : "error"}
                 loading={cleanupRunning}
                 data-id="auto-import-cleanup-button"
                 onClick={() => {
@@ -250,7 +256,7 @@ export function AutoImportSettings() {
                     : `Delete ${cleanupCounted} photo(s) from this device`}
             </Button>
             {cleanupMessage
-                && <Typography level="body-sm" sx={{ color: 'text.tertiary' }} data-id="auto-import-cleanup-message">
+                && <Typography variant="body2" sx={{ color: 'text.secondary' }} data-id="auto-import-cleanup-message">
                     {cleanupMessage}
                 </Typography>
             }

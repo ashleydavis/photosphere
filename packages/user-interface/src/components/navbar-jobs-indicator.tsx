@@ -1,6 +1,6 @@
 import React from "react";
-import Chip from "@mui/joy/Chip";
-import CircularProgress from "@mui/joy/CircularProgress";
+import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
 import { useJobs } from "../context/jobs-context";
 import { describeJobsIndicator } from "../lib/jobs";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -24,52 +24,34 @@ export function NavbarJobsIndicator() {
             {indicator
                 && <Chip
                     data-id="navbar-jobs-indicator"
-                    variant="soft"
                     color="primary"
-                    size="sm"
+                    size="small"
                     title="Show background jobs"
                     onClick={() => window.dispatchEvent(new CustomEvent("photosphere:show-jobs"))}
+                    //
+                    // Always spinning, never filling. This says "something is running", and a ring
+                    // creeping round once over a minute reads as a stuck app rather than a busy one.
+                    //
+                    icon={<CircularProgress size={14} color="inherit" />}
+                    //
+                    // The count is desktop only. A mobile's navbar has no room to spare, and the
+                    // spinner alone still says work is happening; how much and what it is are one
+                    // tap away in the dialog.
+                    //
+                    label={isMobile ? undefined : indicator.label}
                     sx={{
                         mx: 1,
-                        cursor: 'pointer',
                         whiteSpace: 'nowrap',
-                        // Joy's small chip is sized for a bare word. This one carries a spinner as
-                        // well, which sits against the edge without room made for it.
-                        '--Chip-paddingInline': isMobile ? '8px' : '12px',
-                        py: 0.75,
-                    }}
-                    slotProps={{
-                        //
-                        // The spinner and the count are both children, so they land in the label
-                        // slot together. That slot is not a flex row, so the ring sat on the text's
-                        // baseline instead of level with it, and the space between them came from a
-                        // margin on the text rather than from the layout. Centring them here lines
-                        // the ring up with the word and gives the gap one owner.
-                        //
-                        label: {
-                            sx: {
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1,
-                            },
+                        color: 'primary.main',
+                        '& .MuiChip-icon': {
+                            color: 'primary.main',
+                        },
+                        backgroundColor: 'rgba(var(--mui-palette-primary-mainChannel) / 0.12)',
+                        '&:hover': {
+                            backgroundColor: 'rgba(var(--mui-palette-primary-mainChannel) / 0.2)',
                         },
                     }}
-                    >
-                    {/*
-                        Always spinning, never filling. This says "something is running", and a ring
-                        creeping round once over a minute reads as a stuck app rather than a busy one.
-                    */}
-                    <CircularProgress size="sm" />
-
-                    {/*
-                        The count is desktop only. A mobile's navbar has no room to spare, and the
-                        spinner alone still says work is happening; how much and what it is are one
-                        tap away in the dialog.
-                    */}
-                    {!isMobile
-                        && <span>{indicator.label}</span>
-                    }
-                </Chip>
+                    />
             }
 
             {/*

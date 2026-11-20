@@ -1,8 +1,8 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import Box from "@mui/joy/Box";
-import Typography from "@mui/joy/Typography";
-import Button from "@mui/joy/Button";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import { useIsMobile } from "../lib/use-is-mobile";
 
@@ -34,31 +34,31 @@ export function EmptyDatabase() {
                         width: isMobile ? 96 : 80,
                         height: isMobile ? 96 : 80,
                         borderRadius: "50%",
-                        backgroundColor: "background.level2",
+                        backgroundColor: "action.selected",
                         mb: 2.5,
                     }}
                     >
                     <AddPhotoAlternateIcon sx={{ fontSize: isMobile ? 48 : 40, color: "text.secondary" }} />
                 </Box>
 
-                <Typography level={isMobile ? "h2" : "h4"} sx={{ fontSize: isMobile ? "1.9rem" : undefined, mb: 1.5 }}>
+                <Typography variant={isMobile ? "h2" : "h4"} sx={{ fontSize: isMobile ? "1.9rem" : undefined, mb: 1.5 }}>
                     No photos yet
                 </Typography>
-                <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
+                <Typography variant="body1" sx={{ mb: 4, color: "text.secondary" }}>
                     Import photos and videos to get started.
                 </Typography>
 
                 <Button
                     data-id="import-button"
-                    variant="solid"
+                    variant="contained"
                     color="primary"
-                    size="lg"
-                    startDecorator={<AddPhotoAlternateIcon />}
+                    size="large"
+                    startIcon={<AddPhotoAlternateIcon />}
                     onClick={() => navigate('/import')}
                     sx={{
                         width: isMobile ? "100%" : undefined,
                         minHeight: 52,
-                        borderRadius: "md",
+                        borderRadius: 2,
                         px: 4,
                     }}
                 >

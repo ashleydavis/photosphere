@@ -10,12 +10,12 @@ trap 'cleanup_apps "$TMP_DIR"' EXIT
 export PHOTOSPHERE_SMOKE_THEME=dark
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
-wait_for_attribute "$APP_PORT" "data-joy-color-scheme" "dark" 10
+wait_for_attribute "$APP_PORT" "class" "dark" 10
 log_success "The dark theme reached the page before it drew"
 
 send_command "$APP_PORT" click '{"dataId":"theme-toggle-button"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"theme-option-light"}' || exit 1
-wait_for_attribute "$APP_PORT" "data-joy-color-scheme" "light" 10
+wait_for_attribute "$APP_PORT" "class" "light" 10
 log_success "The theme toggle changed the page's colours while it ran"
 
 config_text="$(read_config_file config.toml)" || exit 1
@@ -33,7 +33,7 @@ reset_log_cursor "$TMP_DIR"
 unset PHOTOSPHERE_SMOKE_THEME
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
-wait_for_attribute "$APP_PORT" "data-joy-color-scheme" "light" 10
+wait_for_attribute "$APP_PORT" "class" "light" 10
 log_success "The restart read the light setting from the config file"
 
 check_no_errors "$TMP_DIR" || exit 1

@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { log } from 'utils';
-import Box from '@mui/joy/Box';
-import Typography from '@mui/joy/Typography';
-import Table from '@mui/joy/Table';
-import IconButton from '@mui/joy/IconButton';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Table from '@mui/material/Table';
+import TableHead from '@mui/material/TableHead';
+import TableBody from '@mui/material/TableBody';
+import TableRow from '@mui/material/TableRow';
+import TableCell from '@mui/material/TableCell';
+import IconButton from '@mui/material/IconButton';
 import { Edit, Delete, FolderOpen, IosShare, Visibility, FileCopy, Add, NoteAdd, Download, Storage, Star, CloudSync } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { usePlatform, type IDatabaseEntry } from '../../context/platform-context';
@@ -23,7 +27,7 @@ import { ReplicateDatabaseDialog } from '../../components/replicate-database-dia
 import { ConsolidateDatabaseDialog } from '../../components/consolidate-database-dialog';
 import { useConfigStore } from '../../context/config-store-context';
 import { getDefaultDatabasePath, setDefaultDatabasePath } from '../../lib/auto-import-config';
-import Chip from '@mui/joy/Chip';
+import Chip from '@mui/material/Chip';
 
 //
 // Full CRUD management page for configured database entries.
@@ -235,13 +239,13 @@ export function DatabasesPage() {
                         textAlign: 'center',
                         py: 6,
                         px: 2,
-                        borderRadius: 'lg',
-                        backgroundColor: 'background.level1',
+                        borderRadius: 3,
+                        backgroundColor: 'action.hover',
                     }}
                     >
-                    <Storage sx={{ fontSize: 48, color: 'text.tertiary', mb: 1 }} />
-                    <Typography level="title-md" sx={{ mb: 0.5 }}>No databases yet</Typography>
-                    <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                    <Storage sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                    <Typography variant="subtitle1" sx={{ mb: 0.5 }}>No databases yet</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         Create a new database, add an existing one, or receive one from another device.
                     </Typography>
                 </Box>
@@ -268,40 +272,49 @@ export function DatabasesPage() {
             }
 
             {databases.length > 0 && !isMobile
-                && <Table>
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Description</th>
-                            <th>Path</th>
-                            <th>Origin</th>
-                            <th style={{ width: '170px', whiteSpace: 'nowrap' }}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                && <Table size="small">
+                    <TableHead>
+                        <TableRow>
+                            <TableCell>Name</TableCell>
+                            <TableCell>Description</TableCell>
+                            <TableCell>Path</TableCell>
+                            <TableCell>Origin</TableCell>
+                            <TableCell
+                                style={{
+                                    width: '170px',
+                                    whiteSpace: 'nowrap',
+                                }}
+                                >
+                                Actions
+                            </TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
                         {databases.map((entry, entryIndex) => (
-                            <tr key={entry.name}>
-                                <td data-id={`database-row-name-${entry.name}`}>
+                            <TableRow key={entry.name}>
+                                <TableCell data-id={`database-row-name-${entry.name}`}>
                                     {entry.name}
                                     {entry.path === defaultDatabasePath
                                         && <Chip
-                                            size="sm"
+                                            size="small"
                                             color="primary"
                                             sx={{ ml: 1 }}
                                             data-id={`database-default-badge-${entryIndex}`}
-                                            >
-                                            Default
-                                        </Chip>
+                                            label="Default"
+                                            />
                                     }
-                                </td>
-                                <td>{entry.description}</td>
-                                <td>{entry.path}</td>
-                                <td>{entry.origin ?? ''}</td>
-                                <td style={{ whiteSpace: 'nowrap' }}>
+                                </TableCell>
+                                <TableCell>{entry.description}</TableCell>
+                                <TableCell>{entry.path}</TableCell>
+                                <TableCell>{entry.origin ?? ''}</TableCell>
+                                <TableCell
+                                    style={{
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                    >
                                     <IconButton
                                         data-id="view-database-button"
-                                        size="sm"
-                                        variant="plain"
+                                        size="small"
                                         title="View database"
                                         onClick={() => { log.info('View database dialog opened'); setViewingEntry(entry); }}
                                     >
@@ -309,8 +322,7 @@ export function DatabasesPage() {
                                     </IconButton>
                                     <IconButton
                                         data-id="open-database-button"
-                                        size="sm"
-                                        variant="plain"
+                                        size="small"
                                         title="Open database"
                                         onClick={() => handleOpen(entry).catch(err => log.exception('Open database error:', err as Error))}
                                     >
@@ -318,8 +330,7 @@ export function DatabasesPage() {
                                     </IconButton>
                                     <IconButton
                                         data-id="share-database-button"
-                                        size="sm"
-                                        variant="plain"
+                                        size="small"
                                         title="Share database"
                                         onClick={() => setSharingEntry(entry)}
                                     >
@@ -327,8 +338,7 @@ export function DatabasesPage() {
                                     </IconButton>
                                     <IconButton
                                         data-id="replicate-database-button"
-                                        size="sm"
-                                        variant="plain"
+                                        size="small"
                                         title="Replicate database"
                                         onClick={() => { log.info('Replicate database dialog opened'); setReplicatingEntry(entry); }}
                                     >
@@ -336,8 +346,7 @@ export function DatabasesPage() {
                                     </IconButton>
                                     <IconButton
                                         data-id="set-default-database-button"
-                                        size="sm"
-                                        variant="plain"
+                                        size="small"
                                         title="Set as the database automatic import writes to"
                                         onClick={() => {
                                             makeDefault(entry).catch(error => log.exception('Failed to set the default database', error as Error));
@@ -347,8 +356,7 @@ export function DatabasesPage() {
                                     </IconButton>
                                     <IconButton
                                         data-id="consolidate-database-button"
-                                        size="sm"
-                                        variant="plain"
+                                        size="small"
                                         title="Consolidate into remote"
                                         onClick={() => { log.info('Consolidate into remote dialog opened'); setConsolidatingEntry(entry); }}
                                     >
@@ -356,26 +364,24 @@ export function DatabasesPage() {
                                     </IconButton>
                                     <IconButton
                                         data-id="edit-database-button"
-                                        size="sm"
-                                        variant="plain"
+                                        size="small"
                                         title="Edit database"
                                         onClick={() => openEditDialog(entry)}
                                     >
                                         <Edit fontSize="small" />
                                     </IconButton>
                                     <IconButton
-                                        size="sm"
-                                        variant="plain"
-                                        color="danger"
+                                        size="small"
+                                        color="error"
                                         title="Remove database"
                                         onClick={() => promptRemove(entry)}
                                     >
                                         <Delete fontSize="small" />
                                     </IconButton>
-                                </td>
-                            </tr>
+                                </TableCell>
+                            </TableRow>
                         ))}
-                    </tbody>
+                    </TableBody>
                 </Table>
             }
 

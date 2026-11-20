@@ -72,18 +72,23 @@ wait_for_log "$TMP_DIR" "Select secret modal ready"
 send_command "$APP_PORT" click '{"dataId":"secret-select-button"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database entry added"
+case "$PLATFORM" in
+    android|ios)
+        # Confirming the dialog registers the entry and then opens the database, which re-renders the card list. The open is waited
+        # for here, straight after the entry is added, because it can be logged before or after the page's next "Databases page
+        # loaded", so waiting for it after that line can wait for an event already logged.
+        wait_for_log "$TMP_DIR" "Database opened"
+        ;;
+esac
 
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded"
 
 case "$PLATFORM" in
     android|ios)
-        # Confirming the dialog registers the entry and then opens the database, which re-renders the card list. That open runs after
-        # "Database entry added" is logged, so wait for it to settle before opening the menu, or it tears the menu down before the
-        # action can be clicked.
+        # The card list has re-rendered for the open database once the photo count shows, so the menu is not torn down under the
+        # click that follows.
         wait_for_value "$APP_PORT" database-photo-count "photos"
-        wait_for_log "$TMP_DIR" "Database opened"
-        wait_for_log "$TMP_DIR" "Databases page loaded"
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
         ;;
 esac

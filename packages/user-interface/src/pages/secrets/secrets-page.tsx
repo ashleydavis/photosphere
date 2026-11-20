@@ -1,24 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { log } from 'utils';
-import Box from '@mui/joy/Box';
-import Typography from '@mui/joy/Typography';
-import Button from '@mui/joy/Button';
-import Table from '@mui/joy/Table';
-import IconButton from '@mui/joy/IconButton';
-import Modal from '@mui/joy/Modal';
-import ModalClose from '@mui/joy/ModalClose';
-import ModalDialog from '@mui/joy/ModalDialog';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Table from '@mui/material/Table';
+import TableHead from '@mui/material/TableHead';
+import TableBody from '@mui/material/TableBody';
+import TableRow from '@mui/material/TableRow';
+import TableCell from '@mui/material/TableCell';
+import IconButton from '@mui/material/IconButton';
+import Dialog from '@mui/material/Dialog';
 import { ResponsiveDialog } from '../../components/responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Input from '@mui/joy/Input';
-import Textarea from '@mui/joy/Textarea';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
-import Select from '@mui/joy/Select';
-import Option from '@mui/joy/Option';
-import { Edit, Delete, Add, IosShare, Visibility, Download, Key } from '@mui/icons-material';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import { Edit, Delete, Add, IosShare, Visibility, Download, Key, Close } from '@mui/icons-material';
 import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../../context/platform-context';
 import { useApp } from '../../context/app-context';
 import { useIsMobile } from '../../lib/use-is-mobile';
@@ -34,6 +35,25 @@ import { createDialogKeyHandler } from '../../lib/dialog-keys';
 // The supported secret type identifiers.
 //
 const SECRET_TYPES = ['s3-credentials', 'encryption-key', 'api-key'] as const;
+
+//
+// Props for a Select's display element, the part that shows the chosen value. Material types
+// SelectDisplayProps as plain div attributes, which have no `data-id`.
+//
+interface ISelectDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
+    //
+    // Identifies the select to the smoke tests, which click it and read the chosen value from it.
+    //
+    'data-id': string;
+}
+
+//
+// Display props for the secret type Select. Named rather than written inline in the JSX because an
+// inline object literal is checked against Material's div attributes and rejects `data-id`.
+//
+const SECRET_TYPE_SELECT_DISPLAY_PROPS: ISelectDisplayProps = {
+    'data-id': 'secret-type-select',
+};
 
 //
 // Full CRUD management page for shared secrets stored in the vault.
@@ -208,33 +228,37 @@ export function SecretsPage() {
         if (form.type === 's3-credentials') {
             return (
                 <>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Endpoint (optional)</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="secret-s3-endpoint-input"
                             value={form.s3Endpoint}
                             onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Region</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="secret-s3-region-input"
                             value={form.s3Region}
                             onChange={event => setForm(prev => ({ ...prev, s3Region: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Access Key ID</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="secret-s3-access-key-input"
                             value={form.s3AccessKeyId}
                             onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Secret Access Key</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="secret-s3-secret-key-input"
                             type="password"
                             value={form.s3SecretAccessKey}
@@ -247,19 +271,21 @@ export function SecretsPage() {
         if (form.type === 'encryption-key') {
             return (
                 <>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Private Key PEM</FormLabel>
-                        <Textarea
+                        <OutlinedInput
                             data-id="secret-private-key-input"
+                            multiline
                             minRows={4}
                             value={form.privateKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}
-                            slotProps={{ textarea: { sx: { WebkitTextSecurity: 'disc' } } }}
+                            sx={{ '& textarea': { WebkitTextSecurity: 'disc' } }}
                         />
                     </FormControl>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Public Key PEM</FormLabel>
-                        <Textarea
+                        <OutlinedInput
+                            multiline
                             minRows={4}
                             value={form.publicKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, publicKeyPem: event.target.value }))}
@@ -269,9 +295,10 @@ export function SecretsPage() {
             );
         }
         return (
-            <FormControl sx={{ mb: 1 }}>
+            <FormControl fullWidth sx={{ mb: 1 }}>
                 <FormLabel>API Key</FormLabel>
-                <Input
+                <OutlinedInput
+                    size="small"
                     data-id="secret-value-input"
                     type="password"
                     value={form.apiKey}
@@ -343,13 +370,13 @@ export function SecretsPage() {
                         textAlign: 'center',
                         py: 6,
                         px: 2,
-                        borderRadius: 'lg',
-                        backgroundColor: 'background.level1',
+                        borderRadius: 3,
+                        backgroundColor: 'action.hover',
                     }}
                     >
-                    <Key sx={{ fontSize: 48, color: 'text.tertiary', mb: 1 }} />
-                    <Typography level="title-md" sx={{ mb: 0.5 }}>No secrets yet</Typography>
-                    <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                    <Key sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                    <Typography variant="subtitle1" sx={{ mb: 0.5 }}>No secrets yet</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         Add a secret, or receive one from another device.
                     </Typography>
                 </Box>
@@ -374,24 +401,23 @@ export function SecretsPage() {
             }
 
             {secrets.length > 0 && !isMobile
-                && <Table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th style={{ width: '140px', whiteSpace: 'nowrap' }}>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
+                && <Table size="small">
+                <TableHead>
+                    <TableRow>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Type</TableCell>
+                        <TableCell sx={{ width: '140px', whiteSpace: 'nowrap' }}>Actions</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
                     {secrets.map(secret => (
-                        <tr key={secret.name}>
-                            <td data-id={`secret-row-name-${secret.name}`}>{secret.name}</td>
-                            <td>{secret.type}</td>
-                            <td style={{ whiteSpace: 'nowrap' }}>
+                        <TableRow key={secret.name}>
+                            <TableCell data-id={`secret-row-name-${secret.name}`}>{secret.name}</TableCell>
+                            <TableCell>{secret.type}</TableCell>
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>
                                 <IconButton
                                     data-id="view-secret-button"
-                                    size="sm"
-                                    variant="plain"
+                                    size="small"
                                     title="View secret"
                                     onClick={() => { log.info('View secret dialog opened'); setViewingSecret(secret); }}
                                 >
@@ -399,8 +425,7 @@ export function SecretsPage() {
                                 </IconButton>
                                 <IconButton
                                     data-id="share-secret-button"
-                                    size="sm"
-                                    variant="plain"
+                                    size="small"
                                     title="Share secret"
                                     onClick={() => setSharingSecret(secret)}
                                 >
@@ -408,8 +433,7 @@ export function SecretsPage() {
                                 </IconButton>
                                 <IconButton
                                     data-id="edit-secret-button"
-                                    size="sm"
-                                    variant="plain"
+                                    size="small"
                                     title="Edit secret"
                                     onClick={() => openEditDialog(secret).catch(err => log.exception('Failed to open edit dialog:', err as Error))}
                                 >
@@ -417,18 +441,17 @@ export function SecretsPage() {
                                 </IconButton>
                                 <IconButton
                                     data-id="delete-secret-button"
-                                    size="sm"
-                                    variant="plain"
-                                    color="danger"
+                                    size="small"
+                                    color="error"
                                     title="Delete secret"
                                     onClick={() => promptDelete(secret)}
                                 >
                                     <Delete fontSize="small" />
                                 </IconButton>
-                            </td>
-                        </tr>
+                            </TableCell>
+                        </TableRow>
                     ))}
-                </tbody>
+                </TableBody>
                 </Table>
             }
 
@@ -440,28 +463,38 @@ export function SecretsPage() {
                 maxWidth={700}
                 onKeyDown={createDialogKeyHandler(handleSave, false)}
                 >
-                <ModalClose data-id="add-secret-close" />
+                <IconButton
+                    data-id="add-secret-close"
+                    aria-label="Close"
+                    size="small"
+                    onClick={() => setDialogOpen(false)}
+                    sx={{ position: 'absolute', top: 8, right: 8 }}
+                >
+                    <Close fontSize="small" />
+                </IconButton>
                 <DialogTitle>{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
                 <DialogContent>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Name</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="secret-name-input"
                             value={form.name}
                             onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
                         />
                     </FormControl>
 
-                    <FormControl sx={{ mb: 2 }}>
+                    <FormControl fullWidth sx={{ mb: 2 }}>
                         <FormLabel>Type</FormLabel>
                         <Select
+                            size="small"
                             value={form.type}
-                            onChange={(_event, value) => setForm(prev => ({ ...prev, type: value as string }))}
+                            onChange={event => setForm(prev => ({ ...prev, type: event.target.value }))}
                             disabled={!!editingSecret}
-                            slotProps={{ button: { 'data-id': 'secret-type-select' } }}
+                            SelectDisplayProps={SECRET_TYPE_SELECT_DISPLAY_PROPS}
                         >
                             {SECRET_TYPES.map(secretType => (
-                                <Option key={secretType} data-id={`secret-type-option-${secretType}`} value={secretType}>{secretType}</Option>
+                                <MenuItem key={secretType} data-id={`secret-type-option-${secretType}`} value={secretType}>{secretType}</MenuItem>
                             ))}
                         </Select>
                     </FormControl>
@@ -469,9 +502,10 @@ export function SecretsPage() {
                     {renderTypeFields()}
                 </DialogContent>
                 <DialogActions>
-                    <Button data-id="add-secret-cancel" variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button data-id="add-secret-cancel" variant="text" onClick={() => setDialogOpen(false)}>Cancel</Button>
                     <Button
                         data-id="add-secret-confirm"
+                        variant="contained"
                         onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}
                     >
                         Save
@@ -480,8 +514,7 @@ export function SecretsPage() {
             </ResponsiveDialog>
 
             {/* First delete confirmation */}
-            <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
-                <ModalDialog>
+            <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
                     <DialogTitle>Delete Secret</DialogTitle>
                     <DialogContent>
                         <Typography>
@@ -489,20 +522,19 @@ export function SecretsPage() {
                         </Typography>
                     </DialogContent>
                     <DialogActions>
-                        <Button variant="plain" onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
+                        <Button variant="text" onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
                         <Button
-                            color="danger"
+                            variant="contained"
+                            color="error"
                             onClick={() => handleFirstConfirm().catch(err => log.exception('Delete confirm error:', err as Error))}
                         >
                             Delete
                         </Button>
                     </DialogActions>
-                </ModalDialog>
-            </Modal>
+            </Dialog>
 
             {/* Second delete confirmation (secret is referenced by databases) */}
-            <Modal open={confirmDeleteSecondOpen} onClose={() => setConfirmDeleteSecondOpen(false)}>
-                <ModalDialog>
+            <Dialog open={confirmDeleteSecondOpen} onClose={() => setConfirmDeleteSecondOpen(false)}>
                     <DialogTitle>Secret In Use</DialogTitle>
                     <DialogContent>
                         <Typography>
@@ -518,16 +550,16 @@ export function SecretsPage() {
                         </Typography>
                     </DialogContent>
                     <DialogActions>
-                        <Button variant="plain" onClick={() => setConfirmDeleteSecondOpen(false)}>Cancel</Button>
+                        <Button variant="text" onClick={() => setConfirmDeleteSecondOpen(false)}>Cancel</Button>
                         <Button
-                            color="danger"
+                            variant="contained"
+                            color="error"
                             onClick={() => executeDelete().catch(err => log.exception('Delete error:', err as Error))}
                         >
                             Delete
                         </Button>
                     </DialogActions>
-                </ModalDialog>
-            </Modal>
+            </Dialog>
 
             {sharingSecret && (
                 <ShareSecretDialog

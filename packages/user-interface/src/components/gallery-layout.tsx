@@ -4,7 +4,7 @@ import { GalleryScrollbar } from "./gallery-scrollbar";
 import { GalleryImage } from "./gallery-image";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useTheme } from "@mui/joy";
+import { useTheme } from "@mui/material/styles";
 import { log } from "utils";
 
 export type ItemClickFn = ((item: IGalleryItem) => void);
@@ -291,8 +291,8 @@ export function GalleryLayout({ onItemClick }: IGalleryLayoutProps) {
                         position: "absolute",
                         top: 0,
                         zIndex: 100,
-                        backgroundColor: theme.palette.background.body,
-                        color: theme.palette.text.primary,
+                        backgroundColor: (theme.vars ?? theme).palette.background.default,
+                        color: (theme.vars ?? theme).palette.text.primary,
                         borderBottom: "1px solid rgba(0,0,0,0.1)",
                         height: `${stickyHeading.current.height}px`,
                         width: "100%",

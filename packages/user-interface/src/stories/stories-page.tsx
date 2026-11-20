@@ -1,6 +1,7 @@
 import React, { Component, ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
+import { useColorScheme } from "@mui/material/styles";
+import { PhotosphereThemeProvider } from "../components/photosphere-theme-provider";
 import { log } from "utils";
 import { nextStoryIndex } from "../lib/story-navigation";
 import { usePlatform } from "../context/platform-context";
@@ -25,7 +26,7 @@ const CATEGORY_ORDER: StoryCategory[] = ["Pages", "Modals", "Dialogs", "Componen
 // The page is intentionally mounted outside the regular provider stack so
 // each story owns and controls the providers it needs.
 //
-export function StoriesPage(): JSX.Element {
+export function StoriesPage(): React.JSX.Element {
     const [searchParams] = useSearchParams();
 
     //
@@ -38,16 +39,16 @@ export function StoriesPage(): JSX.Element {
         const parsedDuration = durationParam ? parseInt(durationParam, 10) : NaN;
         const durationMs = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 1000;
         return (
-            <CssVarsProvider defaultMode="system">
+            <PhotosphereThemeProvider>
                 <StoriesCycle stories={stories} durationMs={durationMs} />
-            </CssVarsProvider>
+            </PhotosphereThemeProvider>
         );
     }
 
     return (
-        <CssVarsProvider defaultMode="system">
+        <PhotosphereThemeProvider>
             <StoriesBrowser />
-        </CssVarsProvider>
+        </PhotosphereThemeProvider>
     );
 }
 
@@ -56,7 +57,7 @@ export function StoriesPage(): JSX.Element {
 // lives in an overlay drawer and the navigation controls float over the
 // rendered story, so the layout is identical on every platform.
 //
-function StoriesBrowser(): JSX.Element {
+function StoriesBrowser(): React.JSX.Element {
     const [searchParams, setSearchParams] = useSearchParams();
     const [searchText, setSearchText] = useState<string>("");
 
@@ -157,7 +158,7 @@ function StoriesBrowser(): JSX.Element {
     //
     // Divider colour reused across the sidebar and toolbar borders.
     //
-    const borderColor = "var(--joy-palette-divider, #ddd)";
+    const borderColor = "var(--mui-palette-divider, #ddd)";
 
     //
     // The sidebar is an overlay drawer that slides in from the left over the
@@ -172,14 +173,14 @@ function StoriesBrowser(): JSX.Element {
         bottom: 0,
         left: 0,
         zIndex: 30,
-        background: "var(--joy-palette-background-body)",
+        background: "var(--mui-palette-background-default)",
         transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.2s ease",
         boxShadow: drawerOpen ? "0 0 20px rgba(0, 0, 0, 0.3)" : "none",
     };
 
     return (
-        <div data-id="stories-page" className="flex h-screen w-screen relative" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+        <div data-id="stories-page" className="flex h-screen w-screen relative" style={{ background: "var(--mui-palette-background-default)", color: "var(--mui-palette-text-primary)" }}>
             {drawerOpen
                 && <div
                     className="absolute inset-0 z-20"
@@ -239,8 +240,8 @@ function StoriesBrowser(): JSX.Element {
                                                     }}
                                                     className="text-left px-2 py-1 w-full rounded"
                                                     style={{
-                                                        background: isActive ? "var(--joy-palette-primary-softBg, #e3f2fd)" : "transparent",
-                                                        color: isActive ? "var(--joy-palette-primary-plainColor, #0a6cd1)" : "inherit",
+                                                        background: isActive ? "rgba(var(--mui-palette-primary-mainChannel) / 0.12)" : "transparent",
+                                                        color: isActive ? "var(--mui-palette-primary-main, #0a6cd1)" : "inherit",
                                                     }}
                                                     data-testid={`stories-list-item-${story.id}`}
                                                     >
@@ -261,7 +262,7 @@ function StoriesBrowser(): JSX.Element {
                     type="button"
                     onClick={() => setDrawerOpen(true)}
                     className="absolute top-2 left-2 z-10 px-2 py-1 text-sm rounded border"
-                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    style={{ borderColor, background: "var(--mui-palette-background-paper, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
                     data-testid="stories-menu-button"
                     aria-label="Open stories list"
                     >
@@ -271,7 +272,7 @@ function StoriesBrowser(): JSX.Element {
                     type="button"
                     onClick={() => setMode(mode === "dark" ? "light" : "dark")}
                     className="absolute top-2 right-16 z-10 px-2 py-1 text-sm rounded border"
-                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    style={{ borderColor, background: "var(--mui-palette-background-paper, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
                     data-testid="stories-theme-button"
                     aria-label="Toggle light or dark theme"
                     >
@@ -281,7 +282,7 @@ function StoriesBrowser(): JSX.Element {
                     type="button"
                     onClick={() => platform.toggleDevTools()}
                     className="absolute top-2 right-5 z-10 px-2 py-1 text-sm rounded border"
-                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    style={{ borderColor, background: "var(--mui-palette-background-paper, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
                     data-testid="stories-devtools-button"
                     aria-label="Toggle developer tools"
                     >
@@ -310,7 +311,7 @@ function StoriesBrowser(): JSX.Element {
                     type="button"
                     onClick={() => navigateStories(-1)}
                     className="absolute bottom-5 left-5 z-10 w-14 h-14 rounded-full border flex items-center justify-center text-2xl"
-                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    style={{ borderColor, background: "var(--mui-palette-background-paper, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
                     data-testid="stories-prev-button"
                     aria-label="Previous story"
                     >
@@ -320,7 +321,7 @@ function StoriesBrowser(): JSX.Element {
                     type="button"
                     onClick={() => navigateStories(1)}
                     className="absolute bottom-5 right-5 z-10 w-14 h-14 rounded-full border flex items-center justify-center text-2xl"
-                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    style={{ borderColor, background: "var(--mui-palette-background-paper, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
                     data-testid="stories-next-button"
                     aria-label="Next story"
                     >
@@ -361,7 +362,7 @@ interface ICycleStep {
     story: IStory;
 }
 
-function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps): JSX.Element {
+function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps): React.JSX.Element {
     //
     // Steps to walk: every story in each theme.
     //
@@ -378,7 +379,7 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
     const [results, setResults] = useState<{ pass: number; fail: number }>({ pass: 0, fail: 0 });
 
     //
-    // Applies the current step's theme via MUI Joy's setMode (writes localStorage
+    // Applies the current step's theme via MUI's setMode (writes localStorage
     // only, never the config file). Kept in its own effect and idempotent, so it
     // is safe even if setMode's identity changes between renders.
     //
@@ -491,14 +492,14 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
 
     if (index >= steps.length) {
         return (
-            <div className="p-6 h-screen w-screen" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+            <div className="p-6 h-screen w-screen" style={{ background: "var(--mui-palette-background-default)", color: "var(--mui-palette-text-primary)" }}>
                 <h2>Cycle complete</h2>
                 <p>{`${results.pass} passed, ${results.fail} failed`}</p>
                 <button
                     type="button"
                     onClick={() => setSearchParams({})}
                     className="mt-3 text-sm px-3 py-1 rounded border"
-                    style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
+                    style={{ borderColor: "var(--mui-palette-divider, #ddd)" }}
                     data-testid="stories-cycle-back-button"
                     >
                     Back to browser
@@ -515,13 +516,13 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
     // which looks like a layout bug in the page when it is really an artifact of the harness.
     //
     return (
-        <div className="h-screen w-screen flex flex-col" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+        <div className="h-screen w-screen flex flex-col" style={{ background: "var(--mui-palette-background-default)", color: "var(--mui-palette-text-primary)" }}>
             <div className="p-2 text-xs flex items-center gap-3 flex-shrink-0">
                 <button
                     type="button"
                     onClick={() => setSearchParams({})}
                     className="w-7 h-7 rounded border flex items-center justify-center"
-                    style={{ borderColor: "var(--joy-palette-divider, #ddd)", background: "var(--joy-palette-background-surface)", color: "var(--joy-palette-text-primary)" }}
+                    style={{ borderColor: "var(--mui-palette-divider, #ddd)", background: "var(--mui-palette-background-paper)", color: "var(--mui-palette-text-primary)" }}
                     data-testid="stories-cycle-stop-button"
                     aria-label="Cancel playback"
                     >

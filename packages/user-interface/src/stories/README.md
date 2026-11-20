@@ -26,7 +26,7 @@ The sidebar has a **▶ Play on automatic** button that walks every story in ord
 
 ## Theming
 
-The browser has a **light/dark toggle button** (top-right, left of the dev-tools button) to switch theme while viewing stories; it uses MUI Joy's `setMode` and writes localStorage only, never the config file.
+The browser has a **light/dark toggle button** (top-right, left of the dev-tools button) to switch theme while viewing stories; it uses MUI's `setMode` and writes localStorage only, never the config file.
 
 The stories page starts in the web view's colour scheme, which is Ziggy's theme, and its own light/dark toggle changes it while it is open.
 

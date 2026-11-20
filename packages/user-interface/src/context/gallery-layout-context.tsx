@@ -85,7 +85,7 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
 
     const stateStore = useStateStore();
 
-    const scrollToHandler = useRef<(scrollTop: number) => void>();
+    const scrollToHandler = useRef<((scrollTop: number) => void) | undefined>(undefined);
 
     //
     // Maps assetId to its position in the layout for O(1) item replacement on update.

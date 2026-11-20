@@ -1,11 +1,11 @@
-import { desktopDialogSx, mobileSheetDrawerSx, type IMobileSheetContentSx } from "../../lib/modal-styles";
+import { desktopDialogActionsSx, desktopDialogSx, mobileSheetDrawerSx, SHEET_TRANSITION_DURATION_MS, SHEET_TRANSITION_EASING, type IMobileSheetContentSx } from "../../lib/modal-styles";
 
 //
-// Reads the sheet panel's styles out of the drawer sx. They are keyed by the Joy content slot's
-// class, so they are pulled out by that key for the assertions below.
+// Reads the sheet panel's styles out of the drawer sx. They are keyed by the Material Drawer paper
+// slot's class, so they are pulled out by that key for the assertions below.
 //
 function sheetContent(): IMobileSheetContentSx {
-    return mobileSheetDrawerSx()["& .MuiDrawer-content"];
+    return mobileSheetDrawerSx()["& .MuiDrawer-paper"];
 }
 
 describe("desktopDialogSx", () => {
@@ -30,21 +30,46 @@ describe("desktopDialogSx", () => {
         expect(sx.overflowY).toBe("auto");
         expect(sx.overflowX).toBe("hidden");
     });
+
+    test("keeps the same gap to the viewport edges that the size limits allow for", () => {
+        expect(desktopDialogSx(340, 340).margin).toBe("16px");
+    });
+
+    test("puts the close button in the top-right corner", () => {
+        const closeButton = desktopDialogSx(340, 340)["& > .MuiIconButton-root"];
+        expect(closeButton.position).toBe("absolute");
+        expect(closeButton.top).toBe("8px");
+        expect(closeButton.right).toBe("8px");
+    });
+
+    test("lays the actions out right to left, still right-aligned and spaced by the row's gap", () => {
+        const actions = desktopDialogSx(340, 340)["& .MuiDialogActions-root"];
+        expect(actions.flexDirection).toBe("row-reverse");
+        expect(actions.justifyContent).toBe("flex-start");
+        expect(actions.gap).toBe("8px");
+        expect(actions["& > :not(style) ~ :not(style)"].marginLeft).toBe("0px");
+    });
+
+    test("gives a dialog built on Material's Dialog directly the same action row", () => {
+        expect(desktopDialogActionsSx()).toEqual(desktopDialogSx(340, 340)["& .MuiDialogActions-root"]);
+    });
 });
 
 describe("the mobile sheet treatment", () => {
 
     test("slides quickly enough that the sheet is not something the user waits for", () => {
-        const sx = mobileSheetDrawerSx();
-        expect(sx["--Drawer-transitionDuration"]).toBe("0.2s");
-        expect(sx["--Drawer-transitionFunction"]).toBe("cubic-bezier(0.32, 0.72, 0, 1)");
+        expect(SHEET_TRANSITION_DURATION_MS).toBe(200);
+        expect(SHEET_TRANSITION_EASING).toBe("cubic-bezier(0.32, 0.72, 0, 1)");
     });
 
     test("matches the close button's inset to the sheet's own corner radius", () => {
-        expect(mobileSheetDrawerSx()["--Drawer-contentRadius"]).toBe("20px");
+        const closeButton = sheetContent()["& > .MuiIconButton-root"];
+        expect(closeButton.position).toBe("absolute");
+        expect(closeButton.top).toBe("calc(20px / 2)");
+        expect(closeButton.right).toBe("calc(20px / 2)");
     });
 
-    test("hugs its content instead of taking Joy's fixed fraction of the screen", () => {
+    test("hugs its content instead of taking a fixed fraction of the screen", () => {
         expect(sheetContent().height).toBe("auto");
     });
 
@@ -80,5 +105,6 @@ describe("the mobile sheet treatment", () => {
         expect(actions.width).toBe("100%");
         expect(actions["& > *"].width).toBe("100%");
         expect(actions["& > *"].minHeight).toBe("48px");
+        expect(actions["& > *"].marginLeft).toBe("0px");
     });
 });

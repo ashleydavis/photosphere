@@ -8,7 +8,8 @@ import { useGallerySource } from "../context/gallery-source";
 import { usePlatform } from "../context/platform-context";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useStateStore } from "../context/state-store-context";
-import { Chip, Drawer, IconButton } from "@mui/joy";
+import { Chip, Drawer, IconButton } from "@mui/material";
+import type { CSSObject } from "@mui/material/styles";
 import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { dedupeLabels } from "../lib/labels";
@@ -43,6 +44,16 @@ const SUMMARY_COLLAPSED_KEY = "assetSummaryCollapsed";
 // Lets the state apply synchronously when reopening an asset, avoiding a flash before config loads.
 //
 let summaryCollapsedCache: boolean | undefined = undefined;
+
+//
+// Draws the viewer's toolbar IconButtons with a thin border and small rounded corners, so they
+// stay distinct from the photo behind them.
+//
+const outlinedIconButtonSx: CSSObject = {
+    border: "1px solid",
+    borderColor: "divider",
+    borderRadius: "6px",
+};
 
 //
 // Shows info for a particular asset.
@@ -190,8 +201,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         && <div className="flex flex-col justify-center">
                             <IconButton
                                 className="ml-4 pointer-events-auto photo-nav-btn"
-                                variant="outlined"
-                                color="neutral"
+                                sx={outlinedIconButtonSx}
                                 title="Previous"
                                 onClick={() => onPrev()}
                                 >
@@ -204,8 +214,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         && <div className="flex flex-col justify-center">
                             <IconButton
                                 className="mr-4 pointer-events-auto photo-nav-btn"
-                                variant="outlined"
-                                color="neutral"
+                                sx={outlinedIconButtonSx}
                                 title="Next"
                                 onClick={() => onNext()}
                                 >
@@ -222,8 +231,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         <IconButton
                             data-id="asset-view-close-button"
                             className="pointer-events-auto"
-                            variant="outlined"
-                            color="neutral"
+                            sx={outlinedIconButtonSx}
                             title="Close"
                             onClick={() => {
                                 onClose();
@@ -272,9 +280,10 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     <div style={{ flex: 1, display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
                     <IconButton
                         className="pointer-events-auto"
-                        variant="outlined"
-                        color="neutral"
-                        sx={isStarred ? { '--Icon-color': 'gold', '&:hover': { '--Icon-color': 'gold' } } : {}}
+                        sx={{
+                            ...outlinedIconButtonSx,
+                            color: isStarred ? "gold" : undefined,
+                        }}
                         title={isStarred ? "Unstar" : "Star"}
                         onClick={async () => {
                             if (isStarred) {
@@ -290,9 +299,11 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
 
                     <IconButton
                         className="pointer-events-auto"
-                        variant="outlined"
-                        color="neutral"
-                        sx={isFlagged ? { ml: 1, '--Icon-color': 'red', '&:hover': { '--Icon-color': 'red' } } : { ml: 1 }}
+                        sx={{
+                            ...outlinedIconButtonSx,
+                            ml: 1,
+                            color: isFlagged ? "red" : undefined,
+                        }}
                         title={isFlagged ? "Unflag" : "Flag"}
                         onClick={async () => {
                             if (isFlagged) {
@@ -309,9 +320,10 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                     <IconButton
                         data-id="download-asset-button"
                         className="pointer-events-auto"
-                        variant="outlined"
-                        color="neutral"
-                        sx={{ ml: 1 }}
+                        sx={{
+                            ...outlinedIconButtonSx,
+                            ml: 1,
+                        }}
                         title="Download"
                         onClick={handleDownload}
                         >
@@ -320,9 +332,10 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
 
                     <IconButton
                         className="pointer-events-auto"
-                        variant="outlined"
-                        color="neutral"
-                        sx={{ ml: 1 }}
+                        sx={{
+                            ...outlinedIconButtonSx,
+                            ml: 1,
+                        }}
                         title="Copy to clipboard"
                         onClick={handleCopyToClipboard}
                         >
@@ -333,9 +346,10 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         data-testid="open-info-button"
                         data-id="open-info-button"
                         className="pointer-events-auto"
-                        variant="outlined"
-                        color="neutral"
-                        sx={{ ml: 1 }}
+                        sx={{
+                            ...outlinedIconButtonSx,
+                            ml: 1,
+                        }}
                         title="Asset info"
                         onClick={() => {
                             setOpenInfo(true);
@@ -357,8 +371,11 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 }}
                 >
                 <IconButton
-                    variant="outlined"
-                    color="danger"
+                    color="error"
+                    sx={{
+                        ...outlinedIconButtonSx,
+                        borderColor: "error.main",
+                    }}
                     title="Delete"
                     onClick={() => setConfirmingDelete(true)}
                     >
@@ -374,8 +391,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 />
 
             <div
-                className="pointer-events-auto"
-                data-joy-color-scheme="dark"
+                className="pointer-events-auto dark"
                 style={{
                     position: "absolute",
                     bottom: "16px",
@@ -395,9 +411,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                             Quick Info
                         </span>
                         <IconButton
-                            size="sm"
-                            variant="plain"
-                            color="neutral"
+                            size="small"
                             title="Open full details"
                             onClick={() => setOpenInfo(true)}
                             >
@@ -405,9 +419,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                         </IconButton>
                         <IconButton
                             className="asset-summary-toggle"
-                            size="sm"
-                            variant="plain"
-                            color="neutral"
+                            size="small"
                             title={summaryCollapsed ? "Expand details" : "Collapse details"}
                             onClick={toggleSummaryCollapsed}
                             >
@@ -466,21 +478,20 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                                                 key={label}
                                                 data-label-chip
                                                 variant="outlined"
-                                                color="neutral"
+                                                size="small"
+                                                label={label}
                                                 onClick={() => {
                                                     search(`.labels="${label}"`);
                                                     onClose();
                                                 }}
                                                 sx={{ cursor: "pointer" }}
-                                                >
-                                                {label}
-                                            </Chip>
+                                                />
                                         ))}
                                     </div>
                                     {labelsOverflow && (
                                         <Chip
-                                            variant="soft"
-                                            color="neutral"
+                                            size="small"
+                                            label="…"
                                             title="Show all labels"
                                             onClick={() => setOpenInfo(true)}
                                             sx={{
@@ -489,9 +500,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                                                 right: 0,
                                                 bottom: 0,
                                             }}
-                                            >
-                                            …
-                                        </Chip>
+                                            />
                                     )}
                                 </div>
                             </div>
@@ -506,8 +515,14 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
                 onClose={() => {
                     setOpenInfo(false);
                 }}
-                size="lg"
                 anchor="bottom"
+                slotProps={{
+                    paper: {
+                        sx: {
+                            height: "clamp(360px, 60%, 100%)",
+                        },
+                    },
+                }}
                 >
                 <AssetInfo
                     key={asset._id}

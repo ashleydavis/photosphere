@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Spinner } from "./spinner";
-import IconButton from '@mui/joy/IconButton';
-import Box from '@mui/joy/Box';
+import IconButton from '@mui/material/IconButton';
+import Box from '@mui/material/Box';
 import MoreVert from '@mui/icons-material/MoreVert';
 import Star from "@mui/icons-material/Star";
 import StarBorder from "@mui/icons-material/StarBorder";
@@ -11,8 +11,8 @@ import Menu from "@mui/icons-material/Menu";
 import Search from "@mui/icons-material/Search";
 import PhotoLibrary from "@mui/icons-material/PhotoLibrary";
 import Map from "@mui/icons-material/Map";
-import Input from "@mui/joy/Input/Input";
-import { useTheme } from "@mui/joy/styles/ThemeProvider";
+import OutlinedInput from "@mui/material/OutlinedInput";
+import { useTheme } from "@mui/material/styles";
 import classNames from "classnames";
 import { useSearch } from "../context/search-context";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -70,8 +70,23 @@ export function Navbar({
     // labels, so the bar is unchanged there.
     //
     const navButtonSx = isMobile
-        ? { minWidth: 44, minHeight: 44, borderRadius: 'md' }
-        : { borderRadius: 'md' };
+        ? {
+            minWidth: 44,
+            minHeight: 44,
+            borderRadius: 2,
+        }
+        : {
+            borderRadius: 2,
+        };
+
+    //
+    // The tinted background that marks the active page's button on a mobile, where the button has
+    // no label to show which page is open.
+    //
+    const activeNavButtonSx = {
+        ...navButtonSx,
+        backgroundColor: 'rgba(var(--mui-palette-primary-mainChannel) / 0.12)',
+    };
 
     //
     // Local input state so keystrokes don't re-render all context consumers.
@@ -145,8 +160,8 @@ export function Navbar({
             id="navbar" 
             className={"select-none " + classNames({ "search": openSearch })}
             style={{
-                backgroundColor: theme.palette.background.body,
-                color: theme.palette.text.primary,
+                backgroundColor: (theme.vars ?? theme).palette.background.default,
+                color: (theme.vars ?? theme).palette.text.primary,
             }}
         >
             <div className="flex flex-col">
@@ -157,9 +172,8 @@ export function Navbar({
                 <div className={classNames("flex flex-row items-center pt-2 pb-2", isMobile ? "pl-2 pr-2 gap-1" : "pl-4")}>
                     <IconButton
                         data-id="sidebar-toggle-button"
-                        variant="plain"
-                        color="neutral"
-                        size={isMobile ? "lg" : "md"}
+                        color="default"
+                        size={isMobile ? "large" : "medium"}
                         title="Toggle sidebar"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
                         sx={{ ...navButtonSx, flexShrink: 0 }}
@@ -174,9 +188,8 @@ export function Navbar({
                     {!isMobile && <h1 className="ml-3 sm:ml-4">Photosphere</h1>}
 
                     <IconButton
-                        variant="plain"
-                        color="neutral"
-                        size={isMobile ? "lg" : "md"}
+                        color="default"
+                        size={isMobile ? "large" : "medium"}
                         title="Search"
                         onClick={event => {
                             navigate("/gallery");
@@ -191,10 +204,9 @@ export function Navbar({
                     <NavLink to="/gallery" title="Gallery">
                         {({ isActive }) => (
                             <IconButton
-                                variant={isActive && isMobile ? "soft" : "plain"}
-                                color={isActive ? "primary" : "neutral"}
-                                size={isMobile ? "lg" : "md"}
-                                sx={navButtonSx}
+                                color={isActive ? "primary" : "default"}
+                                size={isMobile ? "large" : "medium"}
+                                sx={isActive && isMobile ? activeNavButtonSx : navButtonSx}
                                 >
                                 <PhotoLibrary />
                                 {!isMobile && <span className="hidden sm:block ml-2">Gallery</span>}
@@ -205,10 +217,9 @@ export function Navbar({
                     <NavLink to="/map" title="Map">
                         {({ isActive }) => (
                             <IconButton
-                                variant={isActive && isMobile ? "soft" : "plain"}
-                                color={isActive ? "primary" : "neutral"}
-                                size={isMobile ? "lg" : "md"}
-                                sx={navButtonSx}
+                                color={isActive ? "primary" : "default"}
+                                size={isMobile ? "large" : "medium"}
+                                sx={isActive && isMobile ? activeNavButtonSx : navButtonSx}
                                 >
                                 <Map />
                                 {!isMobile && <span className="hidden sm:block ml-2">Map</span>}
@@ -220,10 +231,9 @@ export function Navbar({
                         <NavLink to="/import" title="Import">
                             {({ isActive }) => (
                                 <IconButton
-                                    variant={isActive && isMobile ? "soft" : "plain"}
-                                    color={isActive ? "primary" : "neutral"}
-                                    size={isMobile ? "lg" : "md"}
-                                    sx={navButtonSx}
+                                    color={isActive ? "primary" : "default"}
+                                    size={isMobile ? "large" : "medium"}
+                                    sx={isActive && isMobile ? activeNavButtonSx : navButtonSx}
                                     data-id="navbar-import-button"
                                     >
                                     <FileUpload />
@@ -236,10 +246,9 @@ export function Navbar({
                     {temporaryNavPage && TemporaryNavPageIcon && (
                         <NavLink to={temporaryNavPage.path} title={temporaryNavPage.label}>
                             <IconButton
-                                variant={isMobile ? "soft" : "plain"}
                                 color="primary"
-                                size={isMobile ? "lg" : "md"}
-                                sx={navButtonSx}
+                                size={isMobile ? "large" : "medium"}
+                                sx={isMobile ? activeNavButtonSx : navButtonSx}
                                 >
                                 <TemporaryNavPageIcon />
                                 {!isMobile && <span className="hidden sm:block ml-2">{temporaryNavPage.label}</span>}
@@ -277,12 +286,10 @@ export function Navbar({
                                     {selectedItemsCount} selected
                                 </div>
                                 /*
-                                    A real <button>, not a Joy Chip like the jobs indicator beside
-                                    it, because Joy hangs a Chip's onClick on a nested button of its
-                                    own and the smoke-test driver clicks the element carrying the
-                                    data-id. The data-id has to stay on the element holding the
-                                    count, which several tests read the number from. The soft pill
-                                    below is the chip's look, so the two still match.
+                                    A real <button> carrying the data-id, because the smoke-test
+                                    driver clicks the element carrying the data-id and several tests
+                                    read the count from that same element. The pill below is drawn
+                                    like the jobs indicator's chip beside it, so the two match.
                                 */
                                 || <Box
                                     component="button"
@@ -295,12 +302,12 @@ export function Navbar({
                                         border: 'none',
                                         font: 'inherit',
                                         color: 'text.primary',
-                                        borderRadius: 'sm',
+                                        borderRadius: 1.5,
                                         px: 1,
                                         py: 0.5,
-                                        backgroundColor: 'neutral.softBg',
+                                        backgroundColor: 'action.selected',
                                         '&:hover': {
-                                            backgroundColor: 'neutral.softHoverBg',
+                                            backgroundColor: 'action.focus',
                                         },
                                     }}
                                     >
@@ -324,8 +331,8 @@ export function Navbar({
                                 padding: '2px 8px',
                                 borderRadius: '999px',
                                 fontSize: '0.75rem',
-                                backgroundColor: theme.palette.success.softBg,
-                                color: theme.palette.success.softColor,
+                                backgroundColor: 'var(--mui-palette-Alert-successStandardBg)',
+                                color: 'var(--mui-palette-Alert-successColor)',
                                 textDecoration: 'none',
                             }}
                         >
@@ -354,10 +361,13 @@ export function Navbar({
 
                     <IconButton
                         data-id="right-sidebar-button"
-                        sx={{ ...navButtonSx, flexShrink: 0 }}
-                        variant="soft"
-                        color="neutral"
-                        size={isMobile ? "lg" : "md"}
+                        sx={{
+                            ...navButtonSx,
+                            flexShrink: 0,
+                            backgroundColor: 'action.selected',
+                        }}
+                        color="default"
+                        size={isMobile ? "large" : "medium"}
                         title="Open menu"
                         onClick={() => setRightSidebarOpen(true)}
                     >
@@ -370,8 +380,8 @@ export function Navbar({
                         <div>
                             <i className="fa-solid fa-search"></i>
                         </div>
-                        <Input
-                            size="sm"
+                        <OutlinedInput
+                            size="small"
                             autoFocus
                             className="flex-grow ml-4 outline-none"
                             placeholder="Type to search..."
@@ -400,9 +410,8 @@ export function Navbar({
                         />
                         {draftSearchInput.trim().length > 0 && (
                             <IconButton
-                                size="sm"
-                                variant="plain"
-                                color="neutral"
+                                size="small"
+                                color="default"
                                 title={savedSearches.includes(draftSearchInput.trim()) ? "Unsave search" : "Save search"}
                                 onClick={async () => {
                                     if (savedSearches.includes(draftSearchInput.trim())) {

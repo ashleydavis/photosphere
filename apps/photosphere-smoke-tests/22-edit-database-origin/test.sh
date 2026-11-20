@@ -50,17 +50,23 @@ send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"My Test D
 send_command "$APP_PORT" type "$(jq -cn --arg text "$DATABASE_PATH" '{dataId: "database-path-input", text: $text}')" || exit 1
 send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database entry added"
+case "$PLATFORM" in
+    android|ios)
+        # Confirming the Add Database dialog opens the database, which re-renders the card list after "Database entry added" is
+        # logged. The open is waited for here, straight after the entry is added, because it can be logged before or after the
+        # page's next "Databases page loaded", so waiting for it after that line can wait for an event already logged.
+        wait_for_log "$TMP_DIR" "Database opened"
+        ;;
+esac
 
 # Open the Edit dialog from the row's edit button.
 send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
 wait_for_log "$TMP_DIR" "Databases page loaded"
 case "$PLATFORM" in
     android|ios)
-        # Confirming the Add Database dialog opens the database, which re-renders the card list after "Database entry added" is
-        # logged. Wait for that to settle before opening the menu, or it tears the menu down before the action can be clicked.
+        # The card list has re-rendered for the open database once the photo count shows, so the menu is not torn down under the
+        # click that follows.
         wait_for_value "$APP_PORT" database-photo-count "photos"
-        wait_for_log "$TMP_DIR" "Database opened"
-        wait_for_log "$TMP_DIR" "Databases page loaded"
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
         ;;
 esac

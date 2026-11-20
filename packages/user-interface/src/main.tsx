@@ -8,9 +8,9 @@ import { useIsMobile, MOBILE_BREAKPOINT_PX } from "./lib/use-is-mobile";
 import { useAssetDatabase } from "./context/asset-database-source";
 import { useSearch } from "./context/search-context";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
-import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
-import { useTheme } from "@mui/joy/styles/ThemeProvider";
-import Drawer from "@mui/joy/Drawer/Drawer";
+import { useColorScheme, useTheme } from "@mui/material/styles";
+import Drawer from "@mui/material/Drawer";
+import { PhotosphereThemeProvider } from "./components/photosphere-theme-provider";
 import { LeftSidebar } from "./components/left-sidebar";
 import { RightSidebar } from "./components/right-sidebar";
 import { JobsDialog } from "./components/jobs-dialog";
@@ -96,6 +96,10 @@ function __Main() {
 
     const platform = usePlatform();
 
+    //
+    // The MUI theme. Its `vars` are CSS variables that follow the light or dark scheme, so the page
+    // colours below switch with the scheme.
+    //
     const theme = useTheme();
 
     const { setMode } = useColorScheme();
@@ -126,7 +130,7 @@ function __Main() {
     }, [platform]);
 
     //
-    // Joy follows the theme setting: "system" uses the operating system's theme, and a light or dark setting is applied directly.
+    // MUI follows the theme setting: "system" uses the operating system's theme, and a light or dark setting is applied directly.
     //
     useEffect(() => {
         setMode(themeSetting === "system" ? systemTheme : themeSetting);
@@ -396,8 +400,8 @@ function __Main() {
                 id="main"
                 className={`select-none ` + classNames({ "search": openSearch })}
                 style={{
-                    backgroundColor: theme.palette.background.body,
-                    color: theme.palette.text.primary,
+                    backgroundColor: (theme.vars ?? theme).palette.background.default,
+                    color: (theme.vars ?? theme).palette.text.primary,
                 }}
                 >
                 <div id="content" >
@@ -502,8 +506,8 @@ function __Main() {
 //
 export function Main() {
     return (
-        <CssVarsProvider defaultMode="system">
+        <PhotosphereThemeProvider>
             <__Main />
-        </CssVarsProvider>
+        </PhotosphereThemeProvider>
     );
 }

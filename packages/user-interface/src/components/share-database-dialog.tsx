@@ -1,17 +1,18 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Input from '@mui/joy/Input';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
-import Typography from '@mui/joy/Typography';
-import Alert from '@mui/joy/Alert';
-import CircularProgress from '@mui/joy/CircularProgress';
-import Checkbox from '@mui/joy/Checkbox';
-import Box from '@mui/joy/Box';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Checkbox from '@mui/material/Checkbox';
+import Box from '@mui/material/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from '../lib/lan-share';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
@@ -212,64 +213,79 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
             >
             <DialogTitle>Share Database</DialogTitle>
             <DialogContent>
-                <Alert color="warning" sx={{ mb: 2 }}>
+                <Alert severity="warning" sx={{ mb: 2 }}>
                     Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
                 </Alert>
 
-                <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
+                <Typography variant="body2" sx={{ mb: 2 }} color="text.secondary">
                     Click Receive Database on another device to receive this database.
                 </Typography>
 
                 {step === "review" && (
                     <>
-                        <FormControl sx={{ mb: 1 }}>
+                        <FormControl fullWidth sx={{ mb: 1 }}>
                             <FormLabel>Name</FormLabel>
-                            <Input
+                            <OutlinedInput
+                                size="small"
                                 value={form.name}
                                 onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
                             />
                         </FormControl>
 
-                        <FormControl sx={{ mb: 1 }}>
+                        <FormControl fullWidth sx={{ mb: 1 }}>
                             <FormLabel>Description</FormLabel>
-                            <Input
+                            <OutlinedInput
+                                size="small"
                                 value={form.description}
                                 onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
                             />
                         </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
                             <FormLabel>Path</FormLabel>
-                            <Input
+                            <OutlinedInput
+                                size="small"
                                 value={form.path}
                                 onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                             />
                         </FormControl>
 
                         {entry.s3Key && (
-                            <Checkbox
+                            <FormControlLabel
                                 label="Include S3 credentials"
-                                checked={form.includeS3}
-                                onChange={event => setForm(prev => ({ ...prev, includeS3: event.target.checked }))}
-                                sx={{ mb: 1 }}
+                                control={
+                                    <Checkbox
+                                        checked={form.includeS3}
+                                        onChange={event => setForm(prev => ({ ...prev, includeS3: event.target.checked }))}
+                                    />
+                                }
+                                sx={{ display: "flex", mb: 1 }}
                             />
                         )}
 
                         {entry.encryptionKey && (
-                            <Checkbox
+                            <FormControlLabel
                                 label="Include encryption key"
-                                checked={form.includeEncryption}
-                                onChange={event => setForm(prev => ({ ...prev, includeEncryption: event.target.checked }))}
-                                sx={{ mb: 1 }}
+                                control={
+                                    <Checkbox
+                                        checked={form.includeEncryption}
+                                        onChange={event => setForm(prev => ({ ...prev, includeEncryption: event.target.checked }))}
+                                    />
+                                }
+                                sx={{ display: "flex", mb: 1 }}
                             />
                         )}
 
                         {entry.geocodingKey && (
-                            <Checkbox
+                            <FormControlLabel
                                 label="Include geocoding key"
-                                checked={form.includeGeocoding}
-                                onChange={event => setForm(prev => ({ ...prev, includeGeocoding: event.target.checked }))}
-                                sx={{ mb: 1 }}
+                                control={
+                                    <Checkbox
+                                        checked={form.includeGeocoding}
+                                        onChange={event => setForm(prev => ({ ...prev, includeGeocoding: event.target.checked }))}
+                                    />
+                                }
+                                sx={{ display: "flex", mb: 1 }}
                             />
                         )}
                     </>
@@ -277,29 +293,29 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
 
                 {step === "searching" && (
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
-                        <CircularProgress size="sm" />
+                        <CircularProgress size={24} />
                         <Typography>Searching for receiver on the local network...</Typography>
                     </Box>
                 )}
 
                 {step === "showing-code" && (
                     <Box sx={{ textAlign: "center", py: 3 }}>
-                        <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
-                        <Typography data-id="share-pairing-code" level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
+                        <Typography variant="body1" sx={{ mb: 1 }}>Pairing Code</Typography>
+                        <Typography data-id="share-pairing-code" variant="h4" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
                             {pairingCode}
                         </Typography>
-                        <Typography level="body-sm">Tell the receiver to enter this code.</Typography>
+                        <Typography variant="body2">Tell the receiver to enter this code.</Typography>
                     </Box>
                 )}
 
                 {step === "success" && (
-                    <Alert color="success">
+                    <Alert severity="success">
                         Database sent successfully!
                     </Alert>
                 )}
 
                 {step === "error" && (
-                    <Alert color="danger">
+                    <Alert severity="error">
                         {errorMessage}
                     </Alert>
                 )}
@@ -307,23 +323,23 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
             <DialogActions>
                 {step === "review" && (
                     <>
-                        <Button data-id="share-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
-                        <Button data-id="share-database-send-button" onClick={() => { handleStartSend(); }}>
+                        <Button data-id="share-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="share-database-send-button" variant="contained" onClick={() => { handleStartSend(); }}>
                             Send
                         </Button>
                     </>
                 )}
 
                 {step === "searching" && (
-                    <Button data-id="share-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {step === "showing-code" && (
-                    <Button data-id="share-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-database-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {(step === "success" || step === "error") && (
-                    <Button data-id="share-database-close-button" onClick={onClose}>Close</Button>
+                    <Button data-id="share-database-close-button" variant="contained" onClick={onClose}>Close</Button>
                 )}
             </DialogActions>
         </ResponsiveDialog>

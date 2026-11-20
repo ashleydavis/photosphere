@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { log } from 'utils';
-import Button from '@mui/joy/Button';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Typography from '@mui/joy/Typography';
-import CircularProgress from '@mui/joy/CircularProgress';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Typography from '@mui/material/Typography';
+import CircularProgress from '@mui/material/CircularProgress';
+import { desktopDialogActionsSx } from '../lib/modal-styles';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -96,68 +96,76 @@ export function ResetDeviceDialog({ open, onClose }: IResetDeviceDialogProps) {
     }
 
     return (
-        <Modal open={open} onClose={handleClose}>
-            <ModalDialog data-id="reset-device-dialog">
-                <DialogTitle>{finalConfirmation ? 'Reset this device?' : 'Reset device'}</DialogTitle>
-                {!finalConfirmation
-                    && <>
-                        <DialogContent>
-                            <Typography>
-                                This removes everything Photosphere keeps on this device:
-                                {' '}<strong data-id="reset-device-database-count">{dbs.length}</strong> database{dbs.length === 1 ? '' : 's'}
-                                {' '}and <strong data-id="reset-device-secret-count">{secrets.length}</strong> secret{secrets.length === 1 ? '' : 's'},
-                                {' '}along with its settings and its caches.
-                            </Typography>
-                            <Typography level="body-sm" sx={{ mt: 1 }}>
-                                <strong>Your photos go with it.</strong> The databases the app keeps
-                                on this device are deleted, and every photo in them. If you have used
-                                Free up space on this device, they are the only copy of those photos.
-                            </Typography>
-                            <Typography level="body-sm" sx={{ mt: 1 }}>
-                                <strong>Your encryption keys go too.</strong> They are stored as
-                                secrets on this device, and an encrypted database cannot be opened
-                                again without them.
-                            </Typography>
-                            <Typography level="body-sm" sx={{ mt: 1 }}>
-                                This cannot be undone.
-                            </Typography>
-                        </DialogContent>
-                        <DialogActions>
-                            <Button data-id="reset-device-cancel" variant="plain" onClick={handleClose}>Cancel</Button>
-                            <Button
-                                data-id="reset-device-continue"
-                                color="danger"
-                                onClick={() => setFinalConfirmation(true)}
-                            >
-                                Continue
-                            </Button>
-                        </DialogActions>
-                    </>
-                }
-                {finalConfirmation
-                    && <>
-                        <DialogContent>
-                            <Typography>
-                                Last chance. Resetting deletes the app's databases and the photos in
-                                them, its secrets including your encryption keys, its settings and
-                                its caches. None of it can be brought back.
-                            </Typography>
-                        </DialogContent>
-                        <DialogActions>
-                            <Button data-id="reset-device-final-cancel" variant="plain" onClick={handleClose} disabled={resetting}>Cancel</Button>
-                            <Button
-                                data-id="reset-device-confirm"
-                                color="danger"
-                                disabled={resetting}
-                                startDecorator={resetting ? <CircularProgress size="sm" /> : undefined}
-                                onClick={() => { void handleReset(); }}
-                            >
-                                Reset device
-                            </Button>
-                        </DialogActions>
-                    </>
-                }
-            </ModalDialog>
-        </Modal>
+        <Dialog
+            open={open}
+            onClose={handleClose}
+            slotProps={{
+                paper: {
+                    'data-id': 'reset-device-dialog',
+                },
+            }}
+            >
+            <DialogTitle>{finalConfirmation ? 'Reset this device?' : 'Reset device'}</DialogTitle>
+            {!finalConfirmation
+                && <>
+                    <DialogContent>
+                        <Typography>
+                            This removes everything Photosphere keeps on this device:
+                            {' '}<strong data-id="reset-device-database-count">{dbs.length}</strong> database{dbs.length === 1 ? '' : 's'}
+                            {' '}and <strong data-id="reset-device-secret-count">{secrets.length}</strong> secret{secrets.length === 1 ? '' : 's'},
+                            {' '}along with its settings and its caches.
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                            <strong>Your photos go with it.</strong> The databases the app keeps
+                            on this device are deleted, and every photo in them. If you have used
+                            Free up space on this device, they are the only copy of those photos.
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                            <strong>Your encryption keys go too.</strong> They are stored as
+                            secrets on this device, and an encrypted database cannot be opened
+                            again without them.
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                            This cannot be undone.
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions sx={desktopDialogActionsSx()}>
+                        <Button data-id="reset-device-cancel" variant="text" onClick={handleClose}>Cancel</Button>
+                        <Button
+                            data-id="reset-device-continue"
+                            variant="contained"
+                            color="error"
+                            onClick={() => setFinalConfirmation(true)}
+                        >
+                            Continue
+                        </Button>
+                    </DialogActions>
+                </>
+            }
+            {finalConfirmation
+                && <>
+                    <DialogContent>
+                        <Typography>
+                            Last chance. Resetting deletes the app's databases and the photos in
+                            them, its secrets including your encryption keys, its settings and
+                            its caches. None of it can be brought back.
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions sx={desktopDialogActionsSx()}>
+                        <Button data-id="reset-device-final-cancel" variant="text" onClick={handleClose} disabled={resetting}>Cancel</Button>
+                        <Button
+                            data-id="reset-device-confirm"
+                            variant="contained"
+                            color="error"
+                            disabled={resetting}
+                            startIcon={resetting ? <CircularProgress size={16} color="inherit" /> : undefined}
+                            onClick={() => { void handleReset(); }}
+                        >
+                            Reset device
+                        </Button>
+                    </DialogActions>
+                </>
+            }
+        </Dialog>
     );
 }

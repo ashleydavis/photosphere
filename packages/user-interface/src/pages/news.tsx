@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { version } from "config";
-import Box from "@mui/joy/Box";
-import Card from "@mui/joy/Card";
-import Chip from "@mui/joy/Chip";
-import Button from "@mui/joy/Button";
-import Typography from "@mui/joy/Typography";
-import Link from "@mui/joy/Link";
-import CircularProgress from "@mui/joy/CircularProgress";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import Chip from "@mui/material/Chip";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import Link from "@mui/material/Link";
+import CircularProgress from "@mui/material/CircularProgress";
 import { Download, OpenInNew } from "@mui/icons-material";
 import { useApi } from "../context/api-context";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -197,7 +197,7 @@ export function NewsPage() {
     return (
         <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', p: isMobile ? 2 : 4, pb: 16 }}>
             <Box sx={{ mx: 'auto', maxWidth: 800 }}>
-                <Typography level="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem', mb: 2 }}>
+                <Typography variant="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem', mb: 2 }}>
                     News
                 </Typography>
 
@@ -205,25 +205,31 @@ export function NewsPage() {
                     thing anybody opens this page to find out. The download is a full-width button
                     on a mobile rather than an underlined link. */}
                 <Card
-                    variant={hasUpdate ? 'soft' : 'outlined'}
-                    color={hasUpdate ? 'success' : 'neutral'}
-                    sx={{ borderRadius: 'lg', p: 2, gap: 1 }}
+                    variant="outlined"
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        bgcolor: hasUpdate ? 'rgba(var(--mui-palette-success-mainChannel) / 0.12)' : undefined,
+                        borderColor: hasUpdate ? 'success.main' : undefined,
+                        borderRadius: 3,
+                        p: 2,
+                        gap: 1,
+                    }}
                     >
                     <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                        <Typography level="title-md">{`Version v${runningVersion}`}</Typography>
+                        <Typography variant="subtitle1">{`Version v${runningVersion}`}</Typography>
                         {latestVersion !== undefined
                             && <Chip
-                                size="sm"
-                                variant="solid"
-                                color={hasUpdate ? 'success' : 'neutral'}
-                                >
-                                {hasUpdate ? 'Update available' : 'Up to date'}
-                            </Chip>
+                                size="small"
+                                variant="filled"
+                                color={hasUpdate ? 'success' : 'default'}
+                                label={hasUpdate ? 'Update available' : 'Up to date'}
+                                />
                         }
                     </Box>
 
                     {latestVersion !== undefined
-                        && <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                        && <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                             {`Latest release: v${latestVersion}`}
                         </Typography>
                     }
@@ -234,9 +240,10 @@ export function NewsPage() {
                             href="https://github.com/ashleydavis/photosphere/releases/latest"
                             target="_blank"
                             rel="noopener noreferrer"
-                            size="lg"
+                            variant="contained"
+                            size="large"
                             color="success"
-                            startDecorator={<Download />}
+                            startIcon={<Download />}
                             sx={{ minHeight: 48, mt: 0.5 }}
                             >
                             Download the latest release
@@ -244,17 +251,17 @@ export function NewsPage() {
                     }
                 </Card>
 
-                <Typography level="title-lg" sx={{ mt: 3, mb: 1.5 }}>News items</Typography>
+                <Typography variant="h6" sx={{ mt: 3, mb: 1.5 }}>News items</Typography>
 
                 {loading
                     && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2 }}>
-                        <CircularProgress size="sm" />
-                        <Typography level="body-md" sx={{ color: 'text.tertiary' }}>Loading...</Typography>
+                        <CircularProgress size={24} />
+                        <Typography variant="body1" sx={{ color: 'text.secondary' }}>Loading...</Typography>
                     </Box>
                 }
 
                 {!loading && orderedItems.length === 0
-                    && <Typography level="body-md" sx={{ color: 'text.tertiary' }}>
+                    && <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                         No news items available.
                     </Typography>
                 }
@@ -262,19 +269,33 @@ export function NewsPage() {
                 {!loading && orderedItems.map(item => (
                     <Card
                         key={item.id}
-                        variant="soft"
-                        sx={{ borderRadius: 'lg', p: 2, mb: 1.5, gap: 1 }}
+                        elevation={0}
+                        sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            bgcolor: 'action.hover',
+                            borderRadius: 3,
+                            p: 2,
+                            mb: 1.5,
+                            gap: 1,
+                        }}
                         >
-                        <Typography level="body-md">{item.message}</Typography>
+                        <Typography variant="body1">{item.message}</Typography>
                         {item.link
                             && <Link
                                 href={item.link.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                endDecorator={<OpenInNew fontSize="small" />}
-                                sx={{ minHeight: 44, alignItems: 'center' }}
+                                underline="hover"
+                                sx={{
+                                    display: 'inline-flex',
+                                    minHeight: 44,
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                }}
                                 >
                                 {item.link.label}
+                                <OpenInNew fontSize="small" />
                             </Link>
                         }
                         {item.action
@@ -283,9 +304,12 @@ export function NewsPage() {
                                 href={item.action.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                variant="solid"
-                                size={isMobile ? 'lg' : 'md'}
-                                sx={{ minHeight: isMobile ? 48 : undefined, alignSelf: isMobile ? 'stretch' : 'flex-start' }}
+                                variant="contained"
+                                size={isMobile ? 'large' : 'medium'}
+                                sx={{
+                                    minHeight: isMobile ? 48 : undefined,
+                                    alignSelf: isMobile ? 'stretch' : 'flex-start',
+                                }}
                                 >
                                 {item.action.label}
                             </Button>

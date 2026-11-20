@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { IGalleryLayout } from "../lib/create-layout";
 import useResizeObserver from "@react-hook/resize-observer";
-import { useTheme } from "@mui/joy";
+import { useTheme } from "@mui/material/styles";
 
 //
 // Width of the custom scrollbar on the right of the gallery.
@@ -22,7 +22,7 @@ export interface IGalleryScrolbarProps {
     //
     // The ref to the scrollable gallery container.
     //
-    scrollContainerRef: React.RefObject<HTMLDivElement>;
+    scrollContainerRef: React.RefObject<HTMLDivElement | null>;
 
     //
     // The layout of the gallery.
@@ -110,9 +110,11 @@ export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }
     //
     // Mouse support for desktop.
     //
-    // Updates the gallery width when the container is resized.
+    // Updates the gallery width when the container is resized. The cast is there because version 1
+    // of @react-hook/resize-observer types its target as React 18's RefObject, which React 19's
+    // nullable RefObject does not match. The hook already copes with a null current.
     //
-    useResizeObserver(containerRef, () => {
+    useResizeObserver(containerRef as React.RefObject<HTMLDivElement>, () => {
         updateScrollbarHeight();
     });
 
@@ -201,7 +203,7 @@ export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }
                 className="gallery-scrollbar"
                 style={{
                     width: `${SCROLLBAR_WIDTH}px`,
-                    backgroundColor: theme.palette.background.body,
+                    backgroundColor: (theme.vars ?? theme).palette.background.default,
                     zIndex: 200,
                 }}
                 onMouseUp={event => {

@@ -403,6 +403,10 @@ photosphere_platform_start() {
     local logcat_pid logcat_pgid
     read -r logcat_pid logcat_pgid < <(launch_in_process_group "$test_dir/logcat-$generation.log" photosphere_adb logcat -v threadtime) || return 1
     echo "$logcat_pgid" > "$test_dir/logcat-stream.pgid"
+    # The screen is woken first. A device whose screen has gone to sleep starts the activity behind it, where the web view draws
+    # nothing, so the page never connects or never renders: an emulator with a screen timeout failed whichever scenario it was
+    # handed once it had sat idle for that long.
+    android_screen_on || return 1
     photosphere_adb shell "am start -W -n $ANDROID_APP_ID/.MainActivity $extras" > "$test_dir/am-start.log" 2>&1 || {
         cat "$test_dir/am-start.log" >&2
         return 1

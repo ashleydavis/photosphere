@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import { log } from "utils";
 import { TaskQueue, TaskStatus } from "task-queue";
-import Box from "@mui/joy/Box";
-import Card from "@mui/joy/Card";
-import Typography from "@mui/joy/Typography";
-import CircularProgress from "@mui/joy/CircularProgress";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import Typography from "@mui/material/Typography";
+import CircularProgress from "@mui/material/CircularProgress";
+import Alert from "@mui/material/Alert";
 import { Storage, Photo, Folder, Save, CloudSync } from "@mui/icons-material";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useUuidGenerator } from "../context/uuid-generator-context";
 import { formatBytes, getStorageType } from "../lib/database-summary-format";
-import Button from "@mui/joy/Button";
+import Button from "@mui/material/Button";
 import { ConsolidateDatabaseDialog } from "./consolidate-database-dialog";
 
 //
@@ -101,16 +102,24 @@ interface IStatTileProps {
 function StatTile({ label, value, icon }: IStatTileProps) {
     return (
         <Card
-            variant="soft"
-            sx={{ borderRadius: 'lg', p: 2, gap: 0.5, minWidth: 0 }}
+            elevation={0}
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                borderRadius: '12px',
+                p: 2,
+                gap: 0.5,
+                minWidth: 0,
+                bgcolor: 'action.hover',
+            }}
             >
-            <Box sx={{ color: 'text.tertiary', display: 'flex' }}>
+            <Box sx={{ color: 'text.secondary', display: 'flex' }}>
                 {icon}
             </Box>
-            <Typography level="h2" sx={{ fontSize: '1.6rem', lineHeight: 1.1 }}>
+            <Typography variant="h2" sx={{ fontSize: '1.6rem', lineHeight: 1.1, fontWeight: 700 }}>
                 {value}
             </Typography>
-            <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {label}
             </Typography>
         </Card>
@@ -139,10 +148,10 @@ interface ISummaryRowProps {
 function SummaryRow({ dataId, label, value }: ISummaryRowProps) {
     return (
         <Box data-id={dataId} sx={{ py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Typography level="body-xs" sx={{ color: 'text.tertiary', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {label}
             </Typography>
-            <Typography level="body-sm" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', mt: 0.25 }}>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', mt: 0.25 }}>
                 {value}
             </Typography>
         </Box>
@@ -165,8 +174,8 @@ interface ISummarySectionProps {
 //
 function SummarySection({ title, children }: ISummarySectionProps) {
     return (
-        <Card variant="outlined" sx={{ borderRadius: 'lg', p: 2, mt: 2, gap: 0 }}>
-            <Typography level="title-md" sx={{ mb: 0.5 }}>{title}</Typography>
+        <Card variant="outlined" sx={{ borderRadius: '12px', p: 2, mt: 2 }}>
+            <Typography variant="subtitle1" sx={{ mb: 0.5 }}>{title}</Typography>
             {children}
         </Card>
     );
@@ -262,7 +271,7 @@ export function DatabaseSummaryView() {
     return (
         <>
             {!databasePath
-                && <Typography level="body-md" sx={{ color: 'text.tertiary' }}>
+                && <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                     No database is currently open.
                 </Typography>
             }
@@ -271,17 +280,17 @@ export function DatabaseSummaryView() {
                 && <>
                     {isLoading
                         && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 3 }}>
-                            <CircularProgress size="sm" />
-                            <Typography level="body-md" sx={{ color: 'text.tertiary' }}>
+                            <CircularProgress size={24} />
+                            <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                                 Loading summary...
                             </Typography>
                         </Box>
                     }
 
                     {error
-                        && <Card variant="soft" color="danger" sx={{ borderRadius: 'lg', p: 2 }}>
-                            <Typography level="body-md" color="danger">{error}</Typography>
-                        </Card>
+                        && <Alert severity="error" icon={false} sx={{ borderRadius: '12px', p: 2 }}>
+                            <Typography variant="body1">{error}</Typography>
+                        </Alert>
                     }
 
                     {/*
@@ -325,15 +334,15 @@ export function DatabaseSummaryView() {
                     </SummarySection>
 
                     <SummarySection title="Remote copy">
-                        <Typography level="body-sm" sx={{ color: 'text.tertiary', mb: 1 }}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
                             Keeps a copy of this database on a remote. If the remote already holds a
                             different database, the two are joined and nothing it already has is
                             uploaded again.
                         </Typography>
                         <Button
-                            size="sm"
+                            size="small"
                             variant="outlined"
-                            startDecorator={<CloudSync />}
+                            startIcon={<CloudSync />}
                             data-id="summary-consolidate-database-button"
                             onClick={() => { log.info('Consolidate into remote dialog opened'); setConsolidateOpen(true); }}
                             >

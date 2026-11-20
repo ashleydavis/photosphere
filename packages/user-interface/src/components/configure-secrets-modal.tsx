@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import Box from '@mui/joy/Box';
-import Button from '@mui/joy/Button';
-import DialogActions from '@mui/joy/DialogActions';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogTitle from '@mui/joy/DialogTitle';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
 import { ResponsiveDialog } from './responsive-dialog';
-import Option from '@mui/joy/Option';
-import Select from '@mui/joy/Select';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import type { ISharedSecretEntry } from '../context/platform-context';
 import { CreateSecretDialog } from './create-secret-dialog';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
@@ -84,6 +84,17 @@ export interface IConfigureSecretsModalProps {
 }
 
 //
+// Props for a Select's display element, the part that shows the chosen value. Material types
+// SelectDisplayProps as plain div attributes, which have no `data-id`.
+//
+interface ISelectDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
+    //
+    // Identifies the select to the smoke tests, which click it and read the chosen value from it.
+    //
+    'data-id': string;
+}
+
+//
 // Popup modal that lets the user pick the vault-secret references for a database entry
 // (S3 credentials, encryption key, geocoding API key) with a "+ New" button per row to
 // quick-create a secret via CreateSecretDialog. Reusable across the Edit Database and
@@ -152,26 +163,30 @@ export function ConfigureSecretsModal({
         secretType: string,
         dataIdPrefix: string,
     ): React.ReactNode {
+        const selectDisplayProps: ISelectDisplayProps = {
+            'data-id': `${dataIdPrefix}-select`,
+        };
         return (
-            <FormControl sx={{ mb: 1 }}>
+            <FormControl fullWidth sx={{ mb: 1 }}>
                 <FormLabel>{label}</FormLabel>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <Select
+                        size="small"
                         sx={{ flexGrow: 1 }}
                         value={selectedName ?? ''}
-                        onChange={(_event, selected) => onSelectionChange((selected as string) || undefined)}
-                        placeholder="None"
-                        slotProps={{ button: { 'data-id': `${dataIdPrefix}-select` } }}
+                        onChange={event => onSelectionChange(event.target.value || undefined)}
+                        displayEmpty
+                        SelectDisplayProps={selectDisplayProps}
                     >
-                        <Option data-id={`${dataIdPrefix}-option-none`} value="">None</Option>
+                        <MenuItem data-id={`${dataIdPrefix}-option-none`} value="">None</MenuItem>
                         {options.map(secret => (
-                            <Option data-id={`${dataIdPrefix}-option-${secret.name}`} key={secret.name} value={secret.name}>{secret.name}</Option>
+                            <MenuItem data-id={`${dataIdPrefix}-option-${secret.name}`} key={secret.name} value={secret.name}>{secret.name}</MenuItem>
                         ))}
                     </Select>
                     <Button
                         data-id={`${dataIdPrefix}-new-button`}
                         variant="outlined"
-                        size="sm"
+                        size="small"
                         onClick={() => setQuickCreateType(secretType)}
                     >
                         + New
@@ -221,8 +236,8 @@ export function ConfigureSecretsModal({
                     )}
                 </DialogContent>
                 <DialogActions>
-                    <Button data-id="configure-secrets-cancel" variant="plain" onClick={onClose}>Cancel</Button>
-                    <Button data-id="configure-secrets-save" onClick={() => onSave(working)}>Save</Button>
+                    <Button data-id="configure-secrets-cancel" variant="text" onClick={onClose}>Cancel</Button>
+                    <Button data-id="configure-secrets-save" variant="contained" onClick={() => onSave(working)}>Save</Button>
                 </DialogActions>
         </ResponsiveDialog>
         {quickCreateType !== undefined && (

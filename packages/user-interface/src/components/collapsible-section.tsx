@@ -1,5 +1,5 @@
 import React, { ReactNode, useEffect, useState } from "react";
-import Typography from "@mui/joy/Typography/Typography";
+import Typography from "@mui/material/Typography";
 import { ExpandMore, KeyboardArrowRight } from "@mui/icons-material";
 import { useStateStore } from "../context/state-store-context";
 
@@ -65,8 +65,11 @@ export function CollapsibleSection({ configKey, label, style, children }: IColla
                 onClick={toggle}
                 >
                 <Typography
-                    level="body-xs"
-                    sx={{ textTransform: 'uppercase', fontWeight: 'lg' }}
+                    variant="caption"
+                    sx={{
+                        textTransform: 'uppercase',
+                        fontWeight: 600,
+                    }}
                     >
                     {label}
                 </Typography>

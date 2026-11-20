@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import Box from "@mui/joy/Box";
-import Card from "@mui/joy/Card";
-import Chip from "@mui/joy/Chip";
-import Typography from "@mui/joy/Typography/Typography";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import Chip from "@mui/material/Chip";
+import Typography from "@mui/material/Typography";
 import { CloudUpload } from "@mui/icons-material";
 import { log } from "utils";
 import { usePlatform } from "../context/platform-context";
@@ -42,31 +42,48 @@ export function ImportProgress() {
 
     return (
         <Card
-            variant="soft"
-            sx={{ borderRadius: 'lg', p: 1.5, gap: 1, mb: 2 }}
+            elevation={0}
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: 'action.hover',
+                borderRadius: 3,
+                p: 1.5,
+                gap: 1,
+                mb: 2,
+            }}
             data-id="import-progress"
             >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CloudUpload sx={{ color: 'text.secondary' }} />
-                <Typography level="title-md" sx={{ flexGrow: 1 }}>Import</Typography>
+                <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Import</Typography>
             </Box>
 
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                <Chip size="sm" color="success" data-id="import-imported-count">
-                    {`Imported ${progress.imported}`}
-                </Chip>
-                <Chip size="sm" color="neutral" data-id="import-skipped-count">
-                    {`Already there ${progress.skipped}`}
-                </Chip>
+                <Chip
+                    size="small"
+                    color="success"
+                    data-id="import-imported-count"
+                    label={`Imported ${progress.imported}`}
+                    />
+                <Chip
+                    size="small"
+                    color="default"
+                    data-id="import-skipped-count"
+                    label={`Already there ${progress.skipped}`}
+                    />
                 {progress.failed > 0
-                    && <Chip size="sm" color="danger" data-id="import-failed-count">
-                        {`Failed ${progress.failed}`}
-                    </Chip>
+                    && <Chip
+                        size="small"
+                        color="error"
+                        data-id="import-failed-count"
+                        label={`Failed ${progress.failed}`}
+                        />
                 }
             </Box>
 
             {progress.currentItem
-                && <Typography level="body-sm" sx={{ color: 'text.tertiary' }} data-id="import-current-item">
+                && <Typography variant="body2" sx={{ color: 'text.secondary' }} data-id="import-current-item">
                     {progress.currentItem}
                 </Typography>
             }

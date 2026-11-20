@@ -1,6 +1,7 @@
 import { watch } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 // Whether Linux has a file watch to spare. Other programs can use up every watch the user is allowed, and Vite then
 // crashes with ENOSPC instead of watching the frontend.
@@ -24,7 +25,13 @@ if (useWatchPolling) {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Tailwind's optimiser is off so MUI's CSS layer keeps its order against Tailwind's.
+    tailwindcss({
+      optimize: false,
+    }),
+  ],
   server: {
     watch: {
       usePolling: useWatchPolling,

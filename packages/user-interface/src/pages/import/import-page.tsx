@@ -3,11 +3,11 @@ import { useAssetDatabase } from "../../context/asset-database-source";
 import { useImport } from "../../context/import-context";
 import { usePlatform } from "../../context/platform-context";
 import { log } from "utils";
-import Box from "@mui/joy/Box";
-import Button from "@mui/joy/Button";
-import Chip from "@mui/joy/Chip";
-import CircularProgress from "@mui/joy/CircularProgress";
-import Typography from "@mui/joy/Typography";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
+import Typography from "@mui/material/Typography";
 import { FileUpload, CheckCircle, Cancel, HourglassEmpty, RemoveCircle } from "@mui/icons-material";
 import { useIsMobile } from "../../lib/use-is-mobile";
 import type { IImportItem } from "../../context/import-context";
@@ -19,7 +19,7 @@ import { ImportProgress } from "../../components/import-progress";
 function NoDatabaseLoaded() {
     return (
         <Box className="flex items-center justify-center" sx={{ height: "calc(100vh - 60px)" }}>
-            <Typography level="body-md" sx={{ color: "text.secondary" }}>
+            <Typography variant="body1" sx={{ color: "text.secondary" }}>
                 Open a database to import photos.
             </Typography>
         </Box>
@@ -34,13 +34,13 @@ function ItemStatusIcon({ status }: { status: IImportItem['status'] }) {
         return <HourglassEmpty fontSize="small" sx={{ color: "text.secondary" }} />;
     }
     else if (status === 'success') {
-        return <CheckCircle fontSize="small" sx={{ color: "success.plainColor" }} />;
+        return <CheckCircle fontSize="small" sx={{ color: "success.main" }} />;
     }
     else if (status === 'failure') {
-        return <Cancel fontSize="small" sx={{ color: "danger.plainColor" }} />;
+        return <Cancel fontSize="small" sx={{ color: "error.main" }} />;
     }
     else {
-        return <RemoveCircle fontSize="small" sx={{ color: "neutral.plainColor" }} />;
+        return <RemoveCircle fontSize="small" sx={{ color: "text.secondary" }} />;
     }
 }
 
@@ -62,9 +62,9 @@ function ImportItemRow({ item }: { item: IImportItem }) {
                     width: 32,
                     height: 32,
                     flexShrink: 0,
-                    borderRadius: "sm",
+                    borderRadius: 1.5,
                     overflow: "hidden",
-                    bgcolor: "background.level2",
+                    bgcolor: "action.selected",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -80,7 +80,7 @@ function ImportItemRow({ item }: { item: IImportItem }) {
                 }
             </Box>
 
-            <Typography data-id="import-item-path" level="body-sm" sx={{ flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <Typography data-id="import-item-path" variant="body2" sx={{ flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {item.logicalPath}
             </Typography>
         </Box>
@@ -203,13 +203,13 @@ export function ImportPage() {
             >
                 {status === 'running' && (
                     <>
-                        <CircularProgress size="sm" />
-                        <Typography level="title-md" sx={{ flexGrow: 1 }}>Importing…</Typography>
+                        <CircularProgress size={24} />
+                        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Importing…</Typography>
                         <Button
                             data-id="import-cancel-button"
-                            variant="soft"
-                            color="danger"
-                            size="sm"
+                            variant="outlined"
+                            color="error"
+                            size="small"
                             onClick={cancelImport}
                         >
                             Cancel
@@ -218,15 +218,15 @@ export function ImportPage() {
                 )}
 
                 {status === 'completed' && (
-                    <Typography level="title-md" sx={{ flexGrow: 1 }}>Import complete</Typography>
+                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Import complete</Typography>
                 )}
 
                 {status === 'cancelled' && (
-                    <Typography level="title-md" sx={{ flexGrow: 1 }}>Import cancelled</Typography>
+                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Import cancelled</Typography>
                 )}
 
                 {status === 'idle' && (
-                    <Typography level="title-md">Import photos</Typography>
+                    <Typography variant="subtitle1">Import photos</Typography>
                 )}
             </Box>
 
@@ -243,14 +243,14 @@ export function ImportPage() {
                         onDrop={allowDragAndDrop ? handleDrop : undefined}
                         sx={{
                             border: isDragOver ? "2px dashed" : "2px dashed transparent",
-                            borderColor: isDragOver ? "primary.outlinedBorder" : "transparent",
-                            borderRadius: "md",
+                            borderColor: isDragOver ? "primary.light" : "transparent",
+                            borderRadius: 2,
                             transition: "border-color 0.15s",
-                            bgcolor: isDragOver ? "primary.softBg" : undefined,
+                            bgcolor: isDragOver ? "rgba(var(--mui-palette-primary-mainChannel) / 0.08)" : undefined,
                         }}
                     >
                         {/* On a mobile the import buttons stack and run the full width of the
-                            screen: a row of two "lg" buttons is what clipped this page's actions
+                            screen: a row of two large buttons is what clipped this page's actions
                             at the edges before, and a single obvious target beats two small ones. */}
                         <Box sx={{ textAlign: "center", width: "100%", px: isMobile ? 3 : 0 }}>
                             <Box
@@ -261,14 +261,14 @@ export function ImportPage() {
                                     width: isMobile ? 96 : 80,
                                     height: isMobile ? 96 : 80,
                                     borderRadius: "50%",
-                                    backgroundColor: "background.level2",
+                                    backgroundColor: "action.selected",
                                     mb: 2,
                                 }}
                                 >
                                 <FileUpload sx={{ fontSize: isMobile ? 48 : 40, color: "text.secondary" }} />
                             </Box>
-                            <Typography level={isMobile ? "h3" : "h4"} sx={{ mb: 1 }}>Import photos</Typography>
-                            <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
+                            <Typography variant={isMobile ? "h3" : "h4"} sx={{ mb: 1 }}>Import photos</Typography>
+                            <Typography variant="body1" sx={{ mb: 4, color: "text.secondary" }}>
                                 {allowDragAndDrop
                                     ? "Drop files or directories here, or use the buttons below."
                                     : "Choose photos and videos from your device."}
@@ -286,23 +286,26 @@ export function ImportPage() {
                                 >
                                 <Button
                                     data-id="import-files-button"
-                                    variant={isMobile ? "solid" : "soft"}
-                                    color={isMobile ? "primary" : "neutral"}
-                                    size="lg"
-                                    startDecorator={<FileUpload />}
+                                    variant={isMobile ? "contained" : "outlined"}
+                                    color={isMobile ? "primary" : "inherit"}
+                                    size="large"
+                                    startIcon={<FileUpload />}
                                     onClick={handleImportFiles}
                                     disabled={isPicking}
-                                    sx={{ minHeight: isMobile ? 52 : undefined, borderRadius: isMobile ? "md" : undefined }}
+                                    sx={{
+                                        minHeight: isMobile ? 52 : undefined,
+                                        borderRadius: isMobile ? 2 : undefined,
+                                    }}
                                 >
                                     {platform.platformKind === "desktop" ? "Import files" : "Select photos"}
                                 </Button>
                                 {platform.platformKind === "desktop" && (
                                     <Button
                                         data-id="import-directory-button"
-                                        variant="soft"
-                                        color="neutral"
-                                        size="lg"
-                                        startDecorator={<FileUpload />}
+                                        variant="outlined"
+                                        color="inherit"
+                                        size="large"
+                                        startIcon={<FileUpload />}
                                         onClick={handleImportDirectories}
                                         disabled={isPicking}
                                         sx={{ minHeight: isMobile ? 52 : undefined }}
@@ -337,17 +340,15 @@ export function ImportPage() {
                                     flexShrink: 0,
                                 }}
                             >
-                                <Chip variant="soft" color="success" size="lg">{`${successCount} added`}</Chip>
-                                <Chip variant="soft" color="neutral" size="lg">{`${skippedCount} skipped`}</Chip>
+                                <Chip color="success" size="medium" label={`${successCount} added`} />
+                                <Chip color="default" size="medium" label={`${skippedCount} skipped`} />
                                 <Chip
-                                    variant="soft"
-                                    color={failedCount > 0 ? "danger" : "neutral"}
-                                    size="lg"
-                                    >
-                                    {`${failedCount} failed`}
-                                </Chip>
+                                    color={failedCount > 0 ? "error" : "default"}
+                                    size="medium"
+                                    label={`${failedCount} failed`}
+                                    />
                                 {pendingCount > 0 && (
-                                    <Chip variant="soft" color="warning" size="lg">{`${pendingCount} pending`}</Chip>
+                                    <Chip color="warning" size="medium" label={`${pendingCount} pending`} />
                                 )}
                             </Box>
                         )}
@@ -365,9 +366,14 @@ export function ImportPage() {
                                 stops is read as the whole history. */}
                             {recordTruncated && (
                                 <Typography
-                                    level="body-xs"
+                                    variant="caption"
                                     data-id="import-record-truncated"
-                                    sx={{ color: 'text.tertiary', textAlign: 'center', py: 1.5 }}
+                                    sx={{
+                                        display: 'block',
+                                        color: 'text.secondary',
+                                        textAlign: 'center',
+                                        py: 1.5,
+                                    }}
                                 >
                                     Imports older than these are not remembered.
                                 </Typography>
@@ -389,11 +395,14 @@ export function ImportPage() {
                             >
                                 <Button
                                     data-id="import-clear-button"
-                                    variant="soft"
-                                    color="neutral"
-                                    size={isMobile ? "lg" : "md"}
+                                    variant="outlined"
+                                    color="inherit"
+                                    size={isMobile ? "large" : "medium"}
                                     onClick={clearImport}
-                                    sx={{ width: isMobile ? "100%" : undefined, minHeight: isMobile ? 48 : undefined }}
+                                    sx={{
+                                        width: isMobile ? "100%" : undefined,
+                                        minHeight: isMobile ? 48 : undefined,
+                                    }}
                                     >
                                     Clear
                                 </Button>

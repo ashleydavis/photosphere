@@ -1,5 +1,5 @@
 import React, { ReactNode, useEffect, useState } from "react";
-import Button from "@mui/joy/Button";
+import Button from "@mui/material/Button";
 import { useSearchParams } from "react-router-dom";
 import { RandomUuidGenerator, type IUuidGenerator } from "utils";
 import { getQueueBackend } from "task-queue";
@@ -95,7 +95,7 @@ export function StoryModalLauncher({ label, children }: IStoryModalLauncherProps
     return (
         <div className="p-4">
             {!open && (
-                <Button onClick={() => setOpen(true)}>
+                <Button variant="contained" onClick={() => setOpen(true)}>
                     {`Show ${label}`}
                 </Button>
             )}
@@ -105,7 +105,7 @@ export function StoryModalLauncher({ label, children }: IStoryModalLauncherProps
                     style={{
                         position: "fixed",
                         inset: 0,
-                        background: "var(--joy-palette-background-body, #1a1a1a)",
+                        background: "var(--mui-palette-background-default, #1a1a1a)",
                         zIndex: 1000,
                     }}
                     >
@@ -477,7 +477,7 @@ export function MockProviders({
     // import page can be rendered in a fixed state; otherwise use the real
     // provider which manages live import state.
     //
-    function withImportContext(content: ReactNode): JSX.Element {
+    function withImportContext(content: ReactNode): React.JSX.Element {
         if (importContext) {
             return (
                 <ImportContext.Provider value={importContext}>
@@ -498,7 +498,7 @@ export function MockProviders({
     // use the real provider, which stays empty because the mock platform
     // reports no task messages.
     //
-    function withJobsContext(content: ReactNode): JSX.Element {
+    function withJobsContext(content: ReactNode): React.JSX.Element {
         if (jobsContext) {
             return (
                 <JobsContext.Provider value={jobsContext}>

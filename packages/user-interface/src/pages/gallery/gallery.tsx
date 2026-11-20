@@ -5,8 +5,8 @@ import { useGallery } from "../../context/gallery-context";
 import { useAssetDatabase } from "../../context/asset-database-source";
 import { NoDatabaseLoaded } from "../../components/no-database-loaded";
 import { EmptyDatabase } from "../../components/empty-database";
-import Box from "@mui/joy/Box";
-import CircularProgress from "@mui/joy/CircularProgress";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import { log } from "utils";
 
 export interface IGalleryPageProps {
@@ -54,7 +54,7 @@ export function GalleryPage({}: IGalleryPageProps) {
                     className="flex items-center justify-center"
                     sx={{ height: "calc(100vh - 60px)" }}
                 >
-                    <CircularProgress variant="soft" />
+                    <CircularProgress />
                 </Box>
             )}
 

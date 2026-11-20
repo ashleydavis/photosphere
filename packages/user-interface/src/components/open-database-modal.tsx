@@ -2,17 +2,17 @@ import { useEffect, useState } from 'react';
 import React from 'react';
 import { log } from 'utils';
 import { ResponsiveDialog } from './responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Box from '@mui/joy/Box';
-import CircularProgress from '@mui/joy/CircularProgress';
-import Typography from '@mui/joy/Typography';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
+import Typography from '@mui/material/Typography';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import FolderIcon from '@mui/icons-material/Folder';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import IconButton from '@mui/joy/IconButton';
+import IconButton from '@mui/material/IconButton';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -121,7 +121,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                     <DialogContent>
                         {dbs.length === 0
                             ? (
-                                <Typography data-id="no-databases-configured" level="body-sm">
+                                <Typography data-id="no-databases-configured" variant="body2">
                                     No databases configured yet.
                                 </Typography>
                             )
@@ -131,23 +131,24 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                                         <Button
                                             key={dbEntry.name}
                                             data-id={`database-list-item-${index}`}
-                                            variant={dbEntry.path === databasePath ? 'soft' : 'outlined'}
-                                            color="neutral"
+                                            variant={dbEntry.path === databasePath ? 'contained' : 'outlined'}
+                                            color="inherit"
+                                            disableElevation
                                             // Every entry is disabled while an open is under way, not
                                             // just the one tapped: a second open started on top of
                                             // the first cancels its load and leaves the gallery on
                                             // whichever finishes last.
                                             disabled={isOpening}
-                                            startDecorator={dbEntry.path === databasePath ? <FolderOpenIcon /> : <FolderIcon />}
-                                            endDecorator={isOpening && openingPath === dbEntry.path
-                                                ? <CircularProgress data-id={`database-list-item-spinner-${index}`} size="sm" />
+                                            startIcon={dbEntry.path === databasePath ? <FolderOpenIcon /> : <FolderIcon />}
+                                            endIcon={isOpening && openingPath === dbEntry.path
+                                                ? <CircularProgress data-id={`database-list-item-spinner-${index}`} size={24} />
                                                 : undefined
                                             }
                                             onClick={() => handleOpen(dbEntry.path)}
-                                            sx={{ justifyContent: 'flex-start' }}
+                                            sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
                                         >
                                             {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop()}
-                                            <Typography level="body-xs" sx={{ ml: 1, opacity: 0.6 }}>
+                                            <Typography variant="caption" sx={{ ml: 1, opacity: 0.6 }}>
                                                 {dbEntry.path}
                                             </Typography>
                                         </Button>
@@ -159,12 +160,12 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                     {/* The four actions do not fit one row at mobile width, so they wrap instead of
                         squeezing until their labels break mid-button. */}
                     <DialogActions sx={{ flexWrap: 'wrap' }}>
-                        <Button data-id="open-database-modal-cancel" variant="plain" onClick={onClose}>Cancel</Button>
+                        <Button data-id="open-database-modal-cancel" variant="text" onClick={onClose}>Cancel</Button>
                         <IconButton
-                            variant="outlined"
                             disabled={refreshing}
                             title="Refresh"
                             onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh databases:', err as Error))}
+                            sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}
                         >
                             <RefreshIcon
                                 sx={refreshing ? {

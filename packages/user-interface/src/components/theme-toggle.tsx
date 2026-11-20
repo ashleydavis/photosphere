@@ -1,10 +1,8 @@
-import React from "react";
-import IconButton from "@mui/joy/IconButton";
-import Dropdown from "@mui/joy/Dropdown";
-import Menu from "@mui/joy/Menu";
-import MenuButton from "@mui/joy/MenuButton";
-import MenuItem from "@mui/joy/MenuItem";
-import ListItemDecorator from "@mui/joy/ListItemDecorator";
+import React, { useState } from "react";
+import IconButton from "@mui/material/IconButton";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import ListItemIcon from "@mui/material/ListItemIcon";
 import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import SettingsBrightness from "@mui/icons-material/SettingsBrightness";
@@ -37,31 +35,61 @@ function renderModeIcon(mode: ThemeMode): React.ReactNode {
 
 //
 // A nav bar control that lets the user switch between light, dark and system themes.
-// The choice is applied live via MUI Joy's color scheme and persisted through the app config
+// The choice is applied live via MUI's color scheme and persisted through the app config
 // so it survives restarts. "System" follows the OS `prefers-color-scheme` and updates automatically.
 //
 export function ThemeToggle() {
-    const [selectedMode, chooseMode] = useThemeSetting();
+    const [selectedMode, setSelectedMode] = useThemeSetting();
+
+    //
+    // The button the menu hangs from while it is open, and undefined while it is closed.
+    //
+    const [menuAnchor, setMenuAnchor] = useState<HTMLElement | undefined>(undefined);
+
+    //
+    // Applies the chosen mode and closes the menu.
+    //
+    function chooseMode(mode: ThemeMode): void {
+        setSelectedMode(mode);
+        setMenuAnchor(undefined);
+    }
 
     return (
-        <Dropdown>
-            <MenuButton
+        <>
+            <IconButton
                 data-id="theme-toggle-button"
-                slots={{ root: IconButton }}
-                slotProps={{ root: { variant: 'soft', color: 'neutral', title: 'Change theme' } }}
-                sx={{ mr: 1 }}
+                title="Change theme"
+                onClick={event => setMenuAnchor(event.currentTarget)}
+                sx={{
+                    mr: 1,
+                    borderRadius: 2,
+                    backgroundColor: 'action.selected',
+                }}
             >
                 {renderModeIcon(selectedMode)}
-            </MenuButton>
-            <Menu data-id="theme-toggle-menu" placement="bottom-end">
+            </IconButton>
+            <Menu
+                data-id="theme-toggle-menu"
+                anchorEl={menuAnchor}
+                open={menuAnchor !== undefined}
+                onClose={() => setMenuAnchor(undefined)}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                }}
+            >
                 <MenuItem
                     data-id="theme-option-light"
                     selected={selectedMode === 'light'}
                     onClick={() => chooseMode('light')}
                 >
-                    <ListItemDecorator>
+                    <ListItemIcon>
                         <LightMode />
-                    </ListItemDecorator>
+                    </ListItemIcon>
                     Light
                     {selectedMode === 'light'
                         && <Check sx={{ ml: 'auto' }} fontSize="small" />
@@ -72,9 +100,9 @@ export function ThemeToggle() {
                     selected={selectedMode === 'dark'}
                     onClick={() => chooseMode('dark')}
                 >
-                    <ListItemDecorator>
+                    <ListItemIcon>
                         <DarkMode />
-                    </ListItemDecorator>
+                    </ListItemIcon>
                     Dark
                     {selectedMode === 'dark'
                         && <Check sx={{ ml: 'auto' }} fontSize="small" />
@@ -85,15 +113,15 @@ export function ThemeToggle() {
                     selected={selectedMode === 'system'}
                     onClick={() => chooseMode('system')}
                 >
-                    <ListItemDecorator>
+                    <ListItemIcon>
                         <SettingsBrightness />
-                    </ListItemDecorator>
+                    </ListItemIcon>
                     System
                     {selectedMode === 'system'
                         && <Check sx={{ ml: 'auto' }} fontSize="small" />
                     }
                 </MenuItem>
             </Menu>
-        </Dropdown>
+        </>
     );
 }

@@ -1,12 +1,12 @@
 import React from 'react';
 import { log } from 'utils';
-import Button from '@mui/joy/Button';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Typography from '@mui/joy/Typography';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Typography from '@mui/material/Typography';
+import { desktopDialogActionsSx } from '../lib/modal-styles';
 import { type IDatabaseEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 
@@ -42,28 +42,27 @@ export function RemoveDatabaseDialog({ open, entry, onClose }: IRemoveDatabaseDi
     }
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog>
-                <DialogTitle>Remove Database Entry</DialogTitle>
-                <DialogContent>
-                    <Typography>
-                        Remove <strong>{entry?.name || entry?.path}</strong> from the list?
-                    </Typography>
-                    <Typography level="body-sm" sx={{ mt: 1 }}>
-                        This only removes the entry from Photosphere's database list.
-                        No files on disk will be deleted. Shared secrets are not affected.
-                    </Typography>
-                </DialogContent>
-                <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Cancel</Button>
-                    <Button
-                        color="danger"
-                        onClick={() => handleConfirm().catch(err => log.exception('Remove error:', err as Error))}
-                    >
-                        Remove
-                    </Button>
-                </DialogActions>
-            </ModalDialog>
-        </Modal>
+        <Dialog open={open} onClose={onClose}>
+            <DialogTitle>Remove Database Entry</DialogTitle>
+            <DialogContent>
+                <Typography>
+                    Remove <strong>{entry?.name || entry?.path}</strong> from the list?
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                    This only removes the entry from Photosphere's database list.
+                    No files on disk will be deleted. Shared secrets are not affected.
+                </Typography>
+            </DialogContent>
+            <DialogActions sx={desktopDialogActionsSx()}>
+                <Button variant="text" onClick={onClose}>Cancel</Button>
+                <Button
+                    variant="contained"
+                    color="error"
+                    onClick={() => handleConfirm().catch(err => log.exception('Remove error:', err as Error))}
+                >
+                    Remove
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }

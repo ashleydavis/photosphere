@@ -5,7 +5,7 @@ import { useGallery } from "../context/gallery-context";
 import { GalleryItemContextProvider } from "../context/gallery-item-context";
 import { AssetView } from "./asset-view";
 import { SCROLLBAR_WIDTH } from "./gallery-scrollbar";
-import Drawer from "@mui/joy/Drawer/Drawer";
+import Drawer from "@mui/material/Drawer";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 
 //
@@ -39,9 +39,11 @@ export function Gallery() {
     const containerRef = useRef<HTMLDivElement>(null);
 
     //
-    // Updates the gallery width when the container is resized.
+    // Updates the gallery width when the container is resized. The cast is there because version 1
+    // of @react-hook/resize-observer types its target as React 18's RefObject, which React 19's
+    // nullable RefObject does not match. The hook already copes with a null current.
     //
-    useResizeObserver(containerRef, () => {
+    useResizeObserver(containerRef as React.RefObject<HTMLDivElement>, () => {
         setGalleryWidth(containerRef.current!.clientWidth - SCROLLBAR_WIDTH - 2);
     });
 
@@ -82,8 +84,18 @@ export function Gallery() {
                         className="asset-view-drawer"
                         open={openAssetView}
                         onClose={closeAssetView}
-                        size="lg"
                         anchor="left"
+                        slotProps={{
+                            paper: {
+                                sx: {
+                                    top: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    left: 0,
+                                    width: "auto",
+                                },
+                            },
+                        }}
                         >
                         <AssetView
                             onClose={closeAssetView}

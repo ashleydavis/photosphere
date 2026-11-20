@@ -3,19 +3,19 @@ import { log } from 'utils';
 import { TaskQueue, TaskStatus } from 'task-queue';
 import { useUuidGenerator } from '../context/uuid-generator-context';
 import { ResponsiveDialog } from './responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Input from '@mui/joy/Input';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
-import Typography from '@mui/joy/Typography';
-import Alert from '@mui/joy/Alert';
-import CircularProgress from '@mui/joy/CircularProgress';
-import Box from '@mui/joy/Box';
-import Select from '@mui/joy/Select';
-import Option from '@mui/joy/Option';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Box from '@mui/material/Box';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import { type IDatabaseEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
@@ -129,23 +129,24 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                 },
                 step !== "configure" || remotePath.trim().length === 0
             )}
-            data-id="consolidate-database-dialog"
+            dataId="consolidate-database-dialog"
             >
             <DialogTitle>Consolidate into remote</DialogTitle>
             <DialogContent>
                 {step === "configure"
                     && <>
-                        <Typography level="body-sm" sx={{ mb: 2 }}>
+                        <Typography variant="body2" sx={{ mb: 2 }}>
                             Keeps a copy of "{entry.name}" on a remote. If the remote already holds a
                             different database, the two are joined and nothing it already has is
                             uploaded again.
                         </Typography>
-                        {/* The picker sits outside the FormControl, not beside the Input inside it: Joy
-                            allows a FormControl only one control component, and a Select is one. */}
+                        {/* The picker sits outside the FormControl, not beside the input inside it: a
+                            FormControl takes only one input component, and a Select is one. */}
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
                             <FormControl sx={{ flexGrow: 1 }}>
                                 <FormLabel>Remote path</FormLabel>
-                                <Input
+                                <OutlinedInput
+                                    size="small"
                                     data-id="consolidate-remote-path-input"
                                     value={remotePath}
                                     placeholder="/path/to/backup or s3:bucket/prefix"
@@ -155,23 +156,25 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                             {remoteCandidates.length > 0
                                 && <Select
                                     sx={{ minWidth: 160 }}
+                                    size="small"
                                     value=""
-                                    placeholder="Choose…"
-                                    onChange={(_event, selectedPath) => {
-                                        if (selectedPath) {
-                                            setRemotePath(selectedPath as string);
+                                    displayEmpty
+                                    renderValue={() => 'Choose…'}
+                                    onChange={event => {
+                                        if (event.target.value) {
+                                            setRemotePath(event.target.value);
                                         }
                                     }}
-                                    slotProps={{ button: { 'data-id': 'consolidate-remote-select' } }}
+                                    data-id="consolidate-remote-select"
                                 >
                                     {remoteCandidates.map(candidate => (
-                                        <Option
+                                        <MenuItem
                                             data-id={`consolidate-remote-option-${candidate.name}`}
                                             key={candidate.path}
                                             value={candidate.path}
                                             >
                                             {candidate.name}
-                                        </Option>
+                                        </MenuItem>
                                     ))}
                                 </Select>
                             }
@@ -181,23 +184,23 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
 
                 {step === "running"
                     && <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2 }}>
-                        <CircularProgress size="sm" />
-                        <Typography level="body-sm">Consolidating...</Typography>
+                        <CircularProgress size={24} />
+                        <Typography variant="body2">Consolidating...</Typography>
                     </Box>
                 }
 
                 {step === "success"
-                    && <Alert color="success" data-id="consolidate-database-success">
+                    && <Alert severity="success" data-id="consolidate-database-success">
                         <Box>
-                            <Typography level="body-sm">Consolidated into {remotePath}.</Typography>
-                            <Typography level="body-sm">Photos uploaded: {pushedCount}</Typography>
-                            <Typography level="body-sm">Already on the remote: {alreadyPresentCount}</Typography>
+                            <Typography variant="body2">Consolidated into {remotePath}.</Typography>
+                            <Typography variant="body2">Photos uploaded: {pushedCount}</Typography>
+                            <Typography variant="body2">Already on the remote: {alreadyPresentCount}</Typography>
                         </Box>
                     </Alert>
                 }
 
                 {step === "error"
-                    && <Alert color="danger" data-id="consolidate-database-error">
+                    && <Alert severity="error" data-id="consolidate-database-error">
                         {errorMessage}
                     </Alert>
                 }
@@ -206,6 +209,7 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                 {step === "configure"
                     && <Button
                         data-id="consolidate-database-confirm"
+                        variant="contained"
                         disabled={remotePath.trim().length === 0}
                         onClick={() => {
                             consolidate().catch(error => log.exception("Failed to consolidate into the remote", error as Error));
@@ -214,7 +218,7 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                         Consolidate
                     </Button>
                 }
-                <Button variant="plain" data-id="consolidate-database-close" onClick={close}>
+                <Button variant="text" data-id="consolidate-database-close" onClick={close}>
                     {step === "success" ? 'Done' : 'Cancel'}
                 </Button>
             </DialogActions>

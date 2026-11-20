@@ -1,20 +1,20 @@
-import Typography from '@mui/joy/Typography/Typography';
+import Typography from '@mui/material/Typography';
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
-import { useTheme } from '@mui/joy/styles/ThemeProvider';
-import List from '@mui/joy/List/List';
-import ListItem from '@mui/joy/ListItem/ListItem';
-import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
+import { useTheme } from '@mui/material/styles';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import { ArrowForward, CalendarMonth, Category, DateRange, Delete, ExitToApp, Flag, Home, KeyboardArrowRight, Map, MoreHoriz, Place, Search, Star, StarBorder, History } from '@mui/icons-material';
 import { useIsMobile } from '../lib/use-is-mobile';
 import { CollapsibleSection } from './collapsible-section';
-import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
-import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
-import IconButton from '@mui/joy/IconButton/IconButton';
-import Breadcrumbs from '@mui/joy/Breadcrumbs/Breadcrumbs';
-import Link from '@mui/joy/Link/Link';
-import Divider from '@mui/joy/Divider/Divider';
+import ListItemText from '@mui/material/ListItemText';
+import ListItemButton from '@mui/material/ListItemButton';
+import IconButton from '@mui/material/IconButton';
+import Breadcrumbs from '@mui/material/Breadcrumbs';
+import Link from '@mui/material/Link';
+import Divider from '@mui/material/Divider';
 import { useGalleryLayout } from '../context/gallery-layout-context';
 import { IGalleryLayout } from '../lib/create-layout';
 import { useGallery } from '../context/gallery-context';
@@ -47,7 +47,7 @@ interface IMenuItem {
     //
     // The icon for the menu item.
     //
-    icon?: JSX.Element;
+    icon?: React.JSX.Element;
 
     //
     // The text for the menu item.
@@ -77,7 +77,7 @@ interface IBreadcrumb {
     //
     // The icon for the breadcrumb.
     //
-    icon?: JSX.Element;
+    icon?: React.JSX.Element;
 
     //
     // The text for the breadcrumb.
@@ -226,10 +226,16 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
 
     //
     // Row sizing shared by every list in the menu. 48px is the smallest comfortable touch target.
+    // The icon column is kept narrow so the text sits close to its icon.
     //
-    const listSx = isMobile
-        ? { '--ListItem-minHeight': '48px' }
-        : undefined;
+    const listSx = {
+        '& .MuiListItemButton-root': {
+            minHeight: isMobile ? '48px' : undefined,
+        },
+        '& .MuiListItemIcon-root': {
+            minWidth: '36px',
+        },
+    };
 
     //
     // Sizing for the small buttons that hang off the end of a search row (save, remove). At 32px
@@ -369,16 +375,14 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
             <div
                 className="flex flex-col h-full overflow-y-auto"
                 style={{
-                    color: theme.palette.text.primary,
+                    color: (theme.vars ?? theme).palette.text.primary,
                 }}
                 >
                 <div className="flex flex-row items-center" style={{ paddingLeft: "15px", paddingRight: "8px", paddingTop: "8px" }}>
-                    <Typography level="title-lg">Menu</Typography>
+                    <Typography variant="h6">Menu</Typography>
                     <div className="flex-grow" />
                     <IconButton
-                        variant="plain"
-                        color="neutral"
-                        size={isMobile ? "lg" : "md"}
+                        size={isMobile ? "large" : "medium"}
                         title="Close menu"
                         aria-label="Close menu"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -399,6 +403,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                     }
                                     return (
                                         <ListItem
+                                            disablePadding
                                             key={dbEntry.name}
                                             data-id={`move-to-database-${dbEntry.name}`}
                                             onClick={() => {
@@ -407,23 +412,32 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                             }}
                                             >
                                             <ListItemButton>
-                                                <ListItemContent>Move to {dbEntry.name}</ListItemContent>
+                                                <ListItemText>Move to {dbEntry.name}</ListItemText>
                                             </ListItemButton>
                                         </ListItem>
                                     );
                                 })}
                                 <ListItem
+                                    disablePadding
                                     onClick={() => {
                                         setSidebarOpen(false);
                                         setDeleteConfirmationOpen(true);
                                     }}
                                     >
-                                    <ListItemButton color="danger">
-                                        <ListItemDecorator><Delete /></ListItemDecorator>
-                                        <ListItemContent>Delete {selectedItemsCount} assets</ListItemContent>
+                                    <ListItemButton
+                                        sx={{
+                                            color: "error.main",
+                                            '& .MuiListItemIcon-root': {
+                                                color: "inherit",
+                                            },
+                                        }}
+                                        >
+                                        <ListItemIcon><Delete /></ListItemIcon>
+                                        <ListItemText>Delete {selectedItemsCount} assets</ListItemText>
                                     </ListItemButton>
                                 </ListItem>
                                 <ListItem
+                                    disablePadding
                                     data-id="download-selected-button"
                                     onClick={async () => {
                                         setSidebarOpen(false);
@@ -431,30 +445,32 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                     }}
                                     >
                                     <ListItemButton>
-                                        <ListItemDecorator><Download /></ListItemDecorator>
-                                        <ListItemContent>Download {selectedItemsCount} assets</ListItemContent>
+                                        <ListItemIcon><Download /></ListItemIcon>
+                                        <ListItemText>Download {selectedItemsCount} assets</ListItemText>
                                     </ListItemButton>
                                 </ListItem>
                                 <ListItem
+                                    disablePadding
                                     onClick={() => {
                                         setSidebarOpen(false);
                                         setSetDateDialogOpen(true);
                                     }}
                                     >
                                     <ListItemButton>
-                                        <ListItemDecorator><CalendarMonth /></ListItemDecorator>
-                                        <ListItemContent>Set date for {selectedItemsCount} assets</ListItemContent>
+                                        <ListItemIcon><CalendarMonth /></ListItemIcon>
+                                        <ListItemText>Set date for {selectedItemsCount} assets</ListItemText>
                                     </ListItemButton>
                                 </ListItem>
                                 <ListItem
+                                    disablePadding
                                     onClick={() => {
                                         setSidebarOpen(false);
                                         setSetLocationDialogOpen(true);
                                     }}
                                     >
                                     <ListItemButton>
-                                        <ListItemDecorator><i className="fa-regular fa-map" style={{ width: "24px", textAlign: "center" }} /></ListItemDecorator>
-                                        <ListItemContent>Set location for {selectedItemsCount} assets</ListItemContent>
+                                        <ListItemIcon><i className="fa-regular fa-map" style={{ width: "24px", textAlign: "center" }} /></ListItemIcon>
+                                        <ListItemText>Set location for {selectedItemsCount} assets</ListItemText>
                                     </ListItemButton>
                                 </ListItem>
                             </List>
@@ -467,26 +483,28 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                     <CollapsibleSection configKey="right-sidebar-collapsed-quickSearches" label="Quick Searches" style={{ paddingLeft: "15px" }}>
                         <List sx={listSx}>
                             <ListItem
+                                disablePadding
                                 onClick={() => {
                                     search(".labels=starred");
                                     setSidebarOpen(false);
                                 }}
                             >
                                 <ListItemButton>
-                                    <ListItemDecorator><Star /></ListItemDecorator>
-                                    <ListItemContent>Starred</ListItemContent>
+                                    <ListItemIcon><Star /></ListItemIcon>
+                                    <ListItemText>Starred</ListItemText>
                                 </ListItemButton>
                             </ListItem>
 
                             <ListItem
+                                disablePadding
                                 onClick={() => {
                                     search(".labels=flagged");
                                     setSidebarOpen(false);
                                 }}
                             >
                                 <ListItemButton>
-                                    <ListItemDecorator><Flag /></ListItemDecorator>
-                                    <ListItemContent>Flagged</ListItemContent>
+                                    <ListItemIcon><Flag /></ListItemIcon>
+                                    <ListItemText>Flagged</ListItemText>
                                 </ListItemButton>
                             </ListItem>
                         </List>
@@ -500,15 +518,14 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                             <List sx={listSx}>
                                 {savedSearches.map(savedSearch => (
                                     <ListItem
+                                        disablePadding
                                         key={savedSearch}
-                                        endAction={
+                                        secondaryAction={
                                             <IconButton
-                                                size="sm"
-                                                variant="plain"
-                                                color="neutral"
+                                                size="small"
                                                 title="Remove saved search"
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
+                                                onClick={async (event) => {
+                                                    event.stopPropagation();
                                                     await unsaveSearch(savedSearch);
                                                 }}
                                                 sx={endActionSx}
@@ -523,8 +540,8 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                                 setSidebarOpen(false);
                                             }}
                                             >
-                                            <ListItemDecorator><StarBorder /></ListItemDecorator>
-                                            <ListItemContent>{savedSearch}</ListItemContent>
+                                            <ListItemIcon><StarBorder /></ListItemIcon>
+                                            <ListItemText>{savedSearch}</ListItemText>
                                         </ListItemButton>
                                     </ListItem>
                                 ))}
@@ -540,16 +557,15 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                             <List sx={listSx}>
                                 {recentSearches.map(recentSearch => (
                                     <ListItem
+                                        disablePadding
                                         key={recentSearch}
-                                        endAction={
+                                        secondaryAction={
                                             <>
                                                 <IconButton
-                                                    size="sm"
-                                                    variant="plain"
-                                                    color="neutral"
+                                                    size="small"
                                                     title={savedSearches.includes(recentSearch) ? "Unsave search" : "Save search"}
-                                                    onClick={async (e) => {
-                                                        e.stopPropagation();
+                                                    onClick={async (event) => {
+                                                        event.stopPropagation();
                                                         if (savedSearches.includes(recentSearch)) {
                                                             await unsaveSearch(recentSearch);
                                                         }
@@ -565,12 +581,10 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                                     }
                                                 </IconButton>
                                                 <IconButton
-                                                    size="sm"
-                                                    variant="plain"
-                                                    color="neutral"
+                                                    size="small"
                                                     title="Remove from recent searches"
-                                                    onClick={async (e) => {
-                                                        e.stopPropagation();
+                                                    onClick={async (event) => {
+                                                        event.stopPropagation();
                                                         await removeRecentSearch(recentSearch);
                                                     }}
                                                     sx={endActionSx}
@@ -586,8 +600,8 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                                 setSidebarOpen(false);
                                             }}
                                             >
-                                            <ListItemDecorator><History /></ListItemDecorator>
-                                            <ListItemContent>{recentSearch}</ListItemContent>
+                                            <ListItemIcon><History /></ListItemIcon>
+                                            <ListItemText>{recentSearch}</ListItemText>
                                         </ListItemButton>
                                     </ListItem>
                                 ))}
@@ -605,6 +619,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                     separator={<KeyboardArrowRight />}
                                 >
                                     <Link
+                                        component="button"
                                         onClick={() => {
                                             setMenuPath([]);
                                             setBreadCrumbs([]);
@@ -614,11 +629,16 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                     </Link>
 
                                     {breadcrumbs.length > 2 &&
-                                        <Typography level="body-xs">•••</Typography>
+                                        <Typography variant="caption">•••</Typography>
                                     }
 
                                     {breadcrumbs.length > 1 &&
                                         <Link
+                                            component="button"
+                                            sx={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                            }}
                                             onClick={() => {
                                                 setMenuPath(breadcrumbs[breadcrumbs.length - 1].menuPath);
                                                 setBreadCrumbs(breadcrumbs.slice(0, breadcrumbs.length - 1));
@@ -647,6 +667,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                 {curMenu.map((menuItem, index) => {
                                     return (
                                         <ListItem
+                                            disablePadding
                                             key={`${index}-${menuItem.text}`}
                                             onClick={() => {
                                                 if (menuItem.children && menuItem.children.length > 0) {
@@ -663,8 +684,8 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                             }}
                                         >
                                             <ListItemButton>
-                                                <ListItemDecorator>{menuItem.icon}</ListItemDecorator>
-                                                <ListItemContent>{menuItem.text}</ListItemContent>
+                                                <ListItemIcon>{menuItem.icon}</ListItemIcon>
+                                                <ListItemText>{menuItem.text}</ListItemText>
                                                 {menuItem.children && menuItem.children.length > 0 &&
                                                     <KeyboardArrowRight />
                                                 }
@@ -686,6 +707,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                         <Divider />
                         <List sx={{ pl: "15px", ...listSx }}>
                             <ListItem
+                                disablePadding
                                 data-id="close-database-button"
                                 onClick={async () => {
                                     setSidebarOpen(false);
@@ -693,8 +715,8 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                                 }}
                                 >
                                 <ListItemButton>
-                                    <ListItemDecorator><ExitToApp /></ListItemDecorator>
-                                    <ListItemContent>Close database</ListItemContent>
+                                    <ListItemIcon><ExitToApp /></ListItemIcon>
+                                    <ListItemText>Close database</ListItemText>
                                 </ListItemButton>
                             </ListItem>
                         </List>

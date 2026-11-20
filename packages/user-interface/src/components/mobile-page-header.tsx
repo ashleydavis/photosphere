@@ -1,13 +1,11 @@
-import React from 'react';
-import Box from '@mui/joy/Box';
-import Button from '@mui/joy/Button';
-import IconButton from '@mui/joy/IconButton';
-import Typography from '@mui/joy/Typography';
-import Dropdown from '@mui/joy/Dropdown';
-import Menu from '@mui/joy/Menu';
-import MenuButton from '@mui/joy/MenuButton';
-import MenuItem from '@mui/joy/MenuItem';
-import ListItemDecorator from '@mui/joy/ListItemDecorator';
+import React, { useState } from 'react';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Typography from '@mui/material/Typography';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import { MoreVert, Refresh } from '@mui/icons-material';
 import { useIsMobile } from '../lib/use-is-mobile';
 
@@ -64,8 +62,13 @@ export interface IMobilePageHeaderProps {
 //
 // On a wide screen it stays the familiar row: title on the left, actions on the right.
 //
-export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActions, onRefresh, refreshing }: IMobilePageHeaderProps): JSX.Element {
+export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActions, onRefresh, refreshing }: IMobilePageHeaderProps): React.JSX.Element {
     const isMobile = useIsMobile();
+
+    //
+    // The button the overflow menu hangs from while it is open, and undefined while it is closed.
+    //
+    const [menuAnchor, setMenuAnchor] = useState<HTMLElement | undefined>(undefined);
 
     //
     // The spin animation applied to the refresh icon while a refresh is running.
@@ -85,19 +88,32 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
             <Box sx={{ mb: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                        <Typography level="h2" sx={{ fontSize: '1.75rem', lineHeight: 1.2 }}>
+                        <Typography
+                            variant="h4"
+                            component="h2"
+                            sx={{
+                                fontSize: '1.75rem',
+                                lineHeight: 1.2,
+                                fontWeight: 600,
+                            }}
+                            >
                             {title}
                         </Typography>
                         {subtitle
-                            && <Typography level="body-sm" sx={{ mt: 0.5, color: 'text.tertiary' }}>
+                            && <Typography
+                                variant="body2"
+                                sx={{
+                                    mt: 0.5,
+                                    color: 'text.secondary',
+                                }}
+                                >
                                 {subtitle}
                             </Typography>
                         }
                     </Box>
 
                     <IconButton
-                        variant="plain"
-                        size="lg"
+                        size="large"
                         disabled={refreshing}
                         title="Refresh"
                         onClick={onRefresh}
@@ -105,36 +121,63 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
                         <Refresh sx={spinSx} />
                     </IconButton>
 
-                    <Dropdown>
-                        <MenuButton
-                            slots={{ root: IconButton }}
-                            slotProps={{ root: { variant: 'plain', size: 'lg', 'data-id': 'page-actions-menu' } }}
-                            aria-label="More actions"
-                            >
-                            <MoreVert />
-                        </MenuButton>
-                        <Menu placement="bottom-end" sx={{ minWidth: 220 }}>
-                            {secondaryActions.map(action => (
-                                <MenuItem
-                                    key={action.label}
-                                    data-id={action.dataId}
-                                    onClick={action.onClick}
-                                    sx={{ minHeight: 48 }}
-                                    >
-                                    <ListItemDecorator>{action.icon}</ListItemDecorator>
-                                    {action.label}
-                                </MenuItem>
-                            ))}
-                        </Menu>
-                    </Dropdown>
+                    <IconButton
+                        size="large"
+                        data-id="page-actions-menu"
+                        aria-label="More actions"
+                        onClick={event => setMenuAnchor(event.currentTarget)}
+                        >
+                        <MoreVert />
+                    </IconButton>
+                    <Menu
+                        anchorEl={menuAnchor}
+                        open={menuAnchor !== undefined}
+                        onClose={() => setMenuAnchor(undefined)}
+                        anchorOrigin={{
+                            vertical: 'bottom',
+                            horizontal: 'right',
+                        }}
+                        transformOrigin={{
+                            vertical: 'top',
+                            horizontal: 'right',
+                        }}
+                        slotProps={{
+                            paper: {
+                                sx: {
+                                    minWidth: 220,
+                                },
+                            },
+                        }}
+                        >
+                        {secondaryActions.map(action => (
+                            <MenuItem
+                                key={action.label}
+                                data-id={action.dataId}
+                                onClick={() => {
+                                    setMenuAnchor(undefined);
+                                    action.onClick();
+                                }}
+                                sx={{ minHeight: 48 }}
+                                >
+                                <ListItemIcon>{action.icon}</ListItemIcon>
+                                {action.label}
+                            </MenuItem>
+                        ))}
+                    </Menu>
                 </Box>
 
                 <Button
                     data-id={primaryAction.dataId}
-                    startDecorator={primaryAction.icon}
+                    variant="contained"
+                    startIcon={primaryAction.icon}
                     onClick={primaryAction.onClick}
-                    size="lg"
-                    sx={{ mt: 2, width: '100%', minHeight: 52, borderRadius: 'md' }}
+                    size="large"
+                    sx={{
+                        mt: 2,
+                        width: '100%',
+                        minHeight: 52,
+                        borderRadius: 2,
+                    }}
                     >
                     {primaryAction.label}
                 </Button>
@@ -144,11 +187,23 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
 
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-            <Typography level="h3">{title}</Typography>
+            <Typography
+                variant="h5"
+                component="h3"
+                sx={{
+                    fontWeight: 600,
+                }}
+                >
+                {title}
+            </Typography>
             <Box sx={{ flexGrow: 1 }} />
             <IconButton
-                variant="outlined"
                 disabled={refreshing}
+                sx={{
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                }}
                 title="Refresh"
                 onClick={onRefresh}
                 >
@@ -156,7 +211,8 @@ export function MobilePageHeader({ title, subtitle, primaryAction, secondaryActi
             </IconButton>
             <Button
                 data-id={primaryAction.dataId}
-                startDecorator={primaryAction.icon}
+                variant="contained"
+                startIcon={primaryAction.icon}
                 onClick={primaryAction.onClick}
                 >
                 {primaryAction.label}

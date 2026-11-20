@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import Button from '@mui/joy/Button';
-import Modal from '@mui/joy/Modal';
-import Typography from '@mui/joy/Typography';
-import ModalDialog from '@mui/joy/ModalDialog';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Typography from '@mui/material/Typography';
 
 export interface IProps {
     //
@@ -44,32 +46,32 @@ export function DeleteConfirmationDialog({ open, numItems, onCancel, onDelete }:
     }
 
     return (
-        <Modal
+        <Dialog
             open={open}
             onClose={onCancel}
             >
-            <ModalDialog>
-                <Typography component="h2">
-                    Delete Confirmation
-                </Typography>
+            <DialogTitle>
+                Delete Confirmation
+            </DialogTitle>
+            <DialogContent>
                 <Typography>
                     Are you sure you want to delete {numItems} assets? This cannot be undone.
                 </Typography>
-                <div className="flex flex-row w-full">
-                    <Button variant="plain" onClick={onCancel}>
-                        Cancel
-                    </Button>
-                    <div className="flex-grow" />
-                    <Button
-                        variant="solid"
-                        color="danger"
-                        disabled={working}
-                        onClick={handleDelete}
-                        >
-                        Delete
-                    </Button>
-                </div>
-            </ModalDialog>
-        </Modal>
+            </DialogContent>
+            <DialogActions>
+                <Button variant="text" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <div className="flex-grow" />
+                <Button
+                    variant="contained"
+                    color="error"
+                    disabled={working}
+                    onClick={handleDelete}
+                    >
+                    Delete
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }

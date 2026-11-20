@@ -1,13 +1,11 @@
-import React from 'react';
-import Box from '@mui/joy/Box';
-import Card from '@mui/joy/Card';
-import Typography from '@mui/joy/Typography';
-import IconButton from '@mui/joy/IconButton';
-import Dropdown from '@mui/joy/Dropdown';
-import Menu from '@mui/joy/Menu';
-import MenuButton from '@mui/joy/MenuButton';
-import MenuItem from '@mui/joy/MenuItem';
-import ListItemDecorator from '@mui/joy/ListItemDecorator';
+import React, { useState } from 'react';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import { MoreVert } from '@mui/icons-material';
 
 //
@@ -66,14 +64,21 @@ export interface IEntityCardProps {
 // makes the whole card a large tap target for the primary action, and hides the remaining actions
 // behind a ⋮ menu with full-height menu rows.
 //
-export function EntityCard({ title, subtitle, detail, icon, onClick, actions, titleDataId }: IEntityCardProps): JSX.Element {
+export function EntityCard({ title, subtitle, detail, icon, onClick, actions, titleDataId }: IEntityCardProps): React.JSX.Element {
+    //
+    // The ⋮ button the overflow menu hangs from while it is open, or undefined while it is closed.
+    //
+    const [menuAnchor, setMenuAnchor] = useState<HTMLElement | undefined>(undefined);
+
     return (
         <Card
-            variant="soft"
+            elevation={0}
             sx={{
                 p: 1.5,
                 mb: 1.5,
-                borderRadius: 'lg',
+                borderRadius: 3,
+                bgcolor: 'action.hover',
+                display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 1.5,
@@ -100,8 +105,8 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                         flexShrink: 0,
                         width: 44,
                         height: 44,
-                        borderRadius: 'md',
-                        backgroundColor: 'background.level2',
+                        borderRadius: 2,
+                        backgroundColor: 'action.selected',
                         color: 'text.secondary',
                     }}
                     >
@@ -110,7 +115,7 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
 
                 <Box sx={{ minWidth: 0, flexGrow: 1 }}>
                     <Typography
-                        level="title-md"
+                        variant="subtitle1"
                         data-id={titleDataId}
                         sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         >
@@ -118,7 +123,7 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                     </Typography>
                     {subtitle
                         && <Typography
-                            level="body-sm"
+                            variant="body2"
                             sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                             >
                             {subtitle}
@@ -126,8 +131,14 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                     }
                     {detail
                         && <Typography
-                            level="body-xs"
-                            sx={{ color: 'text.tertiary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            variant="caption"
+                            sx={{
+                                display: 'block',
+                                color: 'text.secondary',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
                             >
                             {detail}
                         </Typography>
@@ -135,32 +146,58 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                 </Box>
             </Box>
 
-            {/* Card hands its last child a data-last-child prop. Dropdown renders no element of its own and would pass it on to a DOM node it does not have (React warns), so a layout-neutral wrapper takes it instead. */}
-            <Box sx={{ display: 'contents' }}>
-                <Dropdown>
-                    <MenuButton
-                        slots={{ root: IconButton }}
-                        slotProps={{ root: { variant: 'plain', size: 'lg', 'data-id': 'entity-actions-menu' } }}
-                        aria-label={`Actions for ${title}`}
+            <IconButton
+                data-id="entity-actions-menu"
+                size="large"
+                aria-label={`Actions for ${title}`}
+                onClick={event => setMenuAnchor(event.currentTarget)}
+                >
+                <MoreVert />
+            </IconButton>
+            <Menu
+                open={menuAnchor !== undefined}
+                anchorEl={menuAnchor}
+                onClose={() => setMenuAnchor(undefined)}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                }}
+                slotProps={{
+                    paper: {
+                        sx: {
+                            minWidth: 220,
+                        },
+                    },
+                }}
+                >
+                {actions.map(action => (
+                    <MenuItem
+                        key={action.label}
+                        data-id={action.dataId}
+                        onClick={() => {
+                            setMenuAnchor(undefined);
+                            action.onClick();
+                        }}
+                        sx={{
+                            minHeight: 48,
+                            color: action.danger ? 'error.main' : undefined,
+                        }}
                         >
-                        <MoreVert />
-                    </MenuButton>
-                    <Menu placement="bottom-end" sx={{ minWidth: 220 }}>
-                        {actions.map(action => (
-                            <MenuItem
-                                key={action.label}
-                                data-id={action.dataId}
-                                color={action.danger ? 'danger' : undefined}
-                                onClick={action.onClick}
-                                sx={{ minHeight: 48 }}
-                                >
-                                <ListItemDecorator>{action.icon}</ListItemDecorator>
-                                {action.label}
-                            </MenuItem>
-                        ))}
-                    </Menu>
-                </Dropdown>
-            </Box>
+                        <ListItemIcon
+                            sx={{
+                                color: 'inherit',
+                            }}
+                            >
+                            {action.icon}
+                        </ListItemIcon>
+                        {action.label}
+                    </MenuItem>
+                ))}
+            </Menu>
         </Card>
     );
 }

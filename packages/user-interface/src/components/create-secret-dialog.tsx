@@ -1,13 +1,12 @@
 import { log } from "utils";
 import React, { useState } from 'react';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Input from '@mui/joy/Input';
-import Textarea from '@mui/joy/Textarea';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
 import { type ISharedSecretEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { buildValueJson, emptyFormState, type ISecretFormState } from '../lib/secrets-form';
@@ -60,33 +59,37 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
         if (secretType === 's3-credentials') {
             return (
                 <>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Endpoint (optional)</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="create-secret-s3-endpoint-input"
                             value={form.s3Endpoint}
                             onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Region</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="create-secret-s3-region-input"
                             value={form.s3Region}
                             onChange={event => setForm(prev => ({ ...prev, s3Region: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Access Key ID</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="create-secret-s3-access-key-input"
                             value={form.s3AccessKeyId}
                             onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
                         />
                     </FormControl>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Secret Access Key</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="create-secret-s3-secret-key-input"
                             type="password"
                             value={form.s3SecretAccessKey}
@@ -99,18 +102,20 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
         if (secretType === 'encryption-key') {
             return (
                 <>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Private Key PEM</FormLabel>
-                        <Textarea
+                        <OutlinedInput
+                            multiline
                             minRows={4}
                             value={form.privateKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}
-                            slotProps={{ textarea: { sx: { WebkitTextSecurity: 'disc' } } }}
+                            sx={{ '& textarea': { WebkitTextSecurity: 'disc' } }}
                         />
                     </FormControl>
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Public Key PEM</FormLabel>
-                        <Textarea
+                        <OutlinedInput
+                            multiline
                             minRows={4}
                             value={form.publicKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, publicKeyPem: event.target.value }))}
@@ -120,9 +125,10 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
             );
         }
         return (
-            <FormControl sx={{ mb: 1 }}>
+            <FormControl fullWidth sx={{ mb: 1 }}>
                 <FormLabel>API Key</FormLabel>
-                <Input
+                <OutlinedInput
+                    size="small"
                     data-id="create-secret-api-key-input"
                     type="password"
                     value={form.apiKey}
@@ -142,9 +148,10 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
             >
             <DialogTitle>New {secretType} Secret</DialogTitle>
             <DialogContent>
-                <FormControl sx={{ mb: 2 }}>
+                <FormControl fullWidth sx={{ mb: 2 }}>
                     <FormLabel>Name</FormLabel>
-                    <Input
+                    <OutlinedInput
+                        size="small"
                         data-id="create-secret-name-input"
                         value={form.name}
                         onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
@@ -153,8 +160,8 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                 {renderTypeFields()}
             </DialogContent>
             <DialogActions>
-                <Button variant="plain" onClick={onClose}>Cancel</Button>
-                <Button data-id="create-secret-confirm" onClick={() => handleSave().catch(err => log.exception('Create secret error:', err as Error))}>Create</Button>
+                <Button variant="text" onClick={onClose}>Cancel</Button>
+                <Button data-id="create-secret-confirm" variant="contained" onClick={() => handleSave().catch(err => log.exception('Create secret error:', err as Error))}>Create</Button>
             </DialogActions>
         </ResponsiveDialog>
     );

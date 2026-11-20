@@ -1,12 +1,16 @@
 import { log } from "utils";
 import React, { useEffect, useState } from 'react';
 import { ResponsiveDialog } from './responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Table from '@mui/joy/Table';
-import Typography from '@mui/joy/Typography';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import Table from '@mui/material/Table';
+import TableHead from '@mui/material/TableHead';
+import TableBody from '@mui/material/TableBody';
+import TableRow from '@mui/material/TableRow';
+import TableCell from '@mui/material/TableCell';
+import Typography from '@mui/material/Typography';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { CreateSecretDialog } from './create-secret-dialog';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
@@ -86,34 +90,32 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                 <DialogContent>
                     {secrets.length === 0
                         ? (
-                            <Typography level="body-sm">
+                            <Typography variant="body2">
                                 No {secretType} secrets configured yet.
                             </Typography>
                         )
                         : (
-                            <Table>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th style={{ width: '80px' }}></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>Name</TableCell>
+                                        <TableCell sx={{ width: '80px' }}></TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
                                     {secrets.map(secret => (
-                                        <tr
+                                        <TableRow
                                             key={secret.name}
                                             onClick={() => setSelectedName(secret.name)}
-                                            style={{
-                                                cursor: 'pointer',
-                                                backgroundColor: secret.name === selectedName ? 'rgba(0,0,0,0.08)' : undefined,
-                                            }}
+                                            selected={secret.name === selectedName}
+                                            sx={{ cursor: 'pointer' }}
                                         >
-                                            <td>{secret.name}</td>
-                                            <td>
+                                            <TableCell>{secret.name}</TableCell>
+                                            <TableCell>
                                                 <Button
                                                     data-id="secret-select-button"
-                                                    size="sm"
-                                                    variant="plain"
+                                                    size="small"
+                                                    variant="text"
                                                     onClick={() => {
                                                         setSelectedName(secret.name);
                                                         onSelect(secret);
@@ -121,16 +123,16 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                                                 >
                                                     Select
                                                 </Button>
-                                            </td>
-                                        </tr>
+                                            </TableCell>
+                                        </TableRow>
                                     ))}
-                                </tbody>
+                                </TableBody>
                             </Table>
                         )
                     }
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Cancel</Button>
+                    <Button variant="text" onClick={onClose}>Cancel</Button>
                     <Button
                         variant="outlined"
                         onClick={() => setCreateDialogOpen(true)}
@@ -138,6 +140,7 @@ export function SelectSecretModal({ open, secretType, onClose, onSelect }: ISele
                         Create new
                     </Button>
                     <Button
+                        variant="contained"
                         disabled={selectedName === undefined}
                         onClick={handleSelect}
                     >

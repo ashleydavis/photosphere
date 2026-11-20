@@ -1,9 +1,38 @@
 import React, { useEffect } from "react";
-import Alert from "@mui/joy/Alert";
-import Button from "@mui/joy/Button";
-import IconButton from "@mui/joy/IconButton";
+import Alert, { type AlertColor } from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
 import Close from "@mui/icons-material/Close";
 import { useToast, type IToast } from "../context/toast-context";
+
+//
+// Picks the MUI Alert colour for a toast's colour, so each toast keeps the colour its sender chose.
+// MUI's Alert has no neutral colour, so a neutral toast is drawn as info and painted grey by
+// neutralToastSx.
+//
+export function alertColor(toastColor: IToast["color"]): AlertColor {
+    if (toastColor === 'success') {
+        return 'success';
+    }
+
+    if (toastColor === 'warning') {
+        return 'warning';
+    }
+
+    if (toastColor === 'danger') {
+        return 'error';
+    }
+
+    return 'info';
+}
+
+//
+// The dark grey a neutral toast is painted, which keeps it apart from the coloured toasts.
+//
+const neutralToastSx = {
+    backgroundColor: 'grey.800',
+    color: 'common.white',
+};
 
 //
 // Individual toast notification item.
@@ -22,17 +51,25 @@ function ToastItem({ toast }: { toast: IToast }) {
 
     return (
         <Alert
-            color={toast.color}
-            variant="solid"
-            sx={{ mb: 1, minWidth: 300, maxWidth: 480, boxShadow: 'lg' }}
-            endDecorator={
+            color={alertColor(toast.color)}
+            variant="filled"
+            icon={false}
+            sx={{
+                mb: 1,
+                minWidth: 300,
+                maxWidth: 480,
+                boxShadow: 6,
+                alignItems: 'center',
+                ...(toast.color === 'neutral' ? neutralToastSx : {}),
+            }}
+            action={
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
                     {toast.action && (
                         <Button
                             data-id="toast-action"
-                            size="sm"
-                            variant="soft"
-                            color={toast.color}
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
                             onClick={() => {
                                 toast.action!.onClick();
                                 removeToast(toast.id);
@@ -42,9 +79,8 @@ function ToastItem({ toast }: { toast: IToast }) {
                         </Button>
                     )}
                     <IconButton
-                        size="sm"
-                        variant="plain"
-                        color={toast.color}
+                        size="small"
+                        color="inherit"
                         title="Dismiss"
                         data-id="toast-dismiss"
                         onClick={() => {

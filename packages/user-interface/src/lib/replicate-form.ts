@@ -49,12 +49,11 @@ export function emptyReplicateFormState(): IReplicateFormState {
 //
 // A path written for one kind of destination means nothing to the other (`s3:bucket/prefix` is not a
 // directory), so a real change to the type clears the path. A report of the type the form already
-// holds changes nothing and must leave the path alone: Joy's Select calls its onChange again on
-// re-renders that it did not cause, and clearing the path on those wipes what the user typed. That is
-// not hypothetical. In the desktop smoke test the Select reported "s3" four times over, three of them
-// while the user was in the Configure Secrets modal and while the source database finished opening in
-// the background, and the destination typed afterwards could be erased by the next one. The Start
-// button is disabled without a destination, so the replication then simply never began.
+// holds changes nothing and must leave the path alone, because clearing the path then wipes what the
+// user typed, and the Start button is disabled without a destination, so the replication never
+// begins. Material's Select calls its onChange only when the user picks an option other than the one
+// shown, so a repeated report comes from the caller rather than the Select, and this check keeps the
+// path safe from it either way.
 //
 export function applyDestinationTypeChange(previous: IReplicateFormState, value: string | null): IReplicateFormState {
     const storageType = (value as ReplicateStorageType) ?? 'filesystem';

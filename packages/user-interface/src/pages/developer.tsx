@@ -1,15 +1,15 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import Box from "@mui/joy/Box";
-import Card from "@mui/joy/Card";
-import Button from "@mui/joy/Button";
-import Switch from "@mui/joy/Switch";
-import Typography from "@mui/joy/Typography";
-import List from "@mui/joy/List/List";
-import ListItem from "@mui/joy/ListItem/ListItem";
-import ListItemButton from "@mui/joy/ListItemButton/ListItemButton";
-import ListItemDecorator from "@mui/joy/ListItemDecorator/ListItemDecorator";
-import ListItemContent from "@mui/joy/ListItemContent/ListItemContent";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import Button from "@mui/material/Button";
+import Switch from "@mui/material/Switch";
+import Typography from "@mui/material/Typography";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
 import { Science, Speed, BugReport, ChevronRight, PlayArrow, PlaylistPlay, Layers } from "@mui/icons-material";
 import { useDeveloper } from "../context/developer-context";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -20,7 +20,7 @@ import { planTestJob, startTestJob, TEST_JOB_KINDS } from "../lib/test-jobs";
 // A dedicated screen listing developer tools, reachable only while developer
 // mode is enabled. New developer tools are added to the list below.
 //
-export function DeveloperPage(): JSX.Element {
+export function DeveloperPage(): React.JSX.Element {
     const navigate = useNavigate();
     const { disableDeveloperMode, showFpsIndicator, toggleShowFpsIndicator, devToolsOpen, toggleDevTools } = useDeveloper();
     const isMobile = useIsMobile();
@@ -41,7 +41,11 @@ export function DeveloperPage(): JSX.Element {
     // Height of each row. Every row is a full-width tap target on a mobile, comfortably above the
     // 48px minimum, because these rows carry switches that are easy to miss with a thumb.
     //
-    const rowSx = { minHeight: isMobile ? 56 : 44, borderRadius: 'md' };
+    const rowSx = {
+        minHeight: isMobile ? 56 : 44,
+        borderRadius: 2,
+        px: 1,
+    };
 
     return (
         <Box
@@ -49,112 +53,128 @@ export function DeveloperPage(): JSX.Element {
             sx={{ width: '100%', height: '100%', overflowY: 'auto', p: isMobile ? 2 : 4, pb: 16 }}
             >
             <Box sx={{ mx: 'auto', maxWidth: 800 }}>
-                <Typography level="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem', mb: 2 }}>
+                <Typography variant="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem', mb: 2 }}>
                     Developer
                 </Typography>
 
-                <Card variant="soft" sx={{ borderRadius: 'lg', p: 1, gap: 0 }}>
-                    <List sx={{ '--ListItem-paddingX': '8px' }}>
+                <Card
+                    elevation={0}
+                    sx={{
+                        bgcolor: 'action.hover',
+                        borderRadius: 3,
+                        p: 1,
+                    }}
+                    >
+                    <List disablePadding>
                         {/* Add future developer tools as additional ListItem entries here. */}
                         <ListItem
                             data-id="developer-tool-stories"
+                            disablePadding
                             onClick={() => navigate("/stories")}
                             >
                             <ListItemButton sx={rowSx}>
-                                <ListItemDecorator><Science /></ListItemDecorator>
-                                <ListItemContent>Stories</ListItemContent>
-                                <ChevronRight sx={{ color: 'text.tertiary' }} />
+                                <ListItemIcon><Science /></ListItemIcon>
+                                <ListItemText primary="Stories" />
+                                <ChevronRight sx={{ color: 'text.secondary' }} />
                             </ListItemButton>
                         </ListItem>
 
                         <ListItem
                             data-id="developer-tool-fps-toggle"
                             onClick={() => toggleShowFpsIndicator()}
-                            endAction={
+                            disablePadding
+                            secondaryAction={
                                 <Switch
                                     readOnly
-                                    size={isMobile ? 'lg' : 'md'}
+                                    size="medium"
                                     checked={showFpsIndicator}
                                     sx={{ pointerEvents: "none" }}
                                     />
                             }
                             >
                             <ListItemButton sx={rowSx}>
-                                <ListItemDecorator><Speed /></ListItemDecorator>
-                                <ListItemContent>Show FPS indicator</ListItemContent>
+                                <ListItemIcon><Speed /></ListItemIcon>
+                                <ListItemText primary="Show FPS indicator" />
                             </ListItemButton>
                         </ListItem>
 
                         <ListItem
                             data-id="developer-tool-devtools"
                             onClick={() => toggleDevTools()}
-                            endAction={
+                            disablePadding
+                            secondaryAction={
                                 <Switch
                                     readOnly
-                                    size={isMobile ? 'lg' : 'md'}
+                                    size="medium"
                                     checked={devToolsOpen}
                                     sx={{ pointerEvents: "none" }}
                                     />
                             }
                             >
                             <ListItemButton sx={rowSx}>
-                                <ListItemDecorator><BugReport /></ListItemDecorator>
-                                <ListItemContent>Developer tools</ListItemContent>
+                                <ListItemIcon><BugReport /></ListItemIcon>
+                                <ListItemText primary="Developer tools" />
                             </ListItemButton>
                         </ListItem>
                     </List>
                 </Card>
 
-                <Typography level="title-md" sx={{ mt: 3, mb: 1 }}>
+                <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>
                     Test background jobs
                 </Typography>
-                <Typography level="body-sm" color="neutral" sx={{ mb: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Synthetic work that does nothing but take twenty to sixty seconds, so the background
                     jobs list can be watched and cancelled without staging a database first.
                 </Typography>
 
-                <Card variant="soft" sx={{ borderRadius: 'lg', p: 1, gap: 0 }}>
-                    <List sx={{ '--ListItem-paddingX': '8px' }}>
+                <Card
+                    elevation={0}
+                    sx={{
+                        bgcolor: 'action.hover',
+                        borderRadius: 3,
+                        p: 1,
+                    }}
+                    >
+                    <List disablePadding>
                         {TEST_JOB_KINDS.map((kind, kindIndex) => (
                             <ListItem
                                 key={kind.name}
                                 data-id={`developer-start-job-${kindIndex}`}
+                                disablePadding
                                 onClick={() => startJob(kindIndex, 1)}
                                 >
                                 <ListItemButton sx={rowSx}>
-                                    <ListItemDecorator><PlayArrow /></ListItemDecorator>
-                                    <ListItemContent>{kind.name}</ListItemContent>
+                                    <ListItemIcon><PlayArrow /></ListItemIcon>
+                                    <ListItemText primary={kind.name} />
                                 </ListItemButton>
                             </ListItem>
                         ))}
 
                         <ListItem
                             data-id="developer-start-grouped-job"
+                            disablePadding
                             onClick={() => startJob(0, 4)}
                             >
                             <ListItemButton sx={rowSx}>
-                                <ListItemDecorator><PlaylistPlay /></ListItemDecorator>
-                                <ListItemContent>
-                                    One job of four tasks
-                                    <Typography level="body-xs" color="neutral" sx={{ display: 'block' }}>
-                                        One row that stays until the last of its four tasks finishes.
-                                    </Typography>
-                                </ListItemContent>
+                                <ListItemIcon><PlaylistPlay /></ListItemIcon>
+                                <ListItemText
+                                    primary="One job of four tasks"
+                                    secondary="One row that stays until the last of its four tasks finishes."
+                                    />
                             </ListItemButton>
                         </ListItem>
 
                         <ListItem
                             data-id="developer-start-all-jobs"
+                            disablePadding
                             onClick={() => TEST_JOB_KINDS.forEach((_kind, kindIndex) => startJob(kindIndex, 1))}
                             >
                             <ListItemButton sx={rowSx}>
-                                <ListItemDecorator><Layers /></ListItemDecorator>
-                                <ListItemContent>
-                                    All four at once
-                                    <Typography level="body-xs" color="neutral" sx={{ display: 'block' }}>
-                                        Four separate rows, so the navbar counts them instead of naming one.
-                                    </Typography>
-                                </ListItemContent>
+                                <ListItemIcon><Layers /></ListItemIcon>
+                                <ListItemText
+                                    primary="All four at once"
+                                    secondary="Four separate rows, so the navbar counts them instead of naming one."
+                                    />
                             </ListItemButton>
                         </ListItem>
                     </List>
@@ -162,9 +182,9 @@ export function DeveloperPage(): JSX.Element {
 
                 <Button
                     data-id="developer-exit"
-                    color="danger"
-                    variant="soft"
-                    size={isMobile ? 'lg' : 'md'}
+                    color="error"
+                    variant="outlined"
+                    size={isMobile ? 'large' : 'medium'}
                     onClick={() => {
                         disableDeveloperMode();
                         navigate("/gallery");

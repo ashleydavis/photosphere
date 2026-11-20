@@ -136,7 +136,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 ## Architecture
 
 - **Storage**: `packages-zig/storage-zig` abstracts filesystem (`fs:path`), S3-compatible (`s3:bucket/path`), and encrypted storage.
-- **Frontend**: React 18 + TypeScript, Vite, shared UI in `packages/user-interface`.
+- **Frontend**: React 19 + TypeScript, Vite, MUI Material, Tailwind 4, shared UI in `packages/user-interface`.
 - **Desktop and mobile**: the Photosphere App on Ziggy (`apps/photosphere`, `apps/photosphere-frontend`) runs the shared UI in the system web view on every platform. See [Photosphere on Ziggy](docs/photosphere-on-ziggy.md).
 
 ## Guides

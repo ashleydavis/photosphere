@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Input from '@mui/joy/Input';
-import Box from '@mui/joy/Box';
-import Typography from '@mui/joy/Typography';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
-import List from '@mui/joy/List';
-import ListItem from '@mui/joy/ListItem';
-import ListItemButton from '@mui/joy/ListItemButton';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
 import { usePlatform } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { useDebounce } from '../lib/use-debounce';
@@ -136,13 +136,13 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
         const segments = prefix.split('/').filter(segment => segment.length > 0);
         return (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-                <Button size="sm" variant="plain" onClick={handleGoRoot}>
+                <Button size="small" variant="text" onClick={handleGoRoot}>
                     {bucket || 'root'}
                 </Button>
                 {segments.map((segment, index) => (
                     <React.Fragment key={index}>
-                        <Typography level="body-sm" sx={{ alignSelf: 'center' }}>/</Typography>
-                        <Button size="sm" variant="plain" onClick={() => handleBreadcrumb(index)}>
+                        <Typography variant="body2" sx={{ alignSelf: 'center' }}>/</Typography>
+                        <Button size="small" variant="text" onClick={() => handleBreadcrumb(index)}>
                             {segment}
                         </Button>
                     </React.Fragment>
@@ -161,9 +161,10 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
             >
             <DialogTitle>Browse S3</DialogTitle>
             <DialogContent>
-                <FormControl sx={{ mb: 2 }}>
+                <FormControl fullWidth sx={{ mb: 2 }}>
                     <FormLabel>Bucket</FormLabel>
-                    <Input
+                    <OutlinedInput
+                        size="small"
                         data-id="s3-browser-bucket-input"
                         value={bucket}
                         onChange={event => handleBucketChange(event.target.value)}
@@ -174,15 +175,15 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
                 {bucket && renderBreadcrumbs()}
 
                 {listError && (
-                    <Typography data-id="s3-browser-error" level="body-sm" color="danger" sx={{ mb: 1 }}>
+                    <Typography data-id="s3-browser-error" variant="body2" color="error" sx={{ mb: 1 }}>
                         {listError}
                     </Typography>
                 )}
 
                 {entries.length > 0 && (
-                    <List size="sm" sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                    <List dense sx={{ maxHeight: 300, overflowY: 'auto' }}>
                         {entries.map((dirName, entryIndex) => (
-                            <ListItem key={dirName}>
+                            <ListItem key={dirName} disablePadding>
                                 <ListItemButton
                                     data-id={`s3-browser-dir-${entryIndex}`}
                                     onClick={() => handleNavigate(dirName)}
@@ -195,14 +196,15 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
                 )}
 
                 {bucket && entries.length === 0 && !listError && (
-                    <Typography level="body-sm" sx={{ mt: 1 }}>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
                         No sub-directories found here.
                     </Typography>
                 )}
             </DialogContent>
             <DialogActions>
-                <Button data-id="s3-browser-cancel" variant="plain" onClick={onClose}>Cancel</Button>
+                <Button data-id="s3-browser-cancel" variant="text" onClick={onClose}>Cancel</Button>
                 <Button
+                    variant="contained"
                     disabled={!bucket}
                     onClick={handleSelectLocation}
                 >

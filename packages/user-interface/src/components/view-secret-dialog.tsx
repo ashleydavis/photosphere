@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { log } from 'utils';
 import { ResponsiveDialog } from './responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Typography from '@mui/joy/Typography';
-import Box from '@mui/joy/Box';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
 import { type ISharedSecretEntry } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 
@@ -85,15 +85,15 @@ interface IFieldProps {
 function Field({ label, value, multiline, dataId }: IFieldProps) {
     return (
         <Box sx={{ mb: 1.5 }}>
-            <Typography level="body-sm" sx={{ fontWeight: 'lg', mb: 0.5 }}>{label}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>{label}</Typography>
             <Box
                 data-id={dataId}
                 component={multiline ? 'pre' : 'div'}
                 sx={{
                     fontFamily: 'monospace',
                     fontSize: '0.85rem',
-                    background: 'var(--joy-palette-background-level1)',
-                    borderRadius: 'sm',
+                    background: 'var(--mui-palette-action-hover)',
+                    borderRadius: 1,
                     p: 1,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-all',
@@ -193,10 +193,10 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
             >
                 <DialogTitle>View Secret</DialogTitle>
                 <DialogContent>
-                    <Typography data-id="view-secret-name" level="body-md" sx={{ mb: 1 }}>
+                    <Typography data-id="view-secret-name" variant="body1" sx={{ mb: 1 }}>
                         <strong>Name:</strong> {secret.name}
                     </Typography>
-                    <Typography data-id="view-secret-type" level="body-md" sx={{ mb: 2 }}>
+                    <Typography data-id="view-secret-type" variant="body1" sx={{ mb: 2 }}>
                         <strong>Type:</strong> {secret.type}
                     </Typography>
                     {!revealed
@@ -209,10 +209,11 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
                     }
                 </DialogContent>
                 <DialogActions>
-                    <Button data-id="view-secret-close-button" variant="plain" onClick={onClose}>Close</Button>
+                    <Button data-id="view-secret-close-button" variant="text" onClick={onClose}>Close</Button>
                     {!revealed && (
                         <Button
                             data-id="reveal-secret-button"
+                            variant="contained"
                             loading={loading}
                             disabled={loading}
                             onClick={() => handleReveal().catch(err => log.exception('Reveal error:', err as Error))}

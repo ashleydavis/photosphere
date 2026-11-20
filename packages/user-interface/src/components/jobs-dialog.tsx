@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import Box from "@mui/joy/Box";
-import Button from "@mui/joy/Button";
-import DialogActions from "@mui/joy/DialogActions";
-import DialogContent from "@mui/joy/DialogContent";
-import DialogTitle from "@mui/joy/DialogTitle";
-import Divider from "@mui/joy/Divider";
-import IconButton from "@mui/joy/IconButton";
-import Typography from "@mui/joy/Typography";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
+import Typography from "@mui/material/Typography";
 import Close from "@mui/icons-material/Close";
 import { ResponsiveDialog } from "./responsive-dialog";
 import { useJobs } from "../context/jobs-context";
@@ -99,24 +99,25 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
             {pendingCancel
                 && <>
                     <DialogContent>
-                        <Typography level="body-md" data-id="jobs-cancel-confirm-message">
+                        <Typography variant="body1" data-id="jobs-cancel-confirm-message">
                             Stop {pendingCancel.what}?
                         </Typography>
-                        <Typography level="body-sm" color="neutral" sx={{ mt: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                             Work already finished is kept. Whatever is still in progress is abandoned.
                         </Typography>
                     </DialogContent>
                     <DialogActions>
                         <Button
                             data-id="jobs-cancel-confirm-no"
-                            variant="plain"
+                            variant="text"
                             onClick={() => setPendingCancel(undefined)}
                             >
                             Keep running
                         </Button>
                         <Button
                             data-id="jobs-cancel-confirm-yes"
-                            color="danger"
+                            variant="contained"
+                            color="error"
                             onClick={confirmCancel}
                             >
                             Stop
@@ -129,7 +130,7 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
                 && <>
                     <DialogContent>
                         {jobs.length === 0
-                            && <Typography level="body-sm" color="neutral" data-id="jobs-dialog-empty">
+                            && <Typography variant="body2" color="text.secondary" data-id="jobs-dialog-empty">
                                 Nothing is running in the background.
                             </Typography>
                         }
@@ -158,19 +159,19 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
                                         />
 
                                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                        <Typography level="body-sm">
+                                        <Typography variant="body2">
                                             {job.name}
                                         </Typography>
                                         {job.progressMessage
-                                            && <Typography level="body-xs" sx={{ color: 'text.tertiary', mt: 0.25 }}>
+                                            && <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.25 }}>
                                                 {job.progressMessage}
                                             </Typography>
                                         }
                                     </Box>
 
                                     <Typography
-                                        level="body-xs"
-                                        sx={{ color: 'text.tertiary', whiteSpace: 'nowrap' }}
+                                        variant="caption"
+                                        sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}
                                         data-id={`job-elapsed-${job.id}`}
                                         >
                                         {formatElapsed(now - job.startedAt)}
@@ -179,9 +180,8 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
                                     {job.cancelSource
                                         && <IconButton
                                             data-id={`job-cancel-${job.id}`}
-                                            size="sm"
-                                            variant="plain"
-                                            color="danger"
+                                            size="small"
+                                            color="error"
                                             aria-label="Stop job"
                                             title="Stop"
                                             onClick={() => setPendingCancel({ jobId: job.id, what: `"${job.name}"` })}
@@ -199,14 +199,14 @@ export function JobsDialog({ open, onClose }: IJobsDialogProps) {
                         {canCancelAny
                             && <Button
                                 data-id="jobs-cancel-all-button"
-                                variant="plain"
-                                color="danger"
+                                variant="text"
+                                color="error"
                                 onClick={() => setPendingCancel({ jobId: undefined, what: jobs.length === 1 ? "this job" : `all ${jobs.length} jobs` })}
                                 >
                                 Stop all
                             </Button>
                         }
-                        <Button data-id="jobs-dialog-close" onClick={onClose}>Close</Button>
+                        <Button data-id="jobs-dialog-close" variant="contained" onClick={onClose}>Close</Button>
                     </DialogActions>
                 </>
             }

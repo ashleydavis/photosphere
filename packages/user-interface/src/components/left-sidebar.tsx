@@ -3,34 +3,41 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAssetDatabase } from '../context/asset-database-source';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
-import { useTheme } from '@mui/joy/styles/ThemeProvider';
-import List from '@mui/joy/List/List';
-import ListItem from '@mui/joy/ListItem/ListItem';
-import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
+import { useTheme } from '@mui/material/styles';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete, DeveloperMode, Storage } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
-import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
-import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
-import IconButton from '@mui/joy/IconButton/IconButton';
-import CircularProgress from '@mui/joy/CircularProgress';
-import Divider from '@mui/joy/Divider/Divider';
+import ListItemText from '@mui/material/ListItemText';
+import ListItemButton from '@mui/material/ListItemButton';
+import IconButton from '@mui/material/IconButton';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
 import { useSearch } from '../context/search-context';
 import { useDeveloper } from '../context/developer-context';
 import { findTemporaryNavPage } from '../lib/nav-pages';
 
 //
 // Styling applied to the active sidebar navigation item so it stands out
-// (bold text and an accent colour for both the label and icon). Joy's
-// ListItemButton sets its own colour, so the accent must override the button
-// and icon directly via `sx` rather than rely on a parent Tailwind class. This
-// matches the active link treatment in the navbar (Tailwind's sky-500).
+// (bold text and an accent colour for both the label and icon). MUI's
+// ListItemIcon and the label's Typography set their own colour and weight, so
+// the accent must override them directly via `sx` rather than rely on a parent
+// Tailwind class. This matches the active link treatment in the navbar
+// (Tailwind's sky-500).
 //
 const activeNavItemSx = {
     //
-    // Accent colour and bold weight for the button label.
+    // Accent colour for the button label.
     //
     "& .MuiListItemButton-root": {
         color: "rgb(14 165 233)",
+    },
+
+    //
+    // Bold weight for the label text.
+    //
+    "& .MuiListItemText-primary": {
         fontWeight: 600,
     },
 
@@ -112,7 +119,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
         <div
             className="flex flex-col h-full overflow-y-auto"
             style={{
-                color: theme.palette.text.primary,
+                color: (theme.vars ?? theme).palette.text.primary,
             }}
             >
             <div className="flex flex-row items-center mt-4" style={{ paddingLeft: "15px" }}>
@@ -132,6 +139,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
             <div className="flex flex-col" style={{ paddingLeft: "15px" }}>
                 <List>
                     <ListItem
+                        disablePadding
                         data-id="sidebar-new-database"
                         onClick={() => {
                             setSidebarOpen(false);
@@ -139,24 +147,26 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         }}
                         >
                         <ListItemButton>
-                            <ListItemDecorator><CreateNewFolder /></ListItemDecorator>
-                            <ListItemContent>New database</ListItemContent>
+                            <ListItemIcon><CreateNewFolder /></ListItemIcon>
+                            <ListItemText>New database</ListItemText>
                         </ListItemButton>
                     </ListItem>
 
                     <ListItem
+                        disablePadding
                         onClick={() => {
                             setSidebarOpen(false);
                             onAddDatabase();
                         }}
                         >
                         <ListItemButton>
-                            <ListItemDecorator><LibraryAdd /></ListItemDecorator>
-                            <ListItemContent>Add database</ListItemContent>
+                            <ListItemIcon><LibraryAdd /></ListItemIcon>
+                            <ListItemText>Add database</ListItemText>
                         </ListItemButton>
                     </ListItem>
 
                     <ListItem
+                        disablePadding
                         data-id="sidebar-open-database"
                         onClick={() => {
                             setSidebarOpen(false);
@@ -165,8 +175,8 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         }}
                         >
                         <ListItemButton>
-                            <ListItemDecorator><FolderOpen /></ListItemDecorator>
-                            <ListItemContent>Open database</ListItemContent>
+                            <ListItemIcon><FolderOpen /></ListItemIcon>
+                            <ListItemText>Open database</ListItemText>
                         </ListItemButton>
                     </ListItem>
 
@@ -177,10 +187,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             onClick={() => setSidebarOpen(false)}
                             >
                             {({ isActive }) => (
-                                <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                <ListItem disablePadding sx={isActive ? activeNavItemSx : undefined}>
                                     <ListItemButton>
-                                        <ListItemDecorator><FileUpload /></ListItemDecorator>
-                                        <ListItemContent>Import</ListItemContent>
+                                        <ListItemIcon><FileUpload /></ListItemIcon>
+                                        <ListItemText>Import</ListItemText>
                                     </ListItemButton>
                                 </ListItem>
                             )}
@@ -189,6 +199,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
 
 
                     <ListItem
+                        disablePadding
                         onClick={() => {
                             setSidebarOpen(false);
                             navigate("/gallery");
@@ -198,8 +209,8 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         }}
                         >
                         <ListItemButton>
-                            <ListItemDecorator><Search /></ListItemDecorator>
-                            <ListItemContent>Search</ListItemContent>
+                            <ListItemIcon><Search /></ListItemIcon>
+                            <ListItemText>Search</ListItemText>
                         </ListItemButton>
                     </ListItem>
 
@@ -208,10 +219,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                            <ListItem disablePadding sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
-                                    <ListItemDecorator><PhotoLibrary /></ListItemDecorator>
-                                    <ListItemContent>Gallery</ListItemContent>
+                                    <ListItemIcon><PhotoLibrary /></ListItemIcon>
+                                    <ListItemText>Gallery</ListItemText>
                                 </ListItemButton>
                             </ListItem>
                         )}
@@ -222,10 +233,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                            <ListItem disablePadding sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
-                                    <ListItemDecorator><Map /></ListItemDecorator>
-                                    <ListItemContent>Map</ListItemContent>
+                                    <ListItemIcon><Map /></ListItemIcon>
+                                    <ListItemText>Map</ListItemText>
                                 </ListItemButton>
                             </ListItem>
                         )}
@@ -238,10 +249,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             onClick={() => setSidebarOpen(false)}
                             >
                             {({ isActive }) => (
-                                <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                <ListItem disablePadding sx={isActive ? activeNavItemSx : undefined}>
                                     <ListItemButton>
-                                        <ListItemDecorator><Storage /></ListItemDecorator>
-                                        <ListItemContent>Database Info</ListItemContent>
+                                        <ListItemIcon><Storage /></ListItemIcon>
+                                        <ListItemText>Database Info</ListItemText>
                                     </ListItemButton>
                                 </ListItem>
                             )}
@@ -253,10 +264,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             to={temporaryNavPage.path}
                             onClick={() => setSidebarOpen(false)}
                             >
-                            <ListItem sx={activeNavItemSx}>
+                            <ListItem disablePadding sx={activeNavItemSx}>
                                 <ListItemButton>
-                                    <ListItemDecorator><TemporaryNavPageIcon /></ListItemDecorator>
-                                    <ListItemContent>{temporaryNavPage.label}</ListItemContent>
+                                    <ListItemIcon><TemporaryNavPageIcon /></ListItemIcon>
+                                    <ListItemText>{temporaryNavPage.label}</ListItemText>
                                 </ListItemButton>
                             </ListItem>
                         </NavLink>
@@ -272,13 +283,13 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         <List>
                             {recentDatabases.map((dbEntry, dbIndex) => (
                                 <ListItem
+                                    disablePadding
                                     key={dbEntry.name}
-                                    endAction={
+                                    secondaryAction={
                                         <IconButton
                                             data-id={`remove-recent-database-button-${dbIndex}`}
-                                            size="sm"
-                                            variant="plain"
-                                            color="neutral"
+                                            size="small"
+                                            color="default"
                                             title="Remove from recent databases"
                                             onClick={async (clickEvent) => {
                                                 clickEvent.stopPropagation();
@@ -305,17 +316,17 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                             setSidebarOpen(false);
                                         }}
                                         >
-                                        <ListItemDecorator>
+                                        <ListItemIcon>
                                             {dbEntry.path === databasePath
                                                 ? <FolderOpen />
                                                 : <Folder />
                                             }
-                                        </ListItemDecorator>
-                                        <ListItemContent data-id={`recent-database-name-${dbIndex}`} title={dbEntry.path}>
+                                        </ListItemIcon>
+                                        <ListItemText data-id={`recent-database-name-${dbIndex}`} title={dbEntry.path}>
                                             {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}
-                                        </ListItemContent>
+                                        </ListItemText>
                                         {isOpening && openingPath === dbEntry.path && (
-                                            <CircularProgress data-id={`open-recent-database-spinner-${dbIndex}`} size="sm" />
+                                            <CircularProgress data-id={`open-recent-database-spinner-${dbIndex}`} size={24} />
                                         )}
                                     </ListItemButton>
                                 </ListItem>
@@ -334,10 +345,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                            <ListItem disablePadding sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
-                                    <ListItemDecorator><i className="fa-solid fa-circle-info" /></ListItemDecorator>
-                                    <ListItemContent>About</ListItemContent>
+                                    <ListItemIcon><i className="fa-solid fa-circle-info" /></ListItemIcon>
+                                    <ListItemText>About</ListItemText>
                                 </ListItemButton>
                             </ListItem>
                         )}
@@ -351,10 +362,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                            <ListItem disablePadding sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
-                                    <ListItemDecorator><ManageSearch /></ListItemDecorator>
-                                    <ListItemContent>Manage Databases</ListItemContent>
+                                    <ListItemIcon><ManageSearch /></ListItemIcon>
+                                    <ListItemText>Manage Databases</ListItemText>
                                 </ListItemButton>
                             </ListItem>
                         )}
@@ -365,16 +376,17 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
-                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                            <ListItem disablePadding sx={isActive ? activeNavItemSx : undefined}>
                                 <ListItemButton>
-                                    <ListItemDecorator><Key /></ListItemDecorator>
-                                    <ListItemContent>Manage Secrets</ListItemContent>
+                                    <ListItemIcon><Key /></ListItemIcon>
+                                    <ListItemText>Manage Secrets</ListItemText>
                                 </ListItemButton>
                             </ListItem>
                         )}
                     </NavLink>
 
                     <ListItem
+                        disablePadding
                         data-id="sidebar-configuration"
                         onClick={() => {
                             setSidebarOpen(false);
@@ -382,8 +394,8 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         }}
                         >
                         <ListItemButton>
-                            <ListItemDecorator><Settings /></ListItemDecorator>
-                            <ListItemContent>Configuration</ListItemContent>
+                            <ListItemIcon><Settings /></ListItemIcon>
+                            <ListItemText>Configuration</ListItemText>
                         </ListItemButton>
                     </ListItem>
 
@@ -394,10 +406,10 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             onClick={() => setSidebarOpen(false)}
                             >
                             {({ isActive }) => (
-                                <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                <ListItem disablePadding sx={isActive ? activeNavItemSx : undefined}>
                                     <ListItemButton>
-                                        <ListItemDecorator><DeveloperMode /></ListItemDecorator>
-                                        <ListItemContent>Developer</ListItemContent>
+                                        <ListItemIcon><DeveloperMode /></ListItemIcon>
+                                        <ListItemText>Developer</ListItemText>
                                     </ListItemButton>
                                 </ListItem>
                             )}

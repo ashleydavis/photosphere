@@ -94,10 +94,10 @@ export interface ITestTransport {
 // inherited (a child of a hidden container computes to hidden already) but `display` is not (a child
 // of a `display:none` parent still computes its own display), so both have to be checked up the tree.
 //
-// This matters on mobile because ResponsiveDialog renders a Joy Drawer, and a closed Drawer does not
-// unmount: it stays in the DOM with `visibility:hidden` so it can animate. Several dialogs are also
-// mounted from more than one place, so a `data-id` inside one can match several elements at once,
-// all but one of them in a closed (hidden) drawer. querySelector returns the first in DOM order,
+// This matters because a closed Material Dialog or Drawer can stay in the DOM: one kept mounted
+// stays there with `visibility:hidden`, and a Drawer's slide leaves its paper `visibility:hidden`
+// once it has slid out. Several dialogs are also mounted from more than one place, so a `data-id`
+// inside one can match several elements at once, all but one of them in a closed (hidden) dialog. querySelector returns the first in DOM order,
 // which is whichever mounted first, not the one on screen. That is how the create-database test
 // typed into an invisible form and left the visible one empty, disabling its Create button.
 //
@@ -131,9 +131,9 @@ function findElement(dataId: string, nth: number): HTMLElement | undefined {
 }
 
 //
-// The input nested under the first visible element carrying the given `data-id`, or undefined. Joy's
-// Input puts the `data-id` on its wrapper and the real input inside it, so the action targets a node
-// the `data-id` lookup alone does not reach.
+// The input nested under the first visible element carrying the given `data-id`, or undefined.
+// Material's TextField puts the `data-id` on its root `<div>` and the real input inside it, so the
+// action targets a node the `data-id` lookup alone does not reach.
 //
 function findNestedInput(dataId: string): HTMLInputElement | HTMLTextAreaElement | undefined {
     for (const wrapper of visibleElements(dataId)) {
@@ -216,9 +216,10 @@ export async function waitForElement(dataId: string, nth: number, timeoutMs: num
 const TOGGLE_INPUT_SELECTOR = 'input[type="radio"], input[type="checkbox"]';
 
 //
-// The element a click should actually land on. Joy puts the `data-id` on a wrapper `<span>` and the
-// real form control inside it, so clicking a Joy `<Radio>` by its `data-id` clicks the wrapper and
-// selects nothing: the test then asserts against a screen that never changed and passes.
+// The element a click should actually land on. Material's Radio, Checkbox and Switch put the
+// `data-id` on a wrapper `<span>` and the real form control inside it, so clicking a `<Radio>` by its
+// `data-id` clicks the wrapper and selects nothing: the test then asserts against a screen that never
+// changed and passes.
 //
 // The redirect is deliberately conservative, because returning the element unchanged is always the
 // safe answer and behaves exactly as the driver does today. An element that is already clickable in
@@ -237,13 +238,40 @@ export function clickTarget(element: HTMLElement): HTMLElement {
 }
 
 //
+// Returns the element that opens a Material `Select`'s list when the element with a `data-id` is one
+// or holds exactly one, otherwise undefined. A Select opens on a left-button mousedown on its
+// `role="combobox"` element and ignores a click, so doClick presses that element instead of clicking
+// it. A wrapper holding two comboboxes is ambiguous and is left alone.
+//
+export function selectTrigger(element: HTMLElement): HTMLElement | undefined {
+    if (element.matches('[role="combobox"]')) {
+        return element;
+    }
+    const comboboxes = element.querySelectorAll('[role="combobox"]');
+    if (comboboxes.length === 1) {
+        return comboboxes[0] as HTMLElement;
+    }
+    return undefined;
+}
+
+//
 // Clicks the element with the given `data-id`. When several elements share the id, `nth`
-// selects which one (defaults to the first).
+// selects which one (defaults to the first). A Select is opened with a mousedown, see selectTrigger.
 //
 export function doClick(dataId: string, nth?: number): void {
     const index = nth ?? 0;
     const element = findElement(dataId, index);
     if (element) {
+        const trigger = selectTrigger(element);
+        if (trigger) {
+            console.log(`test-click: pressing select data-id="${dataId}" nth=${index}`);
+            trigger.dispatchEvent(new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+            }));
+            return;
+        }
         const target = clickTarget(element);
         // Report a redirect, so a future failure shows what was actually clicked rather than what was asked for.
         const redirect = target === element ? '' : ` (redirected to nested <${target.tagName.toLowerCase()} type="${(target as HTMLInputElement).type}">)`;
@@ -415,16 +443,6 @@ export function doStagePickFolder(result: string | null): void {
 }
 
 //
-// Reads the current value of the element with the given `data-id`: its own value when it is a form
-// control, otherwise its text, otherwise the value of an input nested inside it. Returns an empty
-// string when not found.
-//
-// Text comes ahead of the nested input on purpose. A container that happens to hold a Joy `<Switch>`
-// contains a hidden checkbox whose value is the string "on" by default, and "on" is truthy, so
-// reading the nested input first reported "on" for any panel or row with a switch in it. A test
-// waiting for that container's text then waited for something that could never be returned.
-//
-//
 // Reads an attribute of the element with the data-id, or of the document element when none is given. A missing element or
 // attribute reads as the empty string.
 //
@@ -436,8 +454,30 @@ export function getAttribute(dataId: string | undefined, attribute: string): str
     return element.getAttribute(attribute) ?? '';
 }
 
+//
+// Selects the input a person types into inside a Material text field: a text input or a textarea.
+// It leaves out a Switch's or Checkbox's checkbox, a Radio's input, and the `aria-hidden` inputs
+// Material adds for its own use (the value input behind a Select and the copy of a multiline field
+// that measures its height).
+//
+const TEXT_ENTRY_SELECTOR = 'input:not([type="checkbox"]):not([type="radio"]):not([aria-hidden="true"]), textarea:not([aria-hidden="true"])';
+
+//
+// Reads the current value of the element with the given `data-id`: its own value when it is a form
+// control, the value typed into it when it is a Material text field, otherwise its text, otherwise
+// the value of an input nested inside it. Returns an empty string when not found.
+//
+// A text field's typed value comes ahead of its text because a Material TextField holds its label
+// twice (in the `<label>` and in the outline's `<legend>`), so its text is the label, never what was
+// typed.
+//
+// Text comes ahead of any other nested input on purpose. A container that happens to hold a
+// `<Switch>` contains a checkbox whose value is the string "on" by default, and "on" is truthy, so
+// reading the nested input first reported "on" for any panel or row with a switch in it. A test
+// waiting for that container's text then waited for something that could never be returned.
+//
 export function getValue(dataId: string): string {
-    // The visible one: on mobile a closed drawer keeps its content in the DOM, so reading the first
+    // The visible one: a closed dialog kept in the DOM still holds its content, so reading the first
     // raw match could report a stale value from a dialog that is not on screen.
     const element = findElement(dataId, 0);
     if (!element) {
@@ -447,6 +487,15 @@ export function getValue(dataId: string): string {
     if (element.matches('input, textarea, select')) {
         return (element as HTMLInputElement).value;
     }
+    // The element is the root of a Material text field (a TextField's FormControl or an InputBase),
+    // so the value typed into it is the answer. A Select has no text-entry input, so it falls
+    // through to its text, which is the option shown.
+    if (element.matches('.MuiFormControl-root, .MuiInputBase-root')) {
+        const textEntry = element.querySelector(TEXT_ENTRY_SELECTOR);
+        if (textEntry) {
+            return (textEntry as HTMLInputElement).value;
+        }
+    }
     // A container's text is what a test asking for its value means. Emptiness is judged on the
     // trimmed text so the whitespace between a wrapper's tags does not count as a value, but the
     // text is returned as-is to keep what existing tests already read from it.
@@ -454,8 +503,8 @@ export function getValue(dataId: string): string {
     if (textContent.trim()) {
         return textContent;
     }
-    // Joy's Input carries the data-id on its wrapper, which holds no text of its own, and the value
-    // on the input nested inside it.
+    // A wrapper with no text of its own carries the data-id, and the value is on the input nested
+    // inside it.
     const nestedInput = element.querySelector('input, textarea');
     if (nestedInput) {
         return (nestedInput as HTMLInputElement).value;

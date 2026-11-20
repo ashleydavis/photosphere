@@ -1,14 +1,16 @@
 import React, { useState } from "react";
-import Stack from "@mui/joy/Stack/Stack";
-import Typography from "@mui/joy/Typography";
-import ToggleButtonGroup from "@mui/joy/ToggleButtonGroup/ToggleButtonGroup";
-import Button from "@mui/joy/Button/Button";
-import Slider from "@mui/joy/Slider/Slider";
-import Switch from "@mui/joy/Switch";
-import ModalClose from "@mui/joy/ModalClose";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import ToggleButton from "@mui/material/ToggleButton";
+import Button from "@mui/material/Button";
+import Slider from "@mui/material/Slider";
+import Switch from "@mui/material/Switch";
+import IconButton from "@mui/material/IconButton";
+import CloseIcon from "@mui/icons-material/Close";
 import { ResponsiveDialog } from "./responsive-dialog";
-import DialogTitle from "@mui/joy/DialogTitle";
-import DialogContent from "@mui/joy/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
 import { useThemeSetting } from "../lib/use-theme-setting";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useSync } from "../context/sync-context";
@@ -50,13 +52,21 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
             dataId="configuration-dialog"
             onKeyDown={createDialogKeyHandler(onClose, false)}
             >
-                <ModalClose data-id="configuration-dialog-close" />
+                <IconButton
+                    aria-label="Close"
+                    data-id="configuration-dialog-close"
+                    onClick={onClose}
+                    >
+                    <CloseIcon />
+                </IconButton>
                 <DialogTitle>Configuration</DialogTitle>
                 <DialogContent>
                     <Stack spacing={3} sx={{ maxWidth: 400, pt: 1 }}>
                         <Stack>
-                            <Typography level="body-xs">Theme</Typography>
+                            <Typography variant="caption">Theme</Typography>
                             <ToggleButtonGroup
+                                exclusive
+                                size="small"
                                 value={themeSetting}
                                 onChange={async (_event, value) => {
                                     if (value) {
@@ -66,14 +76,14 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
                                 }}
                                 sx={{ mt: 1 }}
                             >
-                                <Button value="light">Light</Button>
-                                <Button value="dark">Dark</Button>
-                                <Button value="system">System</Button>
+                                <ToggleButton value="light">Light</ToggleButton>
+                                <ToggleButton value="dark">Dark</ToggleButton>
+                                <ToggleButton value="system">System</ToggleButton>
                             </ToggleButtonGroup>
                         </Stack>
 
                         <Stack>
-                            <Typography level="body-xs">Photo size</Typography>
+                            <Typography variant="caption">Photo size</Typography>
                             <Slider
                                 min={50}
                                 max={500}
@@ -83,27 +93,33 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
                         </Stack>
 
                         <Stack>
-                            <Typography level="body-xs">Syncing</Typography>
+                            <Typography variant="caption">Syncing</Typography>
                             <Stack
                                 data-id="sync-enabled-toggle"
                                 direction="row"
-                                justifyContent="space-between"
-                                alignItems="center"
                                 onClick={() => toggleSyncEnabled()}
-                                sx={{ mt: 1, cursor: "pointer" }}
+                                sx={{
+                                    mt: 1,
+                                    cursor: "pointer",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                }}
                             >
-                                <Typography level="body-sm">Enable syncing</Typography>
+                                <Typography variant="body2">Enable syncing</Typography>
                                 <Switch readOnly checked={syncEnabled} sx={{ pointerEvents: "none" }} />
                             </Stack>
                             <Stack
                                 data-id="sync-wifi-only-toggle"
                                 direction="row"
-                                justifyContent="space-between"
-                                alignItems="center"
                                 onClick={() => toggleSyncOnlyOnWifi()}
-                                sx={{ mt: 1, cursor: "pointer" }}
+                                sx={{
+                                    mt: 1,
+                                    cursor: "pointer",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                }}
                             >
-                                <Typography level="body-sm">Only sync over Wi-Fi</Typography>
+                                <Typography variant="body2">Only sync over Wi-Fi</Typography>
                                 <Switch readOnly checked={syncOnlyOnWifi} sx={{ pointerEvents: "none" }} />
                             </Stack>
                         </Stack>
@@ -112,15 +128,15 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
 
                         {/* Last in the dialog: the one setting nobody should land on by accident. */}
                         <Stack>
-                            <Typography level="body-xs">Reset device</Typography>
-                            <Typography level="body-sm" sx={{ mt: 1 }}>
+                            <Typography variant="caption">Reset device</Typography>
+                            <Typography variant="body2" sx={{ mt: 1 }}>
                                 Removes the databases Photosphere keeps on this device and the photos
                                 in them, along with its secrets, settings and caches.
                             </Typography>
                             <Button
                                 data-id="reset-device-open"
-                                color="danger"
-                                variant="soft"
+                                color="error"
+                                variant="outlined"
                                 sx={{ mt: 1 }}
                                 onClick={() => setResetDialogOpen(true)}
                             >

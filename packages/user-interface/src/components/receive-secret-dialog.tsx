@@ -1,17 +1,17 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
 import { ResponsiveDialog } from './responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Input from '@mui/joy/Input';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
-import Typography from '@mui/joy/Typography';
-import Alert from '@mui/joy/Alert';
-import CircularProgress from '@mui/joy/CircularProgress';
-import Box from '@mui/joy/Box';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Box from '@mui/material/Box';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
@@ -172,14 +172,15 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
             >
                 <DialogTitle>Receive Secret</DialogTitle>
                 <DialogContent>
-                    <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
+                    <Typography variant="body2" sx={{ mb: 2 }} color="text.secondary">
                         Click Share on a secret on another device to send it here.
                     </Typography>
 
                     {step === "enter-code" && (
-                        <FormControl>
+                        <FormControl fullWidth>
                             <FormLabel>Enter the 4-digit pairing code shown on the sender</FormLabel>
-                            <Input
+                            <OutlinedInput
+                                size="small"
                                 data-id="receive-secret-code-input"
                                 value={enteredCode}
                                 onChange={event => setEnteredCode(event.target.value)}
@@ -191,20 +192,21 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
 
                     {step === "waiting" && (
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
-                            <CircularProgress size="sm" />
+                            <CircularProgress size={24} />
                             <Typography>Waiting for sender...</Typography>
                         </Box>
                     )}
 
                     {step === "review" && payload && (
                         <>
-                            <Typography level="body-md" sx={{ mb: 2 }}>
+                            <Typography variant="body1" sx={{ mb: 2 }}>
                                 <strong>Type:</strong> {payload.secretType}
                             </Typography>
 
-                            <FormControl>
+                            <FormControl fullWidth>
                                 <FormLabel>Save as (name)</FormLabel>
-                                <Input
+                                <OutlinedInput
+                                    size="small"
                                     data-id="receive-secret-name-input"
                                     value={saveName}
                                     onChange={event => setSaveName(event.target.value)}
@@ -215,13 +217,13 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
 
                     {step === "success" && (
-                        <Alert data-id="receive-secret-success" color="success">
+                        <Alert data-id="receive-secret-success" severity="success">
                             Secret imported successfully!
                         </Alert>
                     )}
 
                     {step === "error" && (
-                        <Alert color="danger">
+                        <Alert severity="error">
                             {errorMessage}
                         </Alert>
                     )}
@@ -229,9 +231,10 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                 <DialogActions>
                     {step === "enter-code" && (
                         <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button variant="text" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 data-id="receive-secret-start-button"
+                                variant="contained"
                                 disabled={!/^\d{4}$/.test(enteredCode)}
                                 onClick={() => { handleStartReceiving(); }}
                             >
@@ -241,14 +244,15 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
 
                     {step === "waiting" && (
-                        <Button data-id="receive-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="receive-secret-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
                     )}
 
                     {step === "review" && (
                         <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button variant="text" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 data-id="receive-secret-save-button"
+                                variant="contained"
                                 disabled={!saveName.trim()}
                                 onClick={() => { handleSave(); }}
                             >
@@ -258,7 +262,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
 
                     {(step === "success" || step === "error") && (
-                        <Button data-id="receive-secret-close-button" onClick={onClose}>Close</Button>
+                        <Button data-id="receive-secret-close-button" variant="contained" onClick={onClose}>Close</Button>
                     )}
                 </DialogActions>
         </ResponsiveDialog>

@@ -7,7 +7,7 @@ import { AssetView } from "../../components/asset-view";
 import { MapView } from "./map-view";
 import { NoDatabaseLoaded } from "../../components/no-database-loaded";
 import { EmptyDatabase } from "../../components/empty-database";
-import Drawer from "@mui/joy/Drawer/Drawer";
+import Drawer from "@mui/material/Drawer";
 
 export interface IMapPageProps {
 }
@@ -63,7 +63,6 @@ export function MapPage({}: IMapPageProps) {
                         className="asset-view-drawer"
                         open={openAssetView}
                         onClose={closeAssetView}
-                        size="lg"
                         anchor="left"
                     >
                         <AssetView

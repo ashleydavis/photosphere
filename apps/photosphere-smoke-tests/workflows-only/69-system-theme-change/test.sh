@@ -21,7 +21,7 @@ photosphere_platform_changes_appearance || exit 77
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 expected="$(photosphere_platform_system_theme "$TMP_DIR")" || fail "the operating system's theme could not be read"
-wait_for_attribute "$APP_PORT" "data-joy-color-scheme" "$expected" 10
+wait_for_attribute "$APP_PORT" "class" "$expected" 10
 
 if [ "$expected" = "dark" ]; then
     other="light"
@@ -29,9 +29,9 @@ else
     other="dark"
 fi
 photosphere_platform_set_system_theme "$TMP_DIR" "$other" || exit 1
-wait_for_attribute "$APP_PORT" "data-joy-color-scheme" "$other" 10
+wait_for_attribute "$APP_PORT" "class" "$other" 10
 log_success "The page followed a change of the system's theme while the app ran"
 
 photosphere_platform_restore_system_theme "$TMP_DIR" || exit 1
-wait_for_attribute "$APP_PORT" "data-joy-color-scheme" "$expected" 10
+wait_for_attribute "$APP_PORT" "class" "$expected" 10
 check_no_errors "$TMP_DIR" || exit 1

@@ -1,5 +1,5 @@
 import React from 'react';
-import CircularProgress from '@mui/joy/CircularProgress';
+import CircularProgress from '@mui/material/CircularProgress';
 
 export function FullscreenSpinner() {
     return (
@@ -17,7 +17,7 @@ export function FullscreenSpinner() {
                 zIndex: 1300,
             }}
             >
-            <CircularProgress variant="soft" />
+            <CircularProgress />
         </div>
     );
 };

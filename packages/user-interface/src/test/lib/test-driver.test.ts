@@ -5,6 +5,7 @@
 import {
     doClick,
     clickTarget,
+    selectTrigger,
     waitForElement,
     isElementVisible,
     doLongPressClick,
@@ -93,10 +94,11 @@ class ManualClock implements ITestDriverClock {
 
 //
 // Regression guard for the create-database smoke-test failure caused by commit fa673c6b (mobile
-// dialogs became Joy Drawers). A closed Joy Drawer stays in the DOM with visibility:hidden, and a
-// dialog mounted in several places matches its data-id several times, all but one hidden. The driver
-// must act only on the visible one; before this it took the first in DOM order (a hidden drawer), so
-// it typed into an invisible form and the visible one stayed empty.
+// dialogs became drawers). A closed Material Dialog or Drawer kept mounted stays in the DOM with
+// visibility:hidden on its Modal root, and a dialog mounted in several places matches its data-id
+// several times, all but one hidden. The driver must act only on the visible one; before this it
+// took the first in DOM order (a hidden drawer), so it typed into an invisible form and the visible
+// one stayed empty.
 //
 // The late-render tests below give the driver a ManualClock rather than letting it wait on the
 // machine. Fixes the intermittent unit-test failure where a late render lost the race against the
@@ -112,15 +114,16 @@ describe("hidden elements are not actionable", () => {
         setTestDriverClock(realTestDriverClock);
     });
 
-    // A hidden wrapper (a closed drawer) followed by a visible one, both carrying the same data-id.
+    // A hidden Modal root (a closed drawer kept mounted) followed by a visible one, both holding a
+    // Material TextField and a Button carrying the same data-ids.
     function twoWrappers(): void {
         document.body.innerHTML = `
-            <div id="closed" style="visibility: hidden;">
-                <div data-id="field"><input type="text" /></div>
+            <div id="closed" class="MuiModal-root" style="visibility: hidden;">
+                <div data-id="field" class="MuiFormControl-root MuiTextField-root"><div class="MuiInputBase-root"><input type="text" /></div></div>
                 <button data-id="confirm">Confirm</button>
             </div>
-            <div id="open">
-                <div data-id="field"><input type="text" /></div>
+            <div id="open" class="MuiModal-root">
+                <div data-id="field" class="MuiFormControl-root MuiTextField-root"><div class="MuiInputBase-root"><input type="text" /></div></div>
                 <button data-id="confirm">Confirm</button>
             </div>`;
     }
@@ -213,17 +216,62 @@ describe("doClick", () => {
 
     //
     // Regression guard for the replication smoke test, which appeared to cover both replication modes
-    // but only ever covered partial. Joy's Radio puts the data-id on a wrapper span with the real
-    // input nested inside, so clicking the wrapper selected nothing, the mode stayed on its default,
-    // and the test asserted against a screen that had not changed.
+    // but only ever covered partial. A Radio puts the data-id on a wrapper span with the real input
+    // nested inside, so clicking the wrapper selected nothing, the mode stayed on its default, and
+    // the test asserted against a screen that had not changed.
     //
-    test("selects the radio nested inside a Joy-style wrapper carrying the data-id", () => {
+    test("selects the radio nested inside a Material Radio's wrapper carrying the data-id", () => {
         document.body.innerHTML = `
-            <span data-id="mode-partial"><input type="radio" name="mode" value="partial" checked /></span>
-            <span data-id="mode-full"><input type="radio" name="mode" value="full" /></span>`;
+            <span data-id="mode-partial" class="MuiRadio-root MuiButtonBase-root"><input class="PrivateSwitchBase-input" type="radio" name="mode" value="partial" checked /><span></span></span>
+            <span data-id="mode-full" class="MuiRadio-root MuiButtonBase-root"><input class="PrivateSwitchBase-input" type="radio" name="mode" value="full" /><span></span></span>`;
         const fullInput = document.querySelector(`[data-id="mode-full"] input`) as HTMLInputElement;
         doClick("mode-full");
         expect(fullInput.checked).toBe(true);
+    });
+
+    //
+    // A Material Select opens on a left-button mousedown on its combobox and ignores a click, so a
+    // click command aimed at a Select by its data-id would leave the list closed.
+    //
+    test("presses a Material Select's combobox with a left-button mousedown instead of clicking", () => {
+        document.body.innerHTML = `
+            <div data-id="type-select" class="MuiInputBase-root MuiOutlinedInput-root">
+                <div role="combobox" class="MuiSelect-select">Local</div>
+                <input aria-hidden="true" tabindex="-1" class="MuiSelect-nativeInput" value="local" />
+            </div>`;
+        const combobox = document.querySelector(`[role="combobox"]`) as HTMLElement;
+        const pressedButtons: number[] = [];
+        let clicks = 0;
+        combobox.addEventListener("mousedown", event => pressedButtons.push(event.button));
+        combobox.addEventListener("click", () => { clicks += 1; });
+        doClick("type-select");
+        expect(pressedButtons).toEqual([0]);
+        expect(clicks).toBe(0);
+    });
+});
+
+describe("selectTrigger", () => {
+
+    test("returns the element when it is the combobox", () => {
+        document.body.innerHTML = `<div data-id="select" role="combobox">Local</div>`;
+        const select = document.querySelector(`[data-id="select"]`) as HTMLElement;
+        expect(selectTrigger(select)).toBe(select);
+    });
+
+    test("returns the combobox nested inside the Select's root", () => {
+        document.body.innerHTML = `<div data-id="select" class="MuiInputBase-root"><div role="combobox">Local</div></div>`;
+        const select = document.querySelector(`[data-id="select"]`) as HTMLElement;
+        expect(selectTrigger(select)).toBe(document.querySelector(`[role="combobox"]`));
+    });
+
+    test("returns undefined for a button", () => {
+        document.body.innerHTML = `<button data-id="go">go</button>`;
+        expect(selectTrigger(document.querySelector(`[data-id="go"]`) as HTMLElement)).toBeUndefined();
+    });
+
+    test("returns undefined when the wrapper holds two comboboxes", () => {
+        document.body.innerHTML = `<div data-id="form"><div role="combobox">A</div><div role="combobox">B</div></div>`;
+        expect(selectTrigger(document.querySelector(`[data-id="form"]`) as HTMLElement)).toBeUndefined();
     });
 });
 
@@ -255,17 +303,17 @@ describe("clickTarget", () => {
     });
 
     test("returns the nested radio when the wrapper contains exactly one", () => {
-        document.body.innerHTML = `<span data-id="mode"><input type="radio" /></span>`;
+        document.body.innerHTML = `<span data-id="mode" class="MuiRadio-root MuiButtonBase-root"><input class="PrivateSwitchBase-input" type="radio" /><span></span></span>`;
         expect(clickTarget(element("mode"))).toBe(document.querySelector(`[data-id="mode"] input`));
     });
 
     test("returns the nested checkbox when the wrapper contains exactly one", () => {
-        document.body.innerHTML = `<span data-id="toggle"><input type="checkbox" /></span>`;
+        document.body.innerHTML = `<span class="MuiSwitch-root"><span data-id="toggle" class="MuiSwitch-switchBase MuiButtonBase-root"><input class="MuiSwitch-input" type="checkbox" /><span class="MuiSwitch-thumb"></span></span><span class="MuiSwitch-track"></span></span>`;
         expect(clickTarget(element("toggle"))).toBe(document.querySelector(`[data-id="toggle"] input`));
     });
 
     test("returns the wrapper unchanged when it contains no toggle", () => {
-        document.body.innerHTML = `<div data-id="row"><input type="text" /><span>label</span></div>`;
+        document.body.innerHTML = `<div data-id="row" class="MuiFormControl-root MuiTextField-root"><label>label</label><div class="MuiInputBase-root"><input type="text" /></div></div>`;
         const row = element("row");
         expect(clickTarget(row)).toBe(row);
     });
@@ -511,12 +559,12 @@ describe("getValue", () => {
     });
 
     //
-    // Regression guard for containers holding a Joy Switch. The switch's hidden checkbox has the
-    // value "on" by default, which is truthy, so reading the nested input ahead of the text reported
-    // "on" for the whole container and a test waiting for its text waited forever.
+    // Regression guard for containers holding a Switch. The switch's checkbox has the value "on" by
+    // default, which is truthy, so reading the nested input ahead of the text reported "on" for the
+    // whole container and a test waiting for its text waited forever.
     //
     test("returns a container's text ahead of a nested checkbox's \"on\"", () => {
-        document.body.innerHTML = `<div data-id="panel">Encryption enabled<span><input type="checkbox" /></span></div>`;
+        document.body.innerHTML = `<div data-id="panel">Encryption enabled<span class="MuiSwitch-root"><span class="MuiSwitch-switchBase"><input class="MuiSwitch-input" type="checkbox" /></span></span></div>`;
         expect(getValue("panel")).toBe("Encryption enabled");
     });
 
@@ -531,6 +579,40 @@ describe("getValue", () => {
         // text content, which would make the text path answer and leave this path unexercised.
         (document.querySelector(`[data-id="key"] textarea`) as HTMLTextAreaElement).value = "PEM";
         expect(getValue("key")).toBe("PEM");
+    });
+
+    //
+    // A Material TextField holds its label in a `<label>` and again in its outline's `<legend>`, so
+    // reading its text returns the label instead of what was typed.
+    //
+    test("returns a Material TextField's typed value, not its label", () => {
+        document.body.innerHTML = `
+            <div data-id="path" class="MuiFormControl-root MuiTextField-root">
+                <label>Path</label>
+                <div class="MuiInputBase-root MuiOutlinedInput-root"><input type="text" value="/photos/db" /><fieldset><legend><span>Path</span></legend></fieldset></div>
+            </div>`;
+        expect(getValue("path")).toBe("/photos/db");
+    });
+
+    test("returns a multiline TextField's typed value, not the hidden copy that measures its height", () => {
+        document.body.innerHTML = `
+            <div data-id="description" class="MuiFormControl-root MuiTextField-root">
+                <label>Description</label>
+                <div class="MuiInputBase-root MuiInputBase-multiline"><textarea></textarea><textarea aria-hidden="true" readonly></textarea></div>
+            </div>`;
+        const textareas = document.querySelectorAll(`[data-id="description"] textarea`);
+        (textareas[0] as HTMLTextAreaElement).value = "A day at the beach";
+        (textareas[1] as HTMLTextAreaElement).value = "x";
+        expect(getValue("description")).toBe("A day at the beach");
+    });
+
+    test("returns the option a Material Select shows, not the value of its hidden input", () => {
+        document.body.innerHTML = `
+            <div data-id="key-select" class="MuiInputBase-root MuiOutlinedInput-root">
+                <div role="combobox" class="MuiSelect-select">My key</div>
+                <input aria-hidden="true" tabindex="-1" class="MuiSelect-nativeInput" value="secret-id-1" />
+            </div>`;
+        expect(getValue("key-select")).toContain("My key");
     });
 
     test("returns an empty string when the element is missing", () => {
@@ -609,16 +691,16 @@ describe("installTestDriver", () => {
     });
 
     test("routes a get-attribute command to the element's attribute and to the document element's when no data-id is given", async () => {
-        document.documentElement.setAttribute("data-joy-color-scheme", "dark");
+        document.documentElement.setAttribute("class", "dark");
         document.body.innerHTML = `<div data-id="panel" data-state="open"></div>`;
         try {
             const { transport, invoke } = makeTransport();
             installTestDriver(transport);
             expect(await invoke("get-attribute", { dataId: "panel", attribute: "data-state" })).toBe("open");
-            expect(await invoke("get-attribute", { dataId: "", attribute: "data-joy-color-scheme" })).toBe("dark");
+            expect(await invoke("get-attribute", { dataId: "", attribute: "class" })).toBe("dark");
         }
         finally {
-            document.documentElement.removeAttribute("data-joy-color-scheme");
+            document.documentElement.removeAttribute("class");
         }
     });
 

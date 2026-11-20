@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { log, logExceptions } from 'utils';
-import Box from '@mui/joy/Box';
-import Typography from '@mui/joy/Typography';
-import Button from '@mui/joy/Button';
-import ModalClose from '@mui/joy/ModalClose';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import CloseIcon from '@mui/icons-material/Close';
 import { ResponsiveDialog } from './responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Input from '@mui/joy/Input';
-import Select from '@mui/joy/Select';
-import Option from '@mui/joy/Option';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { ConfigureSecretsModal, type IDatabaseSecretsSelection } from './configure-secrets-modal';
@@ -233,12 +234,20 @@ export function EditDatabaseModal({
                 maxWidth={700}
                 onKeyDown={createDialogKeyHandler(handleSave, false)}
                 >
-                    <ModalClose data-id="edit-database-close" />
+                    <IconButton
+                        data-id="edit-database-close"
+                        aria-label="Close"
+                        onClick={onClose}
+                        sx={{ position: 'absolute', top: 8, right: 8 }}
+                        >
+                        <CloseIcon />
+                    </IconButton>
                     <DialogTitle>{entry ? 'Edit Database' : 'Add Database'}</DialogTitle>
                     <DialogContent>
-                        <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
+                        <FormControl fullWidth sx={{ mb: 1 }} error={nameError !== undefined}>
                             <FormLabel>Name</FormLabel>
-                            <Input
+                            <OutlinedInput
+                                size="small"
                                 data-id="edit-database-name-input"
                                 value={form.name}
                                 onChange={event => {
@@ -247,25 +256,27 @@ export function EditDatabaseModal({
                                 }}
                             />
                             {nameError && (
-                                <Typography level="body-sm" color="danger" sx={{ mt: 0.5 }}>
+                                <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
                                     {nameError}
                                 </Typography>
                             )}
                         </FormControl>
 
-                        <FormControl sx={{ mb: 1 }}>
+                        <FormControl fullWidth sx={{ mb: 1 }}>
                             <FormLabel>Description</FormLabel>
-                            <Input
+                            <OutlinedInput
+                                size="small"
                                 data-id="edit-database-description-input"
                                 value={form.description}
                                 onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
                             />
                         </FormControl>
 
-                        <FormControl sx={{ mb: 1 }}>
+                        <FormControl fullWidth sx={{ mb: 1 }}>
                             <FormLabel>Path</FormLabel>
                             <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Input
+                                <OutlinedInput
+                                    size="small"
                                     data-id="edit-database-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.path}
@@ -280,12 +291,13 @@ export function EditDatabaseModal({
                             </Box>
                         </FormControl>
 
-                        {/* The picker sits outside the FormControl, not beside the Input inside it: Joy
-                            allows a FormControl only one control component, and a Select is one. */}
+                        {/* The picker sits outside the FormControl, not beside the input inside it: a
+                            FormControl takes only one input component, and a Select is one. */}
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end', mb: 2 }}>
-                            <FormControl sx={{ flexGrow: 1 }}>
+                            <FormControl fullWidth sx={{ flexGrow: 1 }}>
                                 <FormLabel>Origin</FormLabel>
-                                <Input
+                                <OutlinedInput
+                                    size="small"
                                     data-id="database-origin-input"
                                     value={form.origin}
                                     onChange={event => setForm(prev => ({ ...prev, origin: event.target.value }))}
@@ -294,44 +306,47 @@ export function EditDatabaseModal({
                             {originCandidates.length > 0
                                 && <Select
                                     sx={{ minWidth: 160 }}
+                                    size="small"
                                     value=""
-                                    placeholder="Choose…"
-                                    onChange={(_event, selectedPath) => {
-                                        if (selectedPath) {
-                                            setForm(prev => ({ ...prev, origin: selectedPath as string }));
+                                    displayEmpty
+                                    renderValue={() => 'Choose…'}
+                                    onChange={event => {
+                                        if (event.target.value) {
+                                            setForm(prev => ({ ...prev, origin: event.target.value }));
                                         }
                                     }}
-                                    slotProps={{ button: { 'data-id': 'database-origin-select' } }}
+                                    data-id="database-origin-select"
                                 >
                                     {originCandidates.map(candidate => (
-                                        <Option
+                                        <MenuItem
                                             data-id={`database-origin-option-${candidate.name}`}
                                             key={candidate.path}
                                             value={candidate.path}
                                             >
                                             {candidate.name}
-                                        </Option>
+                                        </MenuItem>
                                     ))}
                                 </Select>
                             }
                         </Box>
 
-                        <FormControl sx={{ mb: 1 }}>
+                        <FormControl fullWidth sx={{ mb: 1 }}>
                             <FormLabel>Secrets</FormLabel>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography data-id="edit-database-secrets-summary" level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
+                                <Typography data-id="edit-database-secrets-summary" variant="body2" sx={{ flexGrow: 1 }} color="text.secondary">
                                     {summariseSecrets()}
                                 </Typography>
-                                <Button data-id="edit-database-configure-secrets-button" variant="outlined" size="sm" onClick={() => setSecretsModalOpen(true)}>
+                                <Button data-id="edit-database-configure-secrets-button" variant="outlined" size="small" onClick={() => setSecretsModalOpen(true)}>
                                     Configure secrets…
                                 </Button>
                             </Box>
                         </FormControl>
                     </DialogContent>
                     <DialogActions>
-                        <Button data-id="edit-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>
+                        <Button data-id="edit-database-cancel" variant="text" onClick={onClose}>Cancel</Button>
                         <Button
                             data-id="save-database-button"
+                            variant="contained"
                             onClick={logExceptions(handleSave, 'Save error')}
                             >
                             Save

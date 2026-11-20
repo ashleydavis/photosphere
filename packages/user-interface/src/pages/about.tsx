@@ -1,11 +1,12 @@
 import React, { useRef, useState } from "react";
 import { version } from "config";
-import Box from "@mui/joy/Box";
-import Card from "@mui/joy/Card";
-import Button from "@mui/joy/Button";
-import Input from "@mui/joy/Input";
-import Typography from "@mui/joy/Typography";
-import Link from "@mui/joy/Link";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import Button from "@mui/material/Button";
+import OutlinedInput from "@mui/material/OutlinedInput";
+import InputAdornment from "@mui/material/InputAdornment";
+import Typography from "@mui/material/Typography";
+import Link from "@mui/material/Link";
 import { Check } from "@mui/icons-material";
 import { useDeveloper } from "../context/developer-context";
 import { useToast } from "../context/toast-context";
@@ -70,7 +71,7 @@ export function AboutPage() {
     return (
         <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', p: isMobile ? 2 : 4, pb: 16 }}>
             <Box sx={{ mx: 'auto', maxWidth: 800 }}>
-                <Typography level="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem' }}>
+                <Typography variant="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem' }}>
                     About Photosphere
                 </Typography>
 
@@ -78,93 +79,123 @@ export function AboutPage() {
                     is a chip: a real target on a mobile rather than a line of grey text. */}
                 {/* The version doubles as the hidden developer-mode gesture (four rapid taps), so it
                     is a real button: one element that both carries the text and takes the tap. (A
-                    Joy Chip splits those across two elements, which breaks the smoke test that reads
-                    the text from the element it clicks.) */}
+                    chip splits those across two elements, which breaks the smoke test that reads the
+                    text from the element it clicks.) */}
                 <Button
                     data-id="about-version"
-                    variant="soft"
-                    color="neutral"
-                    size={isMobile ? 'lg' : 'sm'}
+                    variant="outlined"
+                    color="inherit"
+                    size={isMobile ? 'large' : 'small'}
                     onClick={onVersionTap}
-                    sx={{ mt: 1, borderRadius: 'xl', minHeight: isMobile ? 44 : undefined }}
+                    sx={{
+                        mt: 1,
+                        borderRadius: 4,
+                        minHeight: isMobile ? 44 : undefined,
+                    }}
                     >
                     {`Version ${version}`}
                 </Button>
 
-                <Typography level="body-md" sx={{ mt: 2.5 }}>
+                <Typography variant="body1" sx={{ mt: 2.5 }}>
                     Photosphere is a local-first application for managing your database of digital media
                     files (photos and videos). Think of it as the spiritual successor to Picasa, but with
                     a UI more like modern Google Photos, backed by a Git-style database for immutable
                     binary files with editable metadata.
                 </Typography>
 
-                <Card variant="soft" sx={{ borderRadius: 'lg', p: 2, mt: 2.5, gap: 1 }}>
-                    <Typography level="title-md">Important features</Typography>
+                <Card
+                    elevation={0}
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        bgcolor: 'action.hover',
+                        borderRadius: 3,
+                        p: 2,
+                        mt: 2.5,
+                        gap: 1,
+                    }}
+                    >
+                    <Typography variant="subtitle1">Important features</Typography>
                     <Box component="ul" sx={{ m: 0, pl: 2.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
                         {FEATURES.map(feature => (
-                            <Typography component="li" level="body-sm" key={feature}>
+                            <Typography component="li" variant="body2" key={feature}>
                                 {feature}
                             </Typography>
                         ))}
                     </Box>
                 </Card>
 
-                <Card variant="outlined" sx={{ borderRadius: 'lg', p: 2, mt: 2, gap: 1 }}>
-                    <Typography level="title-md">Claude / MCP integration</Typography>
-                    <Typography level="body-sm">
+                <Card
+                    variant="outlined"
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderRadius: 3,
+                        p: 2,
+                        mt: 2,
+                        gap: 1,
+                    }}
+                    >
+                    <Typography variant="subtitle1">Claude / MCP integration</Typography>
+                    <Typography variant="body2">
                         The Photosphere desktop app ships with an embedded Model Context Protocol (MCP)
                         server so AI assistants like Claude Code or Claude Desktop can browse and edit
                         your library while it is open. Add this URL to your MCP client configuration as
                         an HTTP server:
                     </Typography>
-                    {/* The copy button sits under the field on a mobile, where an end decorator would
+                    {/* The copy button sits under the field on a mobile, where an end adornment would
                         squeeze the URL into a few characters. */}
-                    <Input
+                    <OutlinedInput
                         value={MCP_URL}
                         readOnly
-                        size={isMobile ? 'lg' : 'md'}
-                        sx={{ fontFamily: 'monospace', maxWidth: isMobile ? '100%' : 500 }}
-                        endDecorator={isMobile
+                        size={isMobile ? 'medium' : 'small'}
+                        sx={{
+                            fontFamily: 'monospace',
+                            maxWidth: isMobile ? '100%' : 500,
+                        }}
+                        endAdornment={isMobile
                             ? undefined
-                            : <Button
-                                variant="plain"
-                                size="sm"
-                                onClick={() => { void copyMcpUrl(); }}
-                                >
-                                {copyState === "copied" ? "Copied!" : "Copy"}
-                            </Button>
+                            : <InputAdornment position="end">
+                                <Button
+                                    variant="text"
+                                    size="small"
+                                    onClick={() => { void copyMcpUrl(); }}
+                                    >
+                                    {copyState === "copied" ? "Copied!" : "Copy"}
+                                </Button>
+                            </InputAdornment>
                         }
                         />
                     {isMobile
                         && <Button
-                            variant="soft"
-                            size="lg"
-                            startDecorator={copyState === "copied" ? <Check /> : undefined}
+                            variant="outlined"
+                            size="large"
+                            startIcon={copyState === "copied" ? <Check /> : undefined}
                             onClick={() => { void copyMcpUrl(); }}
                             sx={{ minHeight: 48 }}
                             >
                             {copyState === "copied" ? "Copied" : "Copy the URL"}
                         </Button>
                     }
-                    <Typography level="body-xs" sx={{ color: 'text.tertiary' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         The server only accepts connections from this machine and runs only while the
                         Photosphere desktop app is open.
                     </Typography>
                 </Card>
 
                 <Box sx={{ mt: 2.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Typography level="body-sm">
+                    <Typography variant="body2">
                         {"Photosphere is developed by "}
-                        <Link href="https://codecapers.com.au/about" target="_blank">Ashley Davis</Link>.
+                        <Link href="https://codecapers.com.au/about" target="_blank" underline="hover">Ashley Davis</Link>.
                     </Typography>
-                    <Typography level="body-sm">
+                    <Typography variant="body2">
                         {"Visit the "}
-                        <Link href="https://photosphere.codecapers.com.au/" target="_blank">Photosphere website</Link>
+                        <Link href="https://photosphere.codecapers.com.au/" target="_blank" underline="hover">Photosphere website</Link>
                         {" to learn more."}
                     </Typography>
-                    <Typography level="body-sm">
+                    <Typography variant="body2">
                         {"Early development of Photosphere was covered in the book "}
-                        <Link href="https://tfdd.codecapers.com.au/" target="_blank">The Feedback-Driven Developer</Link>.
+                        <Link href="https://tfdd.codecapers.com.au/" target="_blank" underline="hover">The Feedback-Driven Developer</Link>.
                     </Typography>
                 </Box>
             </Box>

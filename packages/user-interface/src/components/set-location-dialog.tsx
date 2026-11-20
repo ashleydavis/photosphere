@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import Modal from "@mui/joy/Modal/Modal";
-import ModalDialog from "@mui/joy/ModalDialog/ModalDialog";
-import Button from "@mui/joy/Button/Button";
-import Input from "@mui/joy/Input/Input";
-import Typography from "@mui/joy/Typography/Typography";
-import Stack from "@mui/joy/Stack/Stack";
+import Dialog from "@mui/material/Dialog";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import Typography from "@mui/material/Typography";
+import Stack from "@mui/material/Stack";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -319,24 +319,39 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
     const pinIcon = createPinIcon();
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog
-                onKeyDown={createDialogKeyHandler(onConfirm, !pinCoords || isConfirming)}
-                sx={{
-                    width: "85vw",
-                    height: "85vh",
-                    display: "flex",
-                    flexDirection: "column",
-                    p: 2,
-                    gap: 1,
-                }}
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth={false}
+            slotProps={{
+                paper: {
+                    onKeyDown: createDialogKeyHandler(onConfirm, !pinCoords || isConfirming),
+                    sx: {
+                        width: "85vw",
+                        height: "85vh",
+                        display: "flex",
+                        flexDirection: "column",
+                        p: 2,
+                        gap: 1,
+                    },
+                },
+            }}
             >
-                <Typography level="title-md">Set Location</Typography>
+                <Typography variant="subtitle1">Set Location</Typography>
 
-                <Input
+                <TextField
+                    size="small"
                     placeholder="Search for a place or address..."
                     value={searchQuery}
-                    startDecorator={isSearching ? <i className="fa-solid fa-spinner fa-spin" /> : <i className="fa-solid fa-search" />}
+                    slotProps={{
+                        input: {
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    {isSearching ? <i className="fa-solid fa-spinner fa-spin" /> : <i className="fa-solid fa-search" />}
+                                </InputAdornment>
+                            ),
+                        },
+                    }}
                     onChange={event => {
                         const value = event.target.value;
                         setSearchQuery(value);
@@ -376,10 +391,10 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
 
                 {pinCoords && (
                     <Stack spacing={0}>
-                        <Typography level="body-xs" sx={{ color: "text.secondary" }}>
+                        <Typography variant="caption" sx={{ color: "text.secondary" }}>
                             {pinCoords.lat.toFixed(6)}, {pinCoords.lng.toFixed(6)}
                         </Typography>
-                        <Typography level="body-sm">
+                        <Typography variant="body2">
                             {isGeocoding
                                 ? "Looking up location..."
                                 : (pinLocation ?? "Location unknown")
@@ -389,25 +404,31 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
                 )}
 
                 {!pinCoords && (
-                    <Typography level="body-xs" sx={{ color: "text.secondary" }}>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
                         Click on the map to place a pin.
                     </Typography>
                 )}
 
-                <Stack direction="row" spacing={1} justifyContent="space-between">
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        justifyContent: "space-between",
+                    }}
+                    >
                     <Button
-                        variant="plain"
-                        color="danger"
+                        variant="text"
+                        color="error"
                         onClick={onClearLocation}
                     >
                         Clear location
                     </Button>
                     <Stack direction="row" spacing={1}>
-                        <Button variant="outlined" color="neutral" onClick={onClose}>
+                        <Button variant="outlined" color="inherit" onClick={onClose}>
                             Cancel
                         </Button>
                         <Button
-                            variant="solid"
+                            variant="contained"
                             color="primary"
                             disabled={!pinCoords}
                             loading={isConfirming}
@@ -417,7 +438,6 @@ export function SetLocationDialog({ open, initialCoordinates, onSetLocation, onC
                         </Button>
                     </Stack>
                 </Stack>
-            </ModalDialog>
-        </Modal>
+        </Dialog>
     );
 }

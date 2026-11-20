@@ -4,21 +4,22 @@ import { useUuidGenerator } from '../context/uuid-generator-context';
 import { replicateDatabase } from '../lib/replicate-database';
 import type { IReplicateDatabaseData } from 'api/src/lib/replicate-database.types';
 import { ResponsiveDialog } from './responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Input from '@mui/joy/Input';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
-import Radio from '@mui/joy/Radio';
-import RadioGroup from '@mui/joy/RadioGroup';
-import Select from '@mui/joy/Select';
-import Option from '@mui/joy/Option';
-import Typography from '@mui/joy/Typography';
-import Box from '@mui/joy/Box';
-import Alert from '@mui/joy/Alert';
-import CircularProgress from '@mui/joy/CircularProgress';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Radio from '@mui/material/Radio';
+import RadioGroup from '@mui/material/RadioGroup';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
 import { S3BrowserModal } from './s3-browser-modal';
 import { ConfigureSecretsModal } from './configure-secrets-modal';
@@ -184,35 +185,36 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
             <DialogContent sx={{ overflowX: 'hidden' }}>
                 {step === "configure" && (
                     <>
-                        <Typography level="body-md" sx={{ mb: 1 }}>
+                        <Typography variant="body1" sx={{ mb: 1 }}>
                             <strong>Source:</strong> {sourceEntry.name}
                         </Typography>
-                        <Typography level="body-sm" color="neutral" sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                             {sourceEntry.path}
                         </Typography>
 
-                        <FormControl sx={{ mb: 2 }}>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
                             <FormLabel>Destination type</FormLabel>
                             <Select
                                 value={form.storageType}
-                                onChange={(_event, value) => setForm(prev => applyDestinationTypeChange(prev, value as string | null))}
-                                slotProps={{ button: { 'data-id': 'replicate-dest-type-select' } }}
+                                size="small"
+                                onChange={event => setForm(prev => applyDestinationTypeChange(prev, event.target.value))}
+                                data-id="replicate-dest-type-select"
                             >
-                                <Option data-id="replicate-dest-type-option-filesystem" value="filesystem">File system</Option>
-                                <Option data-id="replicate-dest-type-option-s3" value="s3">S3</Option>
+                                <MenuItem data-id="replicate-dest-type-option-filesystem" value="filesystem">File system</MenuItem>
+                                <MenuItem data-id="replicate-dest-type-option-s3" value="s3">S3</MenuItem>
                             </Select>
                         </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
                             <FormLabel>Destination secrets</FormLabel>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography data-id="replicate-dest-secrets-summary" level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
+                                <Typography data-id="replicate-dest-secrets-summary" variant="body2" sx={{ flexGrow: 1 }} color="text.secondary">
                                     {summariseDestSecrets()}
                                 </Typography>
                                 <Button
                                     data-id="replicate-configure-secrets-button"
                                     variant="outlined"
-                                    size="sm"
+                                    size="small"
                                     onClick={() => setSecretsModalOpen(true)}
                                 >
                                     Configure secrets…
@@ -220,10 +222,11 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                             </Box>
                         </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
                             <FormLabel>Destination path</FormLabel>
                             <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Input
+                                <OutlinedInput
+                                    size="small"
                                     data-id="replicate-dest-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.destPath}
@@ -243,32 +246,32 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                             </Box>
                         </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
                             <FormLabel>Mode</FormLabel>
                             <RadioGroup
                                 value={form.mode}
                                 onChange={event => setForm(prev => ({ ...prev, mode: event.target.value as ReplicateMode }))}
                             >
-                                <Radio
-                                    data-id="replicate-mode-partial"
+                                <FormControlLabel
                                     value="partial"
+                                    control={<Radio data-id="replicate-mode-partial" size="small" />}
                                     label="Partial"
                                 />
-                                <Typography level="body-xs" color="neutral" sx={{ ml: 4, mb: 1 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ ml: 4, mb: 1 }}>
                                     Copies only metadata and structure. Original photos and videos are fetched on demand from the source. Choose this when you want a small, browsable replica.
                                 </Typography>
-                                <Radio
-                                    data-id="replicate-mode-full"
+                                <FormControlLabel
                                     value="full"
+                                    control={<Radio data-id="replicate-mode-full" size="small" />}
                                     label="Full"
                                 />
-                                <Typography level="body-xs" color="neutral" sx={{ ml: 4 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ ml: 4 }}>
                                     Copies everything — every original, display, and thumbnail file. Choose this when you want a complete, standalone copy that does not depend on the source.
                                 </Typography>
                             </RadioGroup>
                         </FormControl>
 
-                        <Typography level="body-xs" color="neutral" sx={{ mt: 2 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
                             To replicate to an existing encrypted database, register it on this page first and the replica will inherit its credentials.
                         </Typography>
                     </>
@@ -277,23 +280,23 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                 {step === "running" && (
                     <>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-                            <CircularProgress size="sm" />
+                            <CircularProgress size={24} />
                             <Typography>{progress}</Typography>
                         </Box>
-                        <Typography level="body-sm" color="neutral" data-id="replicate-background-hint">
+                        <Typography variant="body2" color="text.secondary" data-id="replicate-background-hint">
                             Replication runs in the background. You can close this dialog and it will keep going; watch it and stop it from the Background jobs list in the menu.
                         </Typography>
                     </>
                 )}
 
                 {step === "success" && (
-                    <Alert color="success">
+                    <Alert severity="success">
                         Replication completed. The replica has been added to your databases at {form.destPath}.
                     </Alert>
                 )}
 
                 {step === "error" && (
-                    <Alert color="danger">
+                    <Alert severity="error">
                         {errorMessage}
                     </Alert>
                 )}
@@ -303,13 +306,14 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                     <>
                         <Button
                             data-id="replicate-cancel-button"
-                            variant="plain"
+                            variant="text"
                             onClick={onClose}
                         >
                             Cancel
                         </Button>
                         <Button
                             data-id="replicate-start-button"
+                            variant="contained"
                             disabled={startDisabled}
                             onClick={() => {
                                 handleStart().catch(err => log.exception('Start replication error:', err as Error));
@@ -323,7 +327,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                 {step === "running" && (
                     <Button
                         data-id="replicate-run-in-background-button"
-                        variant="plain"
+                        variant="text"
                         onClick={onClose}
                     >
                         Run in background
@@ -331,7 +335,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                 )}
 
                 {(step === "success" || step === "error") && (
-                    <Button data-id="replicate-close-button" onClick={onClose}>Close</Button>
+                    <Button data-id="replicate-close-button" variant="contained" onClick={onClose}>Close</Button>
                 )}
             </DialogActions>
         </ResponsiveDialog>

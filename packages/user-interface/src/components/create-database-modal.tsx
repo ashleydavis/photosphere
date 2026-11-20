@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { log } from 'utils';
-import Box from '@mui/joy/Box';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Input from '@mui/joy/Input';
-import FormControl from '@mui/joy/FormControl';
-import FormLabel from '@mui/joy/FormLabel';
-import Select from '@mui/joy/Select';
-import Option from '@mui/joy/Option';
-import Switch from '@mui/joy/Switch';
-import Typography from '@mui/joy/Typography';
+import Box from '@mui/material/Box';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import Switch from '@mui/material/Switch';
+import Typography from '@mui/material/Typography';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { useAssetDatabase } from '../context/asset-database-source';
@@ -205,16 +205,16 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
         buttonDataId: string
     ): React.ReactNode {
         return (
-            <FormControl sx={{ mb: 1 }}>
+            <FormControl fullWidth sx={{ mb: 1 }}>
                 <FormLabel>{label}</FormLabel>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Typography data-id={chosenNameDataId} level="body-sm" sx={{ flexGrow: 1 }}>
+                    <Typography data-id={chosenNameDataId} variant="body2" sx={{ flexGrow: 1 }}>
                         {chosenName ?? 'None selected'}
                     </Typography>
                     <Button
                         data-id={buttonDataId}
                         variant="outlined"
-                        size="sm"
+                        size="small"
                         onClick={() => setSelectSecretType(secretType)}
                     >
                         Select
@@ -240,9 +240,10 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                 >
                 <DialogTitle>New Database</DialogTitle>
                 <DialogContent>
-                    <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
+                    <FormControl fullWidth sx={{ mb: 1 }} error={nameError !== undefined}>
                         <FormLabel>Name</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             data-id="database-name-input"
                             value={form.name}
                             onChange={event => {
@@ -251,38 +252,41 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                             }}
                         />
                         {nameError && (
-                            <Typography level="body-sm" color="danger" sx={{ mt: 0.5 }}>
+                            <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
                                 {nameError}
                             </Typography>
                         )}
                     </FormControl>
 
-                    <FormControl sx={{ mb: 1 }}>
+                    <FormControl fullWidth sx={{ mb: 1 }}>
                         <FormLabel>Description</FormLabel>
-                        <Input
+                        <OutlinedInput
+                            size="small"
                             value={form.description}
                             onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
                         />
                     </FormControl>
 
-                    <FormControl sx={{ mb: 2 }}>
+                    <FormControl fullWidth sx={{ mb: 2 }}>
                         <FormLabel>Type</FormLabel>
                         <Select
                             value={form.storageType}
-                            onChange={(_event, value) => setForm(prev => ({ ...prev, storageType: value as StorageType, path: '', s3Key: undefined }))}
-                            slotProps={{ button: { 'data-id': 'database-storage-type-select' } }}
+                            size="small"
+                            onChange={event => setForm(prev => ({ ...prev, storageType: event.target.value as StorageType, path: '', s3Key: undefined }))}
+                            data-id="database-storage-type-select"
                         >
-                            <Option value="filesystem">File system</Option>
-                            <Option data-id="database-storage-type-option-s3" value="s3">S3</Option>
+                            <MenuItem value="filesystem">File system</MenuItem>
+                            <MenuItem data-id="database-storage-type-option-s3" value="s3">S3</MenuItem>
                         </Select>
                     </FormControl>
 
                     {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'chosen-s3-secret', 'select-s3-button')}
 
-                    <FormControl sx={{ mb: 2 }}>
+                    <FormControl fullWidth sx={{ mb: 2 }}>
                         <FormLabel>Path</FormLabel>
                         <Box sx={{ display: 'flex', gap: 1 }}>
-                            <Input
+                            <OutlinedInput
+                                size="small"
                                 data-id="database-path-input"
                                 sx={{ flexGrow: 1 }}
                                 value={form.path}
@@ -302,7 +306,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                         </Box>
                     </FormControl>
 
-                    <FormControl sx={{ mb: 2 }}>
+                    <FormControl fullWidth sx={{ mb: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Switch
                                 checked={form.encrypted}
@@ -317,15 +321,16 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                     {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, undefined, 'select-geocoding-button')}
 
                     {createError && (
-                        <Typography data-id="create-database-error" level="body-sm" color="danger">
+                        <Typography data-id="create-database-error" variant="body2" color="error">
                             {createError}
                         </Typography>
                     )}
                 </DialogContent>
                 <DialogActions>
-                    <Button data-id="create-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>
+                    <Button data-id="create-database-cancel" variant="text" onClick={onClose}>Cancel</Button>
                     <Button
                         data-id="create-database-confirm"
+                        variant="contained"
                         disabled={!form.path || nameError !== undefined}
                         onClick={createAndShowError}
                     >

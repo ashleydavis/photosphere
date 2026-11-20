@@ -2,7 +2,7 @@ import React, { useCallback, useEffect } from "react";
 import dayjs from "dayjs";
 import { useGalleryItem } from "../../../context/gallery-item-context";
 import _ from "lodash";
-import { Textarea, IconButton, Button, Chip, Typography, Sheet, Input } from "@mui/joy";
+import { TextField, IconButton, Button, Chip, Typography, Box } from "@mui/material";
 import { Flag, FlagOutlined, Star, StarBorder } from "@mui/icons-material";
 import { useGallery } from "../../../context/gallery-context";
 import { SetPhotoDateDialog } from "../../../components/set-photo-date-dialog";
@@ -146,31 +146,19 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
             <Chip
                 key={name}
                 variant="outlined"
-                color="neutral"
+                size="small"
                 className="ml-2 mt-1"
+                label={name}
                 onClick={() => {
                     search(`.labels="${name}"`);
                     onLabelSearch();
                 }}
                 sx={{ cursor: "pointer" }}
-                endDecorator={
-                    <IconButton
-                        size="sm"
-                        variant="plain"
-                        color="neutral"
-                        title="Remove label"
-                        onClick={event => {
-                            event.stopPropagation();
-                            onRemoveLabel(name);
-                        }}
-                        sx={{ minHeight: '20px', minWidth: '20px', ml: 0.5 }}
-                        >
-                        <i className="fa-solid fa-close text-xs" />
-                    </IconButton>
-                }
-                >
-                {name}
-            </Chip>
+                onDelete={() => {
+                    onRemoveLabel(name);
+                }}
+                deleteIcon={<i className="fa-solid fa-close text-xs" title="Remove label" />}
+                />
         );
     }
 
@@ -179,15 +167,13 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
     }
 
     return (
-        <Sheet 
+        <Box
             className="info"
-            sx={{ bgcolor: 'background.surface', color: 'text.primary' }}
+            sx={{ bgcolor: 'background.paper', color: 'text.primary' }}
             >
             <div className="info-header">
                 <div className="flex flex-row items-center pl-3 pt-3 pb-2">
                     <IconButton
-                        variant="plain"
-                        color="neutral"
                         title="Close"
                         onClick={() => {
                             onClose();
@@ -196,13 +182,11 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                         <i className="fa-solid fa-close" />
                     </IconButton>
 
-                    <Typography level="title-lg" className="ml-2">Detail</Typography>
+                    <Typography variant="h6" className="ml-2">Detail</Typography>
 
                     <div className="flex-grow" />
 
                     <IconButton
-                        variant="plain"
-                        color="neutral"
                         title={asset.labels?.includes("starred") ? "Unstar" : "Star"}
                         onClick={async () => {
                             if (asset.labels?.includes("starred")) {
@@ -221,8 +205,6 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                     </IconButton>
 
                     <IconButton
-                        variant="plain"
-                        color="neutral"
                         title={asset.labels?.includes("flagged") ? "Unflag" : "Flag"}
                         onClick={async () => {
                             if (asset.labels?.includes("flagged")) {
@@ -246,9 +228,11 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
 
                 <div className="flex flex-col flex-grow ml-5 mr-5 mt-6 mb-6 justify-center">
                     <div className="flex flex-row">
-                        <Textarea
+                        <TextField
                             data-id="asset-description-input"
                             className="flex-grow"
+                            multiline
+                            size="small"
                             placeholder="Add a description"
                             value={description}
                             onChange={event => onUpdateDescription(event.target.value)}
@@ -261,10 +245,10 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                 <i className="text-2xl fa-solid fa-calendar-day" />
                             </div>
                             <div className="flex flex-col ml-3">
-                                <Typography level="body-md">Asset id</Typography>
+                                <Typography variant="body1">Asset id</Typography>
                                 <Typography
                                 	data-testid="asset-id"
-                                    level="body-sm"
+                                    variant="body2"
                                     >
                                     {asset._id}
                                 </Typography>
@@ -276,8 +260,8 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                 <i className="text-2xl fa-solid fa-calendar-day" />
                             </div>
                             <div className="flex flex-col ml-3">
-                                <Typography level="body-md">Asset hash</Typography>
-                                <Typography level="body-sm">
+                                <Typography variant="body1">Asset hash</Typography>
+                                <Typography variant="body2">
                                     {asset.hash}
                                 </Typography>
                             </div>
@@ -294,9 +278,9 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                     })}
 
                                     {addingLabel
-                                        ? <Input
+                                        ? <TextField
                                             autoFocus
-                                            size="sm"
+                                            size="small"
                                             className="ml-2 mt-1"
                                             placeholder="Label name"
                                             value={newLabelName}
@@ -314,8 +298,6 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                             />
                                         : <IconButton
                                             className="ml-2"
-                                            variant="plain"
-                                            color="neutral"
                                             title="Add label"
                                             onClick={() => setAddingLabel(true)}
                                             >
@@ -331,17 +313,15 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                 <i className="text-2xl fa-solid fa-calendar-day" />
                             </div>
                             <div className="flex flex-col ml-3 flex-grow">
-                                <Typography level="body-md">
+                                <Typography variant="body1">
                                     {asset.photoDate ? dayjs(asset.photoDate).format("MMM D, YYYY") : "No date" }
                                 </Typography>
-                                <Typography level="body-sm">
+                                <Typography variant="body2">
                                     {asset.photoDate ? dayjs(asset.photoDate).format("HH:mm") : "No time" }
                                 </Typography>
                             </div>
                             <IconButton
-                                size="sm"
-                                variant="plain"
-                                color="neutral"
+                                size="small"
                                 title="Edit date"
                                 onClick={() => setEditingDate(true)}
                                 >
@@ -364,19 +344,17 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                 <i className="text-2xl fa-regular fa-map" />
                             </div>
                             <div className="flex flex-col ml-3 flex-grow">
-                                <Typography level="body-md">
+                                <Typography variant="body1">
                                     {asset.location ?? "No location"}
                                 </Typography>
                                 {asset.coordinates && (
-                                    <Typography level="body-sm">
+                                    <Typography variant="body2">
                                         {asset.coordinates.lat.toFixed(6)}, {asset.coordinates.lng.toFixed(6)}
                                     </Typography>
                                 )}
                             </div>
                             <IconButton
-                                size="sm"
-                                variant="plain"
-                                color="neutral"
+                                size="small"
                                 title="Edit location"
                                 onClick={() => setEditingLocation(true)}
                             >
@@ -420,10 +398,10 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                                 <i className="text-2xl fa-regular fa-image" />
                             </div>
                             <div className="flex flex-col ml-3">
-                                <Typography level="body-md">
+                                <Typography variant="body1">
                                     {asset.origPath} {asset.origFileName}
                                 </Typography>
-                                <Typography level="body-sm">
+                                <Typography variant="body2">
                                     {asset.width} × {asset.height}
                                 </Typography>
                             </div>
@@ -443,9 +421,9 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
 
                         <div className="flex flex-row items-center mt-6">
                             <Button
-                                variant="plain"
-                                color="danger"
-                                startDecorator={<i className="text-xl fa-solid fa-trash" />}
+                                variant="text"
+                                color="error"
+                                startIcon={<i className="text-xl fa-solid fa-trash" />}
                                 onClick={onDeleteItem}
                                 >
                                 Delete
@@ -454,6 +432,6 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                     </div>
                 </div>
             </div>
-        </Sheet>
+        </Box>
     );
 }

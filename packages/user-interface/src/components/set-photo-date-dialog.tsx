@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import dayjs from "dayjs";
 import { ResponsiveDialog } from "./responsive-dialog";
-import DialogTitle from "@mui/joy/DialogTitle";
-import DialogContent from "@mui/joy/DialogContent";
-import DialogActions from "@mui/joy/DialogActions";
-import Select from "@mui/joy/Select";
-import Option from "@mui/joy/Option";
-import Input from "@mui/joy/Input";
-import Button from "@mui/joy/Button";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
 import { createDialogKeyHandler } from "../lib/dialog-keys";
 
 //
@@ -159,16 +159,16 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
                 <DialogTitle>Set Photo Date</DialogTitle>
                 <DialogContent sx={{ overflow: "visible", pb: 1 }}>
                     <Select
-                        size="sm"
+                        size="small"
                         value={dateMode}
-                        onChange={(_event, value) => setDateMode(value as DateMode)}
+                        onChange={event => setDateMode(event.target.value as DateMode)}
                         sx={{ mt: 1, width: "100%" }}
                     >
-                        <Option value="specific">Specific date</Option>
-                        <Option value="year">Year</Option>
-                        <Option value="month">Month</Option>
-                        <Option value="decade">Decade</Option>
-                        <Option value="clear">Clear date (undated)</Option>
+                        <MenuItem value="specific">Specific date</MenuItem>
+                        <MenuItem value="year">Year</MenuItem>
+                        <MenuItem value="month">Month</MenuItem>
+                        <MenuItem value="decade">Decade</MenuItem>
+                        <MenuItem value="clear">Clear date (undated)</MenuItem>
                     </Select>
 
                     <div style={{ minHeight: 40, marginTop: 16 }}>
@@ -181,12 +181,17 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
                             />
                         )}
                         {dateMode === "year" && (
-                            <Input
-                                size="sm"
+                            <TextField
+                                size="small"
                                 type="number"
                                 value={year}
                                 onChange={event => setYear(event.target.value)}
-                                slotProps={{ input: { min: 1000, max: 9999 } }}
+                                slotProps={{
+                                    htmlInput: {
+                                        min: 1000,
+                                        max: 9999,
+                                    },
+                                }}
                                 placeholder="e.g. 2023"
                                 sx={{ width: "100%" }}
                             />
@@ -194,21 +199,26 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
                         {dateMode === "month" && (
                             <div style={{ display: "flex", gap: 8 }}>
                                 <Select
-                                    size="sm"
+                                    size="small"
                                     value={month}
-                                    onChange={(_event, value) => setMonth(value as number)}
+                                    onChange={event => setMonth(Number(event.target.value))}
                                     sx={{ flex: 1 }}
                                 >
                                     {MONTH_NAMES.map((name, index) => (
-                                        <Option key={name} value={index + 1}>{name}</Option>
+                                        <MenuItem key={name} value={index + 1}>{name}</MenuItem>
                                     ))}
                                 </Select>
-                                <Input
-                                    size="sm"
+                                <TextField
+                                    size="small"
                                     type="number"
                                     value={monthYear}
                                     onChange={event => setMonthYear(event.target.value)}
-                                    slotProps={{ input: { min: 1000, max: 9999 } }}
+                                    slotProps={{
+                                        htmlInput: {
+                                            min: 1000,
+                                            max: 9999,
+                                        },
+                                    }}
                                     placeholder="Year"
                                     sx={{ width: 90 }}
                                 />
@@ -216,24 +226,24 @@ export function SetPhotoDateDialog({ open, onClose, onSetDate, currentDate }: IS
                         )}
                         {dateMode === "decade" && (
                             <Select
-                                size="sm"
+                                size="small"
                                 value={decade}
-                                onChange={(_event, value) => setDecade(value as number)}
+                                onChange={event => setDecade(Number(event.target.value))}
                                 sx={{ width: "100%" }}
                             >
                                 {DECADES.map(decadeValue => (
-                                    <Option key={decadeValue} value={decadeValue}>{decadeValue}s</Option>
+                                    <MenuItem key={decadeValue} value={decadeValue}>{decadeValue}s</MenuItem>
                                 ))}
                             </Select>
                         )}
                     </div>
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="plain" color="neutral" onClick={onClose}>
+                    <Button variant="text" color="inherit" onClick={onClose}>
                         Cancel
                     </Button>
                     <Button
-                        variant="solid"
+                        variant="contained"
                         color="primary"
                         disabled={isConfirmDisabled()}
                         onClick={handleConfirm}

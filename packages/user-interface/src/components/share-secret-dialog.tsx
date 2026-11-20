@@ -1,14 +1,14 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
 import { ResponsiveDialog } from './responsive-dialog';
-import DialogTitle from '@mui/joy/DialogTitle';
-import DialogContent from '@mui/joy/DialogContent';
-import DialogActions from '@mui/joy/DialogActions';
-import Button from '@mui/joy/Button';
-import Typography from '@mui/joy/Typography';
-import Alert from '@mui/joy/Alert';
-import CircularProgress from '@mui/joy/CircularProgress';
-import Box from '@mui/joy/Box';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Box from '@mui/material/Box';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { lanShareErrorMessage, noReceiverMessage } from '../lib/lan-share-error-message';
@@ -134,20 +134,20 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
             >
             <DialogTitle>Share Secret</DialogTitle>
             <DialogContent>
-                <Alert color="warning" sx={{ mb: 2 }}>
+                <Alert severity="warning" sx={{ mb: 2 }}>
                     Both devices must be on the same local network (wired or Wi-Fi). This does not work over the internet.
                 </Alert>
 
-                <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
+                <Typography variant="body2" sx={{ mb: 2 }} color="text.secondary">
                     Click Receive secret on another device to receive this secret.
                 </Typography>
 
                 {step === "confirm" && (
                     <>
-                        <Typography level="body-md" sx={{ mb: 1 }}>
+                        <Typography variant="body1" sx={{ mb: 1 }}>
                             <strong>Name:</strong> {entry.name}
                         </Typography>
-                        <Typography level="body-md">
+                        <Typography variant="body1">
                             <strong>Type:</strong> {entry.type}
                         </Typography>
                     </>
@@ -155,29 +155,29 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
 
                 {step === "searching" && (
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 3, justifyContent: "center" }}>
-                        <CircularProgress size="sm" />
+                        <CircularProgress size={24} />
                         <Typography>Searching for receiver on the local network...</Typography>
                     </Box>
                 )}
 
                 {step === "showing-code" && (
                     <Box sx={{ textAlign: "center", py: 3 }}>
-                        <Typography level="body-lg" sx={{ mb: 1 }}>Pairing Code</Typography>
-                        <Typography data-id="share-pairing-code" level="h2" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
+                        <Typography variant="body1" sx={{ mb: 1 }}>Pairing Code</Typography>
+                        <Typography data-id="share-pairing-code" variant="h4" sx={{ fontFamily: "monospace", letterSpacing: "0.3em", mb: 2 }}>
                             {pairingCode}
                         </Typography>
-                        <Typography level="body-sm">Tell the receiver to enter this code.</Typography>
+                        <Typography variant="body2">Tell the receiver to enter this code.</Typography>
                     </Box>
                 )}
 
                 {step === "success" && (
-                    <Alert color="success">
+                    <Alert severity="success">
                         Secret sent successfully!
                     </Alert>
                 )}
 
                 {step === "error" && (
-                    <Alert data-id="share-error-message" color="danger">
+                    <Alert data-id="share-error-message" severity="error">
                         {errorMessage}
                     </Alert>
                 )}
@@ -185,23 +185,23 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
             <DialogActions>
                 {step === "confirm" && (
                     <>
-                        <Button data-id="share-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
-                        <Button data-id="share-secret-send-button" onClick={() => { handleStartSend(); }}>
+                        <Button data-id="share-secret-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="share-secret-send-button" variant="contained" onClick={() => { handleStartSend(); }}>
                             Send
                         </Button>
                     </>
                 )}
 
                 {step === "searching" && (
-                    <Button data-id="share-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-secret-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {step === "showing-code" && (
-                    <Button data-id="share-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-secret-cancel-button" variant="text" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {(step === "success" || step === "error") && (
-                    <Button data-id="share-secret-close-button" onClick={onClose}>Close</Button>
+                    <Button data-id="share-secret-close-button" variant="contained" onClick={onClose}>Close</Button>
                 )}
             </DialogActions>
         </ResponsiveDialog>

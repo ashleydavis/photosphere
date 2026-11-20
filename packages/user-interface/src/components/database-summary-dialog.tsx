@@ -1,8 +1,8 @@
 import React from "react";
-import Button from "@mui/joy/Button";
-import DialogActions from "@mui/joy/DialogActions";
-import DialogContent from "@mui/joy/DialogContent";
-import DialogTitle from "@mui/joy/DialogTitle";
+import Button from "@mui/material/Button";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import { ResponsiveDialog } from "./responsive-dialog";
 import { DatabaseSummaryView } from "./database-summary-view";
 
@@ -38,17 +38,16 @@ export function DatabaseSummaryDialog({ open, onClose }: IDatabaseSummaryDialogP
 
             <DialogContent>
                 {/*
-                    Only while the dialog is open. On a mobile the dialog is a Joy Drawer, which keeps
-                    its children mounted when closed, so an unconditional view here ran the
-                    get-database-summary task every time a database opened, for a dialog nobody had
-                    asked for. It also makes the two forms behave alike: the desktop Modal unmounts
-                    when closed, so there the summary already loaded on open.
+                    Only while the dialog is open, so the get-database-summary task runs when the
+                    user opens the dialog and never for a dialog the user has not asked for. A
+                    Material Dialog or Drawer keeps its children mounted for the length of its
+                    closing transition, and this unmounts the view the moment the dialog closes.
                 */}
                 {open && <DatabaseSummaryView />}
             </DialogContent>
 
             <DialogActions>
-                <Button data-id="database-summary-dialog-close" onClick={onClose}>Close</Button>
+                <Button data-id="database-summary-dialog-close" variant="contained" onClick={onClose}>Close</Button>
             </DialogActions>
         </ResponsiveDialog>
     );
