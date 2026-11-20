@@ -7,8 +7,8 @@
         // Ziggy, at a version tag of its repository. Every other place that takes Ziggy (package.json, apps/photosphere-frontend/package.json,
         // the Xcode projects under apps/photosphere/native and apps/photosphere/native/android/app/build.gradle) names the same version.
         .ziggy = .{
-            .url = "git+https://github.com/ashleydavis/ziggy.git?ref=v0.0.28#11e76beef952e67d5d7671c1dd3aa3422b8e7d0d",
-            .hash = "ziggy-0.0.0-Yh04riiALgBJgcgiw9PdRzSnVoHEx8Kte-M584yn3K01",
+            .url = "git+https://github.com/ashleydavis/ziggy.git?ref=v0.0.29#1b4ab4264616f1e945f222d0a4067dd0744a8eeb",
+            .hash = "ziggy-0.0.0-Yh04rljMLgBq1aZ7lKPUKV-Nt0ZAf8y1TeuWO2bUj559",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon" },

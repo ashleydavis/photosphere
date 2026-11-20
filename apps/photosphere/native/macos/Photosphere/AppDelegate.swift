@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Creates the window and starts Ziggy, which draws the main menu.
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let size = AppDelegate.windowSize()
+        let (size, position) = AppDelegate.windowGeometry()
 
         let frame = NSRect(x: 0, y: 0, width: size.width, height: size.height)
         let newWindow = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -26,7 +26,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         newWindow.collectionBehavior.insert(.fullScreenPrimary)
         let newBridge = ZiggyBridge(frame: frame)
         newWindow.contentView = newBridge.view
-        newWindow.center()
+        if let position = position, let screen = NSScreen.main {
+            // The position is of the window's content, measured from the top left of the main screen, so a recording of exactly
+            // that area shows the app and none of the title bar.
+            let content = NSRect(x: position.x, y: screen.frame.maxY - position.y - size.height, width: size.width, height: size.height)
+            newWindow.setFrame(newWindow.frameRect(forContentRect: content), display: false)
+        }
+        else {
+            newWindow.center()
+        }
         newWindow.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
         window = newWindow
@@ -44,21 +52,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bridge?.shutdown()
     }
 
-    // The window size: the WxH or WxH+X+Y text of a -geometry=... argument when there is one (the position is ignored),
-    // otherwise 900 by 800.
-    private static func windowSize() -> CGSize {
+    // The window's content size and, when given, the position of its top left corner from the top left of the main screen: the
+    // WxH or WxH+X+Y text of a -geometry=... argument when there is one, otherwise 900 by 800 in the middle of the screen.
+    private static func windowGeometry() -> (CGSize, CGPoint?) {
         for argument in CommandLine.arguments {
             guard argument.hasPrefix("-geometry=") else {
                 continue
             }
             let text = argument.dropFirst("-geometry=".count)
-            let parts = text.split(separator: "x", maxSplits: 1)
-            guard parts.count == 2, let width = Double(parts[0]), let height = Double(parts[1].prefix(while: { $0.isNumber })) else {
+            let sizeAndPosition = text.split(separator: "+", omittingEmptySubsequences: false)
+            let parts = sizeAndPosition[0].split(separator: "x", maxSplits: 1)
+            guard parts.count == 2, let width = Double(parts[0]), let height = Double(parts[1]),
+                sizeAndPosition.count == 1 || sizeAndPosition.count == 3 else {
                 FileHandle.standardError.write(Data("ziggy native app: invalid -geometry argument: \(argument)\n".utf8))
                 exit(1)
             }
-            return CGSize(width: width, height: height)
+            if sizeAndPosition.count == 1 {
+                return (CGSize(width: width, height: height), nil)
+            }
+            guard let x = Double(sizeAndPosition[1]), let y = Double(sizeAndPosition[2]) else {
+                FileHandle.standardError.write(Data("ziggy native app: invalid -geometry argument: \(argument)\n".utf8))
+                exit(1)
+            }
+            return (CGSize(width: width, height: height), CGPoint(x: x, y: y))
         }
-        return CGSize(width: 900, height: 800)
+        return (CGSize(width: 900, height: 800), nil)
     }
 }
