@@ -52,7 +52,9 @@ fi
 if [ "$(cat "$ARGUMENTS_STAMP" 2>/dev/null)" != "$BUNDLE_ARGUMENTS_TEXT" ]; then
     REBUILD_PAGE="true"
 fi
-if [ -n "$(find "$FRONTEND_DIR/src" "$FRONTEND_DIR/index.html" "$FRONTEND_DIR/vite.config.ts" "$FRONTEND_DIR/package.json" -newer "$PAGE_DIR/index.html" -print -quit 2>/dev/null)" ]; then
+# The page is built from the frontend and from the workspace packages it imports, where the shared user interface lives, so a
+# change to either rebuilds it. Watching the frontend alone left a change to packages/user-interface out of the running app.
+if [ -n "$(find "$FRONTEND_DIR/src" "$FRONTEND_DIR/index.html" "$FRONTEND_DIR/vite.config.ts" "$FRONTEND_DIR/package.json" "$APP_DIR/../../packages"/*/src "$APP_DIR/../../packages"/*/package.json "$APP_DIR/../../bun.lock" -newer "$PAGE_DIR/index.html" -print -quit 2>/dev/null)" ]; then
     REBUILD_PAGE="true"
 fi
 if [ "$REBUILD_PAGE" = "true" ]; then

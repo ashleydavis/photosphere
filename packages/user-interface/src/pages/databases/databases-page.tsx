@@ -209,9 +209,15 @@ export function DatabasesPage() {
     return (
         <Box
             sx={{
-                maxWidth: 'calc(var(--space-8) * 30)',
-                mx: 'auto',
+                //
+                // The page fills the area under the navbar and scrolls itself, as the other
+                // information pages do. Its side padding grows to hold the content in a centred
+                // column no wider than 30 * --space-8, so the scrollbar stays at the window's edge.
+                //
+                height: '100%',
+                overflowY: 'auto',
                 padding: isMobile ? 'var(--space-4) var(--space-4) var(--space-8)' : 'var(--space-6) var(--space-6) var(--space-8)',
+                paddingInline: `max(${isMobile ? 'var(--space-4)' : 'var(--space-6)'}, calc((100% - var(--space-8) * 30) / 2))`,
             }}
             >
             <MobilePageHeader

@@ -17,6 +17,16 @@ code {
 }
 
 /*
+ * The element React draws into is exactly as tall as the window, so the app's frame (navbar, page
+ * and tab bar) is held to the window and a long page scrolls inside it. Without a height of its
+ * own the frame's 100% resolved to its content's height, the page grew past the window and the
+ * body clipped it, so nothing could scroll.
+ */
+#root {
+    height: 100%;
+}
+
+/*
  * Scrollbars are `--scrollbar-size` wide, with no arrow buttons. The thumb is a rounded pill
  * that sits `--scrollbar-thumb-inset` in from each edge of the track and takes
  * `--color-scrollbar-thumb-hover` under the pointer. Chrome ignores the `::-webkit-scrollbar`
