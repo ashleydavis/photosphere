@@ -13,7 +13,7 @@ This is the flow the feature exists for, so it is worth running as one sitting r
 - Run from the repo root, in one terminal, which the later CLI steps use too. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real mobile, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
 - `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
 - S3 is a fresh bucket on a local MinIO server on this machine, set up by `bun run start-minio`: see [MinIO for the manual tests](../../minio.md). The mobile must be on the same network as this machine. The later steps back the mobile up into it and then read that copy with the CLI.
-- `--empty` leaves the prefix empty, which Test step 8 needs, and registers the entry `auto-sync-test` with the credentials `auto-sync-test-s3` on this machine. `start-minio` prints the endpoint, region and keys, for Test step 8 Route A. `$S3_DB` in the steps is the database's path, `s3:photosphere-smoke-test/auto-sync-test`.
+- `--empty` leaves the prefix empty, which Test step 8 needs, and registers the entry `auto-sync-test` with the credentials `auto-sync-test-s3` on this machine. `$S3_DB` in the steps is the database's path, `s3:photosphere-smoke-test/auto-sync-test`.
 
 ```bash
 bun run android:reset   # Android
@@ -100,16 +100,7 @@ Expected:
 
 The bucket prefix must be empty before this step. Do **not** create a database in it with `psi init` yet: a database made without the mobile's id is a stranger to the one on the mobile, and sync refuses to join two databases that are not related.
 
-The mobile needs credentials for the bucket, and no environment variables reach it, so the endpoint has to be part of the secret. Take either route below, not both.
-
-#### Route A: type them into the mobile
-
-1. Go to the **Databases** page.
-2. Open the **⋮** menu on the database automatic import created and choose **Edit**.
-3. Press **Configure secrets…**, then **+ New** beside **S3 Credentials**, and fill in the endpoint, region and keys that `start-minio` printed.
-4. Save.
-
-#### Route B: send them from the development machine
+The mobile needs the bucket in its database list, with the bucket's credentials attached: sync opens the origin with the credentials of the list entry whose path is the origin. No environment variables reach the mobile, so the endpoint is part of the secret.
 
 `start-minio` already made the entry `auto-sync-test` and its credentials `auto-sync-test-s3` on this machine. `dbs send` carries the entry and the secrets attached to it. `--yes` makes it go straight to a pairing code:
 
@@ -117,9 +108,11 @@ The mobile needs credentials for the bucket, and no environment variables reach 
 psi dbs send --name auto-sync-test --yes
 ```
 
-It prints the pairing code and waits. On the mobile, go to the **Databases** page, choose **Receive database**, and enter that code.
+It prints the pairing code and waits. On the mobile, go to the **Databases** page, choose **Receive database**, enter that code, leave **Import S3 credentials** ticked and save.
 
-Expected, either route: the mobile holds a secret with the bucket's endpoint and keys.
+Expected:
+- `auto-sync-test` is listed on the mobile's **Databases** page, with the path `s3:photosphere-smoke-test/auto-sync-test`.
+- The mobile holds the secret `auto-sync-test-s3`, with the bucket's endpoint and keys.
 
 ### 9. Make an empty remote that the mobile can sync into
 
@@ -140,7 +133,7 @@ Expected:
 ### 10. Point the mobile at the remote
 
 1. Open the **⋮** menu on the database automatic import created and choose **Edit**.
-2. Beside **Origin**, use the **Choose…** dropdown and pick the entry for the bucket. Do not type the path: the credentials for an origin are found by matching its path against the database list, so a typed path with a mistake in it finds no entry and no credentials.
+2. Beside **Origin**, pick `auto-sync-test` from the **Choose…** dropdown.
 3. Save.
 
 Expected:
@@ -231,5 +224,5 @@ Expected: it reports that MinIO stopped.
 - Step 2 brings up the system photos and videos permission: allow it, with access to all photos rather than a selection. If a notifications permission follows, allow it.
 - Steps 5, 13 and 15 need a photo taken with the camera, which the human does.
 - Step 7: close the app completely from the system's recent apps screen, or with `adb -s <serial> shell am force-stop au.com.codecapers.photosphere.ziggy`, then open it again from the launcher.
-- Step 8 Route A: type the endpoint, region and keys that `start-minio` printed with `input text`. Route B: read the pairing code from the CLI output and type it on the mobile.
+- Step 8: read the pairing code from the CLI output and type it on the mobile with `input text`.
 - Step 9 needs the mobile's database id, read from the database's details on the mobile with a screenshot.

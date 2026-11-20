@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
@@ -32,6 +33,9 @@ const getHashCacheDir = hash_cache.getHashCacheDir;
 const HashCache = hash_cache.HashCache;
 const IMediaItem = media_source.IMediaItem;
 const buildMediaSource = media_source_registry.buildMediaSource;
+const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
+const foldersAsSources = @import("auto-import-desktop.zig").foldersAsSources;
+const getDefaultPhotoFolders = node_utils.photo_folders.getDefaultPhotoFolders;
 
 //
 // Deleting the photos a device still holds that the database already has.
@@ -151,6 +155,18 @@ fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, localHas
 }
 
 //
+// Where to look when the settings name no sources: the same places automatic import watches then, which is the whole photo
+// library on a mobile (planMobileAutoImport) and the operating system's photo folders on a desktop (planDesktopAutoImport). No
+// sources is the usual setup, so refusing it made the cleanup button fail for everyone who had not added a folder.
+//
+fn defaultSources(allocator: std.mem.Allocator, io: std.Io) ![]const IAutoImportSource {
+    if (builtin.os.tag == .ios or builtin.abi.isAndroid()) {
+        return &api.auto_import_mobile.WHOLE_LIBRARY_SOURCES;
+    }
+    return foldersAsSources(allocator, try getDefaultPhotoFolders(allocator, io));
+}
+
+//
 // Deletes the photos the device still holds that the database already has.
 // (Zig: the task data and output are JSON values holding ICleanupSourcesData and ICleanupSourcesResult.)
 //
@@ -158,9 +174,12 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers
     const data = try std.json.parseFromValueLeaky(ICleanupSourcesData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
-    const settings = try normaliseAutoImportSettings(allocator, data.settings);
+    var settings = try normaliseAutoImportSettings(allocator, data.settings);
     if (settings.sources.len == 0) {
-        return errors.throwError("Cleanup was asked to run with no sources configured. There is nowhere to look.", .{});
+        settings.sources = try defaultSources(allocator, io);
+    }
+    if (settings.sources.len == 0) {
+        return errors.throwError("Cleanup was asked to run with no sources configured, and this device has no photo folders to look in instead. There is nowhere to look.", .{});
     }
 
     const sessionTempDir = try path.join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere", try context.uuidGenerator.generate(allocator, io) });

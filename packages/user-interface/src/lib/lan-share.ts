@@ -18,6 +18,9 @@ export type {
 export interface IReceiveShareTaskResult {
     // Payload delivered by a sender, or null if the receiver timed out or was cancelled.
     payload: IDatabaseSharePayload | ISecretSharePayload | null;
+
+    // Whether a sender looking for a different pairing code heard the receiver.
+    sawMismatchedSender: boolean;
 }
 
 //
@@ -42,6 +45,9 @@ export interface IShareReceiverEndpoint {
 export interface IFindReceiverTaskResult {
     // The discovered receiver endpoint, or null if discovery timed out or was cancelled.
     endpoint: IShareReceiverEndpoint | null;
+
+    // Whether discovery heard a receiver announcing a different pairing code.
+    sawMismatchedReceiver: boolean;
 }
 
 //

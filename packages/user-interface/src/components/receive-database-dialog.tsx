@@ -19,7 +19,7 @@ import type { IConflictResolution } from '../lib/lan-share';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
-import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { lanShareErrorMessage, noSenderMessage } from '../lib/lan-share-error-message';
 import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 
 export interface IReceiveDatabaseDialogProps {
@@ -167,7 +167,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                 return;
             }
 
-            if (!received) {
+            if (!received.payload) {
                 // Logged as well as shown, and with how long it waited, because this is the one way
                 // a receive ends without an error to report. Nothing was written here before, so a
                 // receive that was never reached left no trace at all: the smoke tests that wait on
@@ -175,12 +175,12 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                 // separates a receiver that waited out its full 60s from one whose task was
                 // cancelled after a few hundred milliseconds. Diagnosing that took a whole session.
                 log.error(`Receive gave up after ${Date.now() - startedAt}ms with no payload: it either waited out its full timeout with no sender, or its task was cancelled.`);
-                setErrorMessage("No sender connected within 60 seconds.");
+                setErrorMessage(noSenderMessage(received.sawMismatchedSender));
                 setStep("error");
                 return;
             }
 
-            const receivedPayload = received as IReceivedDatabasePayload;
+            const receivedPayload = received.payload as IReceivedDatabasePayload;
             setPayload(receivedPayload);
             setEditedName(receivedPayload.name);
             setEditedDescription(receivedPayload.description || "");

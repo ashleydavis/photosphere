@@ -230,6 +230,54 @@ test "discovery ignores a receiver whose pairing code is not the one being looke
     _ = try foreignReceiver.receive(log);
 }
 
+// A receiver given a mistyped code used to hear nothing at all from the sender and ended as if nobody were sharing, because
+// only the sender compares the codes. The sender now tells the receiver it heard it, so both devices can say the code is wrong.
+test "a receiver heard by a sender with a different pairing code learns of it" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const receiverCode = try pairing_code.pairingCode();
+
+    // The receive ends on its own timeout, which is when a person would be told; the sender only needs to hear one announcement
+    // within it, and the receiver announces once a second.
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 3000);
+    defer receiver.deinit();
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, try objectPayload(allocator, "message", .{ .string = "test" }), try pairing_code.otherPairingCode(receiverCode));
+    var outcome: IWaitOutcome = .{};
+    const waiting = try std.Thread.spawn(.{}, waitOnThread, .{ &sender, 3000, &outcome });
+    while (!sender.isWaiting.load(.acquire)) {
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+    try receiver.start(receiverCode);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
+
+    waiting.join();
+    const received = try receiving.finish();
+
+    try std.testing.expect(outcome.failure == null);
+    try std.testing.expect(outcome.endpoint == null);
+    try std.testing.expect(sender.sawMismatchedReceiver);
+    try std.testing.expect(received == null);
+    try std.testing.expect(receiver.sawMismatchedSender);
+}
+
+// The other half: a receive nobody looked for ends with nothing heard, so it is not reported as a wrong code.
+test "a receiver no sender heard does not report a different pairing code" {
+    const log = utils.mute_log.MuteLog.init();
+    const discoveryPort = try lan_share.socket.freeUdpPort();
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 1500);
+    defer receiver.deinit();
+    try receiver.start(try pairing_code.pairingCode());
+
+    const received = try receiver.receive(log);
+
+    try std.testing.expect(received == null);
+    try std.testing.expect(!receiver.sawMismatchedSender);
+}
+
 test "send returns false when the receiver it is given has a different pairing code" {
     const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

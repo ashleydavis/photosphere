@@ -477,7 +477,8 @@ test "receiveShareHandler calls receiver.start with the supplied code and return
     const result = try run.finish(io, allocator);
 
     try std.testing.expectEqualStrings(try jsonText(allocator, payload), try jsonText(allocator, result.object.get("payload").?));
-    try std.testing.expectEqual(@as(u32, 1), result.object.count());
+    try std.testing.expectEqual(false, result.object.get("sawMismatchedSender").?.bool);
+    try std.testing.expectEqual(@as(u32, 2), result.object.count());
 }
 
 test "receiveShareHandler returns { payload: null } when no payload arrives before the timeout" {

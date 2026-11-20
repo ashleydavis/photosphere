@@ -21,6 +21,13 @@ pub fn discoveryPort() !u16 {
 }
 
 //
+// The datagram a sender sends back to a receiver whose announcement carries a different pairing code, so that the receiver
+// can tell a person who typed the wrong code that a device was found, rather than only that nobody connected. The receiver
+// announces the hash of its code and the sender alone compares it, so without this the receiver never learns of the sender.
+//
+pub const CODE_MISMATCH_NOTICE = "PSIE_CODE_MISMATCH";
+
+//
 // Response body from GET /pairing-code-hash on the receiver.
 //
 pub const IPairingCodeHashResponse = struct {

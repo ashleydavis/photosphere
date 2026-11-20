@@ -21,14 +21,14 @@ export interface ILanShareTasks {
     // Starts hosting a receiver advertising the given pairing code. Does not wait.
     startShareReceive: (code: string) => Promise<void>;
 
-    // Awaits the payload delivered to the receiver; resolves null on timeout/cancel.
-    waitShareReceive: () => Promise<unknown>;
+    // Awaits the receive; its payload is null on timeout/cancel.
+    waitShareReceive: () => Promise<IReceiveShareTaskResult>;
 
     // Cancels an in-flight receive and tears down the receiver.
     cancelShareReceive: () => Promise<void>;
 
-    // Captures the payload/code and waits for a receiver to be discovered on the LAN.
-    waitForReceiver: (payload: unknown, code: string) => Promise<unknown>;
+    // Captures the payload/code and waits for a receiver to be discovered on the LAN; the endpoint is null on timeout/cancel.
+    waitForReceiver: (payload: unknown, code: string) => Promise<IFindReceiverTaskResult>;
 
     // Sends the previously captured payload to the discovered endpoint.
     sendToReceiver: (endpoint: unknown) => Promise<boolean>;
@@ -100,48 +100,54 @@ export function useLanShareTasks(): ILanShareTasks {
 
     //
     // Awaits the receive task started by startShareReceive.
-    // Returns the delivered payload, null on timeout/cancel, throws on task failure.
+    // Returns its result, with a null payload on timeout/cancel, and throws on task failure.
     //
-    async function waitShareReceive(): Promise<unknown> {
+    async function waitShareReceive(): Promise<IReceiveShareTaskResult> {
+        const nothingReceived: IReceiveShareTaskResult = {
+            payload: null,
+            sawMismatchedSender: false,
+        };
         const pending = pendingReceiveRef.current;
         if (!pending) {
-            return null;
+            return nothingReceived;
         }
         const result = await pending;
         pendingReceiveRef.current = null;
         if (!result) {
-            return null;
+            return nothingReceived;
         }
         if (result.status === TaskStatus.Failed) {
             throw new Error(result.errorMessage || "Receive share failed");
         }
         if (result.status === TaskStatus.Succeeded) {
-            const outputs = result.outputs as IReceiveShareTaskResult;
-            return outputs.payload;
+            return result.outputs as IReceiveShareTaskResult;
         }
-        return null;
+        return nothingReceived;
     }
 
     //
     // Captures the payload/code, submits a find-receiver task, and awaits discovery.
-    // Returns the discovered endpoint, null on timeout/cancel, throws on task failure.
+    // Returns its result, with a null endpoint on timeout/cancel, and throws on task failure.
     //
-    async function waitForReceiver(payload: unknown, code: string): Promise<unknown> {
+    async function waitForReceiver(payload: unknown, code: string): Promise<IFindReceiverTaskResult> {
         capturedSendRef.current = { payload, code };
+        const nothingFound: IFindReceiverTaskResult = {
+            endpoint: null,
+            sawMismatchedReceiver: false,
+        };
         const queue = getQueue();
         const taskId = queue.addTask("find-receiver", { code });
         const result = await queue.awaitTask(taskId);
         if (!result) {
-            return null;
+            return nothingFound;
         }
         if (result.status === TaskStatus.Failed) {
             throw new Error(result.errorMessage || "Find receiver failed");
         }
         if (result.status === TaskStatus.Succeeded) {
-            const outputs = result.outputs as IFindReceiverTaskResult;
-            return outputs.endpoint;
+            return result.outputs as IFindReceiverTaskResult;
         }
-        return null;
+        return nothingFound;
     }
 
     //

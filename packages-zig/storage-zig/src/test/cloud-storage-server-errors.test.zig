@@ -314,7 +314,7 @@ fn expectFailure(result: anytype, expectedMessage: []const u8, expectedCauseName
     }
 }
 
-test "an S3 error response without a body is thrown as the SDK throws it, Unknown with the message UnknownError" {
+test "an S3 error response without a body is thrown as Unknown with a message naming its status" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -326,11 +326,11 @@ test "an S3 error response without a body is thrown as the SDK throws it, Unknow
     var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
-    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "Unknown", 400);
-    try expectFailure(storage.info(allocator, io, "dir/file.txt"), "Failed to get info for dir/file.txt: UnknownError: UnknownError", "Unknown", 400);
-    try expectFailure(storage.write(allocator, io, "dir/file.txt", "text/plain", "data"), "Failed to write to dir/file.txt: UnknownError: UnknownError", "Unknown", 400);
-    try expectFailure(storage.listFiles(allocator, io, "dir", 10, null), "Failed to list files in dir: UnknownError: UnknownError", "Unknown", 400);
-    try expectFailure(storage.fileExists(allocator, io, "dir/file.txt"), "Failed to check if file exists: UnknownError: UnknownError", "Unknown", 400);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: The S3 server answered with HTTP status 400: The S3 server answered with HTTP status 400", "Unknown", 400);
+    try expectFailure(storage.info(allocator, io, "dir/file.txt"), "Failed to get info for dir/file.txt: The S3 server answered with HTTP status 400: The S3 server answered with HTTP status 400", "Unknown", 400);
+    try expectFailure(storage.write(allocator, io, "dir/file.txt", "text/plain", "data"), "Failed to write to dir/file.txt: The S3 server answered with HTTP status 400: The S3 server answered with HTTP status 400", "Unknown", 400);
+    try expectFailure(storage.listFiles(allocator, io, "dir", 10, null), "Failed to list files in dir: The S3 server answered with HTTP status 400: The S3 server answered with HTTP status 400", "Unknown", 400);
+    try expectFailure(storage.fileExists(allocator, io, "dir/file.txt"), "Failed to check if file exists: The S3 server answered with HTTP status 400: The S3 server answered with HTTP status 400", "Unknown", 400);
 
     // deleteFile ignores the failure, as CloudStorage.deleteFile does.
     try storage.deleteFile(allocator, io, "dir/file.txt");
@@ -350,7 +350,7 @@ test "an S3 404 without a body is NotFound, so info and fileExists report a miss
 
     try std.testing.expectEqual(null, try storage.info(allocator, io, "dir/file.txt"));
     try std.testing.expect(!try storage.fileExists(allocator, io, "dir/file.txt"));
-    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "NotFound", 404);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: Not found (HTTP 404): Not found (HTTP 404)", "NotFound", 404);
 }
 
 test "an S3 error response is thrown with the Code and Message of its body" {
@@ -369,8 +369,10 @@ test "an S3 error response is thrown with the Code and Message of its body" {
     try expectFailure(storage.write(allocator, io, "dir/file.txt", "text/plain", "data"), "Failed to write to dir/file.txt: Access & Denied: Access & Denied", "AccessDenied", 403);
     try expectFailure(storage.listFiles(allocator, io, "dir", 10, null), "Failed to list files in dir: Access & Denied: Access & Denied", "AccessDenied", 403);
 
-    // A HEAD response has no body.
-    try expectFailure(storage.info(allocator, io, "dir/file.txt"), "Failed to get info for dir/file.txt: UnknownError: UnknownError", "Unknown", 403);
+    // A HEAD response has no body, so it is named and described from its status. fileExists is the HEAD a database open
+    // starts with, which is where a wrong secret key is first met.
+    try expectFailure(storage.info(allocator, io, "dir/file.txt"), "Failed to get info for dir/file.txt: The S3 server refused the request (HTTP 403): the credentials are wrong or do not allow it: The S3 server refused the request (HTTP 403): the credentials are wrong or do not allow it", "Forbidden", 403);
+    try expectFailure(storage.fileExists(allocator, io, "dir/file.txt"), "Failed to check if file exists: The S3 server refused the request (HTTP 403): the credentials are wrong or do not allow it: The S3 server refused the request (HTTP 403): the credentials are wrong or do not allow it", "Forbidden", 403);
 }
 
 test "an S3 error response without a Message is thrown with the message UnknownError" {
@@ -680,7 +682,7 @@ test "storedHash reports an error of the server other than not found" {
     var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
-    try expectFailure(storage.storedHash(allocator, io, "bucket/dir/file.txt"), "Failed to get the stored hash of bucket/dir/file.txt: UnknownError: UnknownError", "Unknown", 403);
+    try expectFailure(storage.storedHash(allocator, io, "bucket/dir/file.txt"), "Failed to get the stored hash of bucket/dir/file.txt: The S3 server refused the request (HTTP 403): the credentials are wrong or do not allow it: The S3 server refused the request (HTTP 403): the credentials are wrong or do not allow it", "Forbidden", 403);
 }
 
 test "writeStream reports the error of a stream that cannot be read" {

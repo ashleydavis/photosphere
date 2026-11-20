@@ -24,7 +24,7 @@ source tmp/minio/<name>.env
 The options say what the database starts with:
 
 - none: an empty database.
-- `--from <fixture>`: a copy of a test database from `test/dbs`, such as `50-assets` (60 photos) or `1-asset`.
+- `--from <fixture>`: a copy of a test database from `test/dbs`, such as `50-assets` or `1-asset`.
 - `--add <path>`: an empty database with the file or directory at `<path>` (relative to the repo root) added to it.
 - `--encrypt`: the database is encrypted with a key generated for it, stored as the secret `<name>-key` and attached to the entry.
 - `--key <pem file>`: the database is encrypted with that 4096-bit RSA key, which is not attached to the entry.

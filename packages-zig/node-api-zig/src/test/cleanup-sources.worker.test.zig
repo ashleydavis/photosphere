@@ -51,6 +51,9 @@ const CleanupTest = struct {
     // The watched folder.
     photosDir: []const u8,
 
+    // The home folder the test gives the handler, whose photo folders a run with no sources looks in.
+    homeDir: []const u8,
+
     // The database checked against.
     databaseDir: []const u8,
 
@@ -79,6 +82,13 @@ const CleanupTest = struct {
         self.photosDir = try path.join(allocator, &.{ self.tempDir, "photos" });
         try std.Io.Dir.cwd().createDirPath(io, self.photosDir);
         try test_environment.setEnv("PHOTOSPHERE_TMP_DIR", self.tempDir);
+
+        // A run with no sources looks in the photo folders under the home folder, so the home folder is the test's own: the
+        // handler never looks at the developer's photos.
+        self.homeDir = try path.join(allocator, &.{ self.tempDir, "home" });
+        try std.Io.Dir.cwd().createDirPath(io, self.homeDir);
+        try test_environment.setEnv("HOME", self.homeDir);
+        try test_environment.setEnv("USERPROFILE", self.homeDir);
 
         // The hash cache this test writes to and reads back lives in the platform's cache location,
         // so pointing that at the test's own directory is what keeps the test off the developer's
@@ -329,7 +339,27 @@ test "a deleting pass leaves the photos it did not offer" {
     try std.testing.expect(!test_files.fileExists(std.testing.io, deletedPath));
 }
 
-test "refuses to run with no sources configured, rather than looking nowhere and reporting success" {
+// No sources is the usual setup: automatic import then watches the operating system's photo folders on a desktop, so this does
+// too. Refusing it made the cleanup button fail for everyone who had not added a folder.
+test "with no sources configured, looks in the photo folders automatic import watches" {
+    const log = utils.mute_log.MuteLog.init();
+    var context: CleanupTest = undefined;
+    try context.init(log);
+    defer context.deinit(log);
+    const picturesDir = try path.join(context.arena.allocator(), &.{ context.homeDir, "Pictures" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, picturesDir);
+    const filePath = try path.join(context.arena.allocator(), &.{ picturesDir, "in-the-database.jpg" });
+    try test_files.writeFile(std.testing.io, filePath, "one");
+    try context.seedCacheEntry(log, filePath, "one", null);
+    try context.holdInDatabase(log, "one");
+
+    const result = try context.run(log, true, false);
+
+    try std.testing.expectEqual(@as(u64, 1), result.considered);
+    try expectStrings(&.{filePath}, result.deletableSourceIds);
+}
+
+test "refuses to run with no sources configured and no photo folders, rather than looking nowhere and reporting success" {
     const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
     try context.init(log);

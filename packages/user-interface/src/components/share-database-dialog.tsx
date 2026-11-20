@@ -15,7 +15,7 @@ import Box from '@mui/joy/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from '../lib/lan-share';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
-import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { lanShareErrorMessage, noReceiverMessage } from '../lib/lan-share-error-message';
 import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 import { ResponsiveDialog } from './responsive-dialog';
 
@@ -153,14 +153,14 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 geocodingKey,
             };
 
-            const foundEndpoint = await lanShare.waitForReceiver(payload, code);
-            if (!foundEndpoint) {
-                setErrorMessage("No receiver found within 60 seconds.");
+            const found = await lanShare.waitForReceiver(payload, code);
+            if (!found.endpoint) {
+                setErrorMessage(noReceiverMessage(found.sawMismatchedReceiver));
                 setStep("error");
                 return;
             }
 
-            const success = await lanShare.sendToReceiver(foundEndpoint);
+            const success = await lanShare.sendToReceiver(found.endpoint);
             if (success) {
                 setStep("success");
             }

@@ -8,6 +8,12 @@
 
 Work through these manual tests and check them off as they pass.
 
+Markers:
+- `[ ]` not run yet
+- `[x]` passed
+- `[-]` failed
+- `[~]` skipped
+
 **Only an entry that links a test file is a test.** An entry that links no file has no steps: it is checked by hand and ticked, never walked like a test.
 
 Upcoming version: 0.0.9
@@ -201,7 +207,7 @@ Run the story player and check every story cycles through without failures, then
 - [x] [view-database-secret](desktop/database/view-database-secret.md)
 
 ### Secrets
-- [-] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
+- [x] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
 - [x] [add-api-key](desktop/secrets/add-api-key.md)
 - [x] [add-encryption-key](desktop/secrets/add-encryption-key.md)
 - [x] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
@@ -223,51 +229,51 @@ Run the story player and check every story cycles through without failures, then
 Run each of these on Android and on iOS. Tick a test only when it has passed on both, and say which platform failed when one does.
 
 ### Automatic import
-- [ ] [auto-import-new-remote](mobile/auto-import/auto-import-new-remote.md)
-- [ ] [auto-import-existing-remote](mobile/auto-import/auto-import-existing-remote.md)
-- [ ] [auto-import-no-permission](mobile/auto-import/auto-import-no-permission.md)
-- [ ] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
+- [x] [auto-import-new-remote](mobile/auto-import/auto-import-new-remote.md)
+- [x] [auto-import-existing-remote](mobile/auto-import/auto-import-existing-remote.md)
+- [x] [auto-import-no-permission](mobile/auto-import/auto-import-no-permission.md)
+- [x] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
 
 ### Import
-- [ ] [import-photo-and-video](mobile/import/import-photo-and-video.md)
+- [x] [import-photo-and-video](mobile/import/import-photo-and-video.md)
 
 ### Gallery
-- [ ] [view-and-edit-asset](mobile/gallery/view-and-edit-asset.md)
-- [ ] [export-asset](mobile/gallery/export-asset.md)
+- [x] [view-and-edit-asset](mobile/gallery/view-and-edit-asset.md)
+- [x] [export-asset](mobile/gallery/export-asset.md)
 
 ### Download
-- [ ] [download-assets](mobile/download/download-assets.md)
+- [x] [download-assets](mobile/download/download-assets.md)
 
 ### Database
-- [ ] [create-and-open-database](mobile/database/create-and-open-database.md)
-- [ ] [load-large-database](mobile/database/load-large-database.md)
-- [ ] [view-database-details](mobile/database/view-database-details.md)
-- [ ] [remove-recent-database](mobile/database/remove-recent-database.md)
-- [ ] [open-encrypted-database](mobile/database/open-encrypted-database.md)
-- [ ] [edit-database-origin](mobile/database/edit-database-origin.md)
+- [x] [create-and-open-database](mobile/database/create-and-open-database.md)
+- [x] [load-large-database](mobile/database/load-large-database.md)
+- [x] [view-database-details](mobile/database/view-database-details.md)
+- [x] [remove-recent-database](mobile/database/remove-recent-database.md)
+- [x] [open-encrypted-database](mobile/database/open-encrypted-database.md)
+- [x] [edit-database-origin](mobile/database/edit-database-origin.md)
 
 ### Sync
-- [ ] [sync-with-another-database](mobile/sync/sync-with-another-database.md)
+- [x] [sync-with-another-database](mobile/sync/sync-with-another-database.md)
 
 ### Move
-- [ ] [move-file-between-databases](mobile/move/move-file-between-databases.md)
+- [x] [move-file-between-databases](mobile/move/move-file-between-databases.md)
 
 ### Replication
-- [ ] [replicate-to-another-database](mobile/replication/replicate-to-another-database.md)
-- [ ] [partial-replica-and-prefetch](mobile/replication/partial-replica-and-prefetch.md)
+- [x] [replicate-to-another-database](mobile/replication/replicate-to-another-database.md)
+- [x] [partial-replica-and-prefetch](mobile/replication/partial-replica-and-prefetch.md)
 
 ### S3
-- [ ] [s3-database](mobile/s3/s3-database.md)
+- [x] [s3-database](mobile/s3/s3-database.md)
 
 ### Secrets
-- [ ] [add-and-view-secret](mobile/secrets/add-and-view-secret.md)
-- [ ] [add-encryption-key](mobile/secrets/add-encryption-key.md)
-- [ ] [add-s3-credentials](mobile/secrets/add-s3-credentials.md)
+- [x] [add-and-view-secret](mobile/secrets/add-and-view-secret.md)
+- [x] [add-encryption-key](mobile/secrets/add-encryption-key.md)
+- [x] [add-s3-credentials](mobile/secrets/add-s3-credentials.md)
 
 ### LAN Share
-- [ ] [mobile-to-mobile](mobile/lan-share/mobile-to-mobile.md)
-- [ ] [desktop-to-mobile](mobile/lan-share/desktop-to-mobile.md)
-- [ ] [cli-to-mobile](mobile/lan-share/cli-to-mobile.md)
+- [x] [mobile-to-mobile](mobile/lan-share/mobile-to-mobile.md)
+- [x] [desktop-to-mobile](mobile/lan-share/desktop-to-mobile.md)
+- [x] [cli-to-mobile](mobile/lan-share/cli-to-mobile.md)
 
 ### News
-- [ ] [news-notifications](mobile/news/news-notifications.md)
+- [~] [news-notifications](mobile/news/news-notifications.md) (skipped)

@@ -11,7 +11,7 @@ import CircularProgress from '@mui/joy/CircularProgress';
 import Box from '@mui/joy/Box';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
-import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { lanShareErrorMessage, noReceiverMessage } from '../lib/lan-share-error-message';
 import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 
 export interface IShareSecretDialogProps {
@@ -75,14 +75,14 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                 value,
             };
 
-            const foundEndpoint = await lanShare.waitForReceiver(payload, code);
-            if (!foundEndpoint) {
-                setErrorMessage("No receiver found within 60 seconds.");
+            const found = await lanShare.waitForReceiver(payload, code);
+            if (!found.endpoint) {
+                setErrorMessage(noReceiverMessage(found.sawMismatchedReceiver));
                 setStep("error");
                 return;
             }
 
-            const success = await lanShare.sendToReceiver(foundEndpoint);
+            const success = await lanShare.sendToReceiver(found.endpoint);
             if (success) {
                 setStep("success");
             }

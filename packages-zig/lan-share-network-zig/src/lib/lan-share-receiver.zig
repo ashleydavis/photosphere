@@ -346,6 +346,10 @@ pub const LanShareReceiver = struct {
     // The delivered payload, set before isDone.
     payload: ?std.json.Value,
 
+    // Whether a sender looking for a different pairing code heard this receiver. Read once the receive has ended, so that
+    // a receive that ends with no payload can say the code was wrong rather than that nobody connected.
+    sawMismatchedSender: bool,
+
     // Whether the receiver has been cancelled or completed.
     isDone: std.atomic.Value(bool),
 
@@ -375,6 +379,7 @@ pub const LanShareReceiver = struct {
             .deadline = null,
             .requestCount = 0,
             .payload = null,
+            .sawMismatchedSender = false,
             .isDone = .init(false),
             .isCompleting = .init(false),
             .isShutDown = false,
@@ -555,6 +560,7 @@ pub const LanShareReceiver = struct {
             return false;
         }
         self.broadcastIfDue();
+        self.readMismatchNotices();
         // Waits for a connection no longer than until the next broadcast, the deadline or the next check of whether the receive
         // has finished.
         const wait_ms = @min(@min(self.nextBroadcastAt - current, deadline - current), POLL_INTERVAL_MS);
@@ -570,6 +576,24 @@ pub const LanShareReceiver = struct {
             else |_| {}
         }
         return !self.isDone.load(.acquire);
+    }
+
+    //
+    // Reads the datagrams waiting on the announcement socket without blocking, and records a sender's notice that it heard this
+    // receiver with a different pairing code. Discovery is best-effort, so a socket error (an ECONNREFUSED surfaced from an ICMP
+    // port-unreachable after a broadcast) only ends this read; the receiver still serves the transfer over its HTTPS server.
+    //
+    fn readMismatchNotices(self: *LanShareReceiver) void {
+        const udpSocket = self.udpSocket.?;
+        var buffer: [64]u8 = undefined;
+        while (socket.waitReadable(udpSocket, 0) catch false) {
+            const datagram = socket.receiveFrom(udpSocket, &buffer) catch {
+                return;
+            };
+            if (std.mem.eql(u8, datagram.data, lan_share_types.CODE_MISMATCH_NOTICE)) {
+                self.sawMismatchedSender = true;
+            }
+        }
     }
 
     //

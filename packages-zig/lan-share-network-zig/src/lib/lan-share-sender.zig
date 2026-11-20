@@ -205,6 +205,10 @@ pub const LanShareSender = struct {
             // already closed), picking a stranger ended the share for good.
             if (!std.mem.eql(u8, announcedCodeHash, &expectedCodeHash)) {
                 self.sawMismatchedReceiver = true;
+
+                // Tells that receiver it was heard with a different code, so a mistyped code is reported on the receiving
+                // device too. Best-effort, like the rest of discovery: a receiver that has gone away only misses the notice.
+                socket.sendTo(udpSocket, lan_share_types.CODE_MISMATCH_NOTICE, datagram.from) catch {};
                 continue;
             }
 

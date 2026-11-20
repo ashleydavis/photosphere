@@ -51,7 +51,7 @@ Expected:
 
 1. Select a video and download it.
 
-Expected: It saves and plays back from the device.
+Expected: It saves, and the saved file is the same file as the database's stored original. Playing it back is not part of the mobile test.
 
 ## Check
 
@@ -67,5 +67,4 @@ Expected:
 
 - How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Android: the agent does the UI steps with adb. iOS: the human does them, and the agent reads the results from screenshots.
 - On Android, saving one photo opens the system save dialog and saving several opens the system folder picker. On iOS it opens the share sheet. These are system screens, tapped like the app. Checking the download in the system gallery app is done with a screenshot there.
-- Step 3: whether the video plays back is judged by the human.
 - Step 4 has to cancel partway, so take a screenshot straight after starting and tap cancel as soon as progress shows.

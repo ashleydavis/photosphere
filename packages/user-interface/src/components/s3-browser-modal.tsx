@@ -13,6 +13,7 @@ import ListItem from '@mui/joy/ListItem';
 import ListItemButton from '@mui/joy/ListItemButton';
 import { usePlatform } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { useDebounce } from '../lib/use-debounce';
 import { ResponsiveDialog } from './responsive-dialog';
 
 export interface IS3BrowserModalProps {
@@ -58,6 +59,13 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
     }
 
     //
+    // Lists the bucket only once typing pauses. Listing on every keystroke listed each partial name as a bucket:
+    // typing "photosphere-smoke-test" made 21 listings of buckets that do not exist, each logged as an error, and
+    // the last of those failures to arrive stayed on screen above the real bucket's listing.
+    //
+    const bucketDebounce = useDebounce(500);
+
+    //
     // Handles bucket input changes: reset prefix and load listing.
     //
     function handleBucketChange(newBucket: string): void {
@@ -65,9 +73,14 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
         setPrefix('');
         setEntries([]);
         if (newBucket) {
-            loadListing(newBucket, '').catch(err => {
-                setListError(String(err));
+            bucketDebounce.schedule(() => {
+                loadListing(newBucket, '').catch(err => {
+                    setListError(String(err));
+                });
             });
+        }
+        else {
+            bucketDebounce.cancel();
         }
     }
 

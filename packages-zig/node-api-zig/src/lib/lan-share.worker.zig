@@ -56,6 +56,7 @@ pub fn receiveShareHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, 
         null;
     const result: IReceiveShareTaskResult = .{
         .payload = payload,
+        .sawMismatchedSender = receiver.sawMismatchedSender,
     };
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, result, .{}), .{});
 }
@@ -91,6 +92,7 @@ pub fn findReceiverHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, 
             .port = found.port,
             .certFingerprint = found.certFingerprint,
         } else null,
+        .sawMismatchedReceiver = sender.sawMismatchedReceiver,
     };
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, result, .{}), .{});
 }

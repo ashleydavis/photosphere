@@ -56,6 +56,9 @@ pub const IReceiveShareTaskData = struct {
 pub const IReceiveShareTaskResult = struct {
     // Payload delivered by a sender, or null if the receiver timed out or was cancelled.
     payload: ?std.json.Value,
+
+    // Whether a sender looking for a different pairing code heard the receiver.
+    sawMismatchedSender: bool,
 };
 
 //
@@ -90,6 +93,9 @@ pub const IFindReceiverTaskData = struct {
 pub const IFindReceiverTaskResult = struct {
     // The discovered receiver endpoint, or null if discovery timed out or was cancelled.
     endpoint: ?IShareReceiverEndpoint,
+
+    // Whether discovery heard a receiver announcing a different pairing code.
+    sawMismatchedReceiver: bool,
 };
 
 //

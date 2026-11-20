@@ -15,7 +15,7 @@ import Box from '@mui/joy/Box';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
-import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { lanShareErrorMessage, noSenderMessage } from '../lib/lan-share-error-message';
 import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 
 export interface IReceiveSecretDialogProps {
@@ -86,13 +86,13 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
 
             const received = await lanShare.waitShareReceive();
 
-            if (!received) {
-                setErrorMessage("No sender connected within 60 seconds.");
+            if (!received.payload) {
+                setErrorMessage(noSenderMessage(received.sawMismatchedSender));
                 setStep("error");
                 return;
             }
 
-            const receivedPayload = received as IReceivedSecretPayload;
+            const receivedPayload = received.payload as IReceivedSecretPayload;
             setPayload(receivedPayload);
             setSaveName(receivedPayload.name);
             setStep("review");

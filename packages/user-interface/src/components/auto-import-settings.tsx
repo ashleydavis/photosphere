@@ -13,7 +13,7 @@ import { usePlatform } from "../context/platform-context";
 import { log } from "utils";
 import { getDefaultDatabasePath, loadAutoImportSettings, saveAutoImportSettings } from "../lib/auto-import-config";
 import { buildCleanupSourcesTaskData, describeCleanupResult, ICleanupSourcesTaskResult } from "../lib/source-cleanup-request";
-import { TaskQueue } from "task-queue";
+import { TaskQueue, TaskStatus } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 
 //
@@ -133,6 +133,17 @@ export function AutoImportSettings() {
             try {
                 const taskId = queue.addTask("cleanup-sources", buildCleanupSourcesTaskData(databasePath, settings!, dryRun));
                 const taskResult = await queue.awaitTask(taskId);
+
+                // A failed task has no outputs. Reading them anyway showed an empty message, left the button as it was and
+                // logged the run as counted, so a cleanup that could not run looked like one that did nothing.
+                if (taskResult?.status === TaskStatus.Failed) {
+                    const errorMessage = taskResult.errorMessage || "The check failed.";
+                    log.error(`Source cleanup failed: ${errorMessage}`);
+                    setCleanupMessage(`Could not check the photos on this device: ${errorMessage}`);
+                    setCleanupCounted(undefined);
+                    return;
+                }
+
                 const cleanupResult = taskResult?.outputs as ICleanupSourcesTaskResult | undefined;
 
                 setCleanupMessage(describeCleanupResult(cleanupResult, dryRun));

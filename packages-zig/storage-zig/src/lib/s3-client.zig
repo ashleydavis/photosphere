@@ -343,13 +343,29 @@ pub fn staticErrorName(code: []const u8) ![]const u8 {
 
 //
 // The error name given to an S3 error response whose body has no <Error><Code> (for example the
-// response to a HEAD request, which has no body): loadRestXmlErrorCode's "NotFound" for a 404, else "Unknown".
+// response to a HEAD request, which has no body): "Forbidden" for a 403, "NotFound" for a 404, else "Unknown".
 //
 pub fn errorNameForStatus(status: u16) []const u8 {
+    if (status == 403) {
+        return "Forbidden";
+    }
     if (status == 404) {
         return "NotFound";
     }
     return "Unknown";
+}
+
+//
+// The message given to an S3 error response that has no body, so no <Error><Message>, from its HTTP status. A HEAD
+// request's response never has a body, so without this a refused HEAD (a wrong secret key when a database is opened)
+// was reported as "UnknownError", which says nothing about what the server answered.
+//
+pub fn errorMessageForStatus(allocator: std.mem.Allocator, status: u16) ![]const u8 {
+    return switch (status) {
+        401, 403 => std.fmt.allocPrint(allocator, "The S3 server refused the request (HTTP {d}): the credentials are wrong or do not allow it", .{status}),
+        404 => std.fmt.allocPrint(allocator, "Not found (HTTP {d})", .{status}),
+        else => std.fmt.allocPrint(allocator, "The S3 server answered with HTTP status {d}", .{status}),
+    };
 }
 
 //
@@ -561,8 +577,8 @@ fn replaceNumericReferences(allocator: std.mem.Allocator, text: []const u8, base
 
 //
 // Throws the error of a failed meta request: the S3 service exception of an S3 error response (name = Code,
-// message = Message, and "UnknownError" for a missing Message, like the SDK), or the SDK's own error when there was
-// no S3 response.
+// message = Message, and "UnknownError" for a body with no Message, like the SDK; a response with no body at all is named
+// and described from its status, see errorMessageForStatus), or the SDK's own error when there was no S3 response.
 //
 // aws-c-s3 keeps the status and body only of responses it will not retry. A 500 or 503, or any response whose
 // <Error><Code> is one it retries (InternalError, SlowDown, RequestTimeout, ...), fails with its own error code,
@@ -577,6 +593,9 @@ fn throwResultError(allocator: std.mem.Allocator, result: *const MetaRequestCall
     last_http_status_code = @intCast(result.responseStatus);
     var name = errorNameForStatus(last_http_status_code);
     var message: []const u8 = "UnknownError";
+    if (result.errorBody == null) {
+        message = try errorMessageForStatus(allocator, last_http_status_code);
+    }
     if (result.errorBody) |body| {
         if (try errorElementText(allocator, body, "Code")) |code| {
             name = try staticErrorName(code);

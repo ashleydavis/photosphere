@@ -353,7 +353,7 @@ public final class MediaLibraryNativeCalls implements NativeCallHandler {
         for (List<String> batch : MediaLibrary.buildDeleteBatches(itemIds, MediaLibrary.DELETE_BATCH_SIZE)) {
             List<Uri> uris = new ArrayList<Uri>();
             for (String itemId : batch) {
-                uris.add(uriForItem(itemId));
+                uris.add(deleteUriForItem(itemId));
             }
 
             JSONArray target = requestDelete(uris) ? deletedIds : failedIds;
@@ -388,13 +388,47 @@ public final class MediaLibraryNativeCalls implements NativeCallHandler {
         }
     }
 
-    // The content uri for one library item.
+    // The content uri for one library item, in the files collection the library is read from.
     private static Uri uriForItem(String itemId) throws NativeCallException {
+        return ContentUris.withAppendedId(contentUri(), parseItemId(itemId));
+    }
+
+    // Reads a library item id.
+    private static long parseItemId(String itemId) throws NativeCallException {
         try {
-            return ContentUris.withAppendedId(contentUri(), Long.parseLong(itemId));
+            return Long.parseLong(itemId);
         } catch (NumberFormatException error) {
             throw new NativeCallException("\"" + itemId + "\" is not a photo library item id.", error);
         }
+    }
+
+    // The content uri for deleting one library item: in the images or the videos collection, whichever the item belongs to. The
+    // files collection the library is read from will not do, because MediaStore.createDeleteRequest refuses any uri that is not in
+    // a media collection ("All requested items must be Media items"), so no delete could ever be asked for.
+    private Uri deleteUriForItem(String itemId) throws NativeCallException {
+        long id = parseItemId(itemId);
+
+        int mediaType;
+        try (Cursor cursor = context.getContentResolver().query(
+                contentUri(),
+                new String[] { MediaStore.Files.FileColumns.MEDIA_TYPE },
+                MediaStore.Files.FileColumns._ID + " = ?",
+                new String[] { String.valueOf(id) },
+                null)) {
+            if (cursor == null || !cursor.moveToFirst()) {
+                throw new NativeCallException("Photo library item " + itemId + " is not in the library.");
+            }
+            mediaType = cursor.getInt(0);
+        }
+
+        String volume = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ? MediaStore.VOLUME_EXTERNAL : "external";
+        if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) {
+            return ContentUris.withAppendedId(MediaStore.Images.Media.getContentUri(volume), id);
+        }
+        if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO) {
+            return ContentUris.withAppendedId(MediaStore.Video.Media.getContentUri(volume), id);
+        }
+        throw new NativeCallException("Photo library item " + itemId + " is not a photo or a video.");
     }
 
     // Reads the ids out of the JSON array the core sent.

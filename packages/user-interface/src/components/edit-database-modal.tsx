@@ -209,8 +209,12 @@ export function EditDatabaseModal({
             // Skipping the write when the entry already agrees assumes the two cannot disagree, and
             // when they do the disagreement is unfixable: the field shows the right origin, saving
             // does nothing, and the database goes on never syncing with nothing to say why.
-            await platform.setDatabaseOrigin(entryData.path, entryData.origin);
+            //
+            // The entry is saved first because setting the origin opens the database's storage with the S3 secret of the
+            // saved entry. Setting it first opened an S3 database with no credentials when its secret had just been
+            // attached in this dialog, and the save failed with "Could not load credentials from any providers".
             await updateDatabase(entry.name, { ...entry, ...entryData });
+            await platform.setDatabaseOrigin(entryData.path, entryData.origin);
             log.event('Database entry updated');
         }
         else {

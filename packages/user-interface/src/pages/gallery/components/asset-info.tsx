@@ -245,7 +245,7 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
             <div className="info-content flex flex-col">
 
                 <div className="flex flex-col flex-grow ml-5 mr-5 mt-6 mb-6 justify-center">
-                    <div className="flex flex-row h-8">
+                    <div className="flex flex-row">
                         <Textarea
                             data-id="asset-description-input"
                             className="flex-grow"

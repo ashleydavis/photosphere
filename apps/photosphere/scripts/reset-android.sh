@@ -46,15 +46,16 @@ if [ "$qemu" != "1" ]; then
     exit 1
 fi
 
-# A pool emulator's device lock is held while it is wiped, the lock the smoke tests and run-android.sh take, so the reset never
-# pulls the app out from under a test that is using it. The picker already holds it for an emulator it chose itself, so it is taken
-# here only for one that was named.
+# A named emulator is wiped only while its device lock is held, by whoever is using it, for the whole time they use it. Taking the
+# lock here instead would mean the caller letting go of it for the reset, and a smoke run queued on the lock takes the emulator in
+# that gap. The picker already holds the lock for an emulator it chose itself.
 if [ -n "$requested" ]; then
     exec 8<>"$(android_device_lock_path "$serial")"
-    if ! flock -n 8; then
-        echo "ERROR: $serial is in use by a test run, so it is left alone." >&2
+    if flock -n 8; then
+        echo "ERROR: $serial is not locked. Hold $(android_device_lock_path "$serial") for as long as you use the emulator, then reset it." >&2
         exit 1
     fi
+    exec 8>&-
 fi
 
 if ! "$adb_command" -s "$serial" shell pm list packages "$PHOTOSPHERE_ANDROID_APP_ID" | tr -d '\r' | grep -qx "package:$PHOTOSPHERE_ANDROID_APP_ID"; then
