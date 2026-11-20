@@ -194,7 +194,8 @@ case "$PLATFORM" in
         # gallery was sorted, and the news it had already shown.
         for config_file in databases.toml config.toml state.json; do
             if [ -n "$(read_config_file "$config_file")" ]; then
-                log_error "The app reported the reset but $config_file is still in the app's storage"
+                log_error "The app reported the reset but $config_file is still in the app's storage. It holds:"
+                read_config_file "$config_file" >&2
                 exit 1
             fi
         done
