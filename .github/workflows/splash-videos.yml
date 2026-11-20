@@ -182,6 +182,13 @@ jobs:
         with:
           run: bun install
 
+      # record-splash.sh records macOS with ffmpeg: screencapture hung waiting on replayd, the system's screen recording service.
+      - name: Install the recorder (macOS)
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install ffmpeg
+          verify: ffmpeg
+
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:
@@ -336,6 +343,13 @@ jobs:
       - name: Build (Android)
         shell: bash
         run: bun run --filter=ziggy build:android -- --output-dir "$PWD/out/app"
+
+      # record-splash.sh cuts the recording to start where the app's splash fills the screen, with ffmpeg.
+      - name: Install the video tools (Android)
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: ffmpeg
+          verify: ffmpeg
 
       - name: Enable KVM (Android)
         run: |

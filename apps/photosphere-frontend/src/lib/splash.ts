@@ -46,6 +46,8 @@ export interface ISplashStyle {
     height: string;
     objectFit: string;
     objectPosition: string;
+    transform: string;
+    maxWidth: string;
 }
 
 //
@@ -143,17 +145,27 @@ export function installSplashScreen(documentLike: IDocumentLike | Document, opti
     const portrait = documentInterface.createElement("img");
     portrait.setAttribute("src", "/ziggy-splash-portrait.png");
     portrait.setAttribute("alt", "");
-    // The image covers the whole window, not only the page: on Android the page is kept clear of the system bars, and the native
-    // app sets --ziggy-window-inset-<side> to how far the window reaches past the page on that side, so the art sits where the
-    // native splash picture, which covers the whole window, has it. Elsewhere they are unset and the image covers the page.
+    // The image's box is the whole window, not only the page: on Android and iOS the page is kept clear of the system bars, and the
+    // native app sets --ziggy-window-inset-<side> to how far the window reaches past the page on that side, so the art sits where
+    // the native splash picture, which covers the whole window, has it. Elsewhere they are unset and the box is the page. The image
+    // covers the box, except on Android, where the native app sets --ziggy-splash-fit to none and --ziggy-splash-scale to the
+    // fixed scale its system splash draws the art at, so the image is centred at that scale instead: the box is made larger by one
+    // over the scale, around the same centre, so the image is not cut at the box's edges before it is scaled down to fit them.
+    const windowWidth = "(100% + var(--ziggy-window-inset-left, 0px) + var(--ziggy-window-inset-right, 0px))";
+    const windowHeight = "(100% + var(--ziggy-window-inset-top, 0px) + var(--ziggy-window-inset-bottom, 0px))";
+    const scale = "var(--ziggy-splash-scale, 1)";
     portrait.style.display = "block";
+    // An app's base styles may cap every image at the width of its box (Tailwind gives img max-width: 100%), which shrank the
+    // enlarged box above back to the window and moved the art off screen on Android.
+    portrait.style.maxWidth = "none";
     portrait.style.position = "absolute";
-    portrait.style.top = "calc(-1 * var(--ziggy-window-inset-top, 0px))";
-    portrait.style.left = "calc(-1 * var(--ziggy-window-inset-left, 0px))";
-    portrait.style.width = "calc(100% + var(--ziggy-window-inset-left, 0px) + var(--ziggy-window-inset-right, 0px))";
-    portrait.style.height = "calc(100% + var(--ziggy-window-inset-top, 0px) + var(--ziggy-window-inset-bottom, 0px))";
-    portrait.style.objectFit = "cover";
+    portrait.style.top = `calc(-1 * var(--ziggy-window-inset-top, 0px) + ${windowHeight} * (1 - 1 / ${scale}) / 2)`;
+    portrait.style.left = `calc(-1 * var(--ziggy-window-inset-left, 0px) + ${windowWidth} * (1 - 1 / ${scale}) / 2)`;
+    portrait.style.width = `calc(${windowWidth} / ${scale})`;
+    portrait.style.height = `calc(${windowHeight} / ${scale})`;
+    portrait.style.objectFit = "var(--ziggy-splash-fit, cover)";
     portrait.style.objectPosition = "center";
+    portrait.style.transform = `scale(${scale})`;
     picture.appendChild(landscape);
     picture.appendChild(portrait);
     overlay.appendChild(picture);
@@ -185,8 +197,7 @@ export function installSplashScreen(documentLike: IDocumentLike | Document, opti
                     resolve();
                     return;
                 }
-                options.onFadeStart(options.fadeDurationMilliseconds);
-                fadeOut(documentInterface, overlay, options.fadeDurationMilliseconds, resolve);
+                fadeOut(documentInterface, overlay, options.fadeDurationMilliseconds, () => options.onFadeStart(options.fadeDurationMilliseconds), resolve);
             }, remaining);
         });
     }
@@ -197,16 +208,37 @@ export function installSplashScreen(documentLike: IDocumentLike | Document, opti
 }
 
 //
-// Fades the overlay out with easeOutCubic and removes it, resolving once it is gone.
+// Fades the overlay out with easeOutCubic and removes it, resolving once it is gone. The fade starts at its first frame, and
+// onStarted is called at the frame after it, once the web view has drawn the fade's first step, so what the native app fades with
+// it (the menu bar's cover, the system bars' strips) starts with what is on screen rather than ahead of it.
 //
-export function fadeOut(documentLike: IDocumentLike, overlay: ISplashElement, fadeDurationMilliseconds: number, onRemoved: () => void): void {
-    const fadeStartedAt = Date.now();
+// Each frame moves the fade on by the time since the frame before it, but by no more than largestFrameMilliseconds, a frame at 10
+// frames a second, so a slow device keeps the fade's timing. After the web view draws no frames for a while, which a slow device
+// does, the fade goes on from where it was at its own speed: following the clock, it jumped, or, kept to small steps, it hurried
+// through the rest and left the native app's fades behind.
+//
+export function fadeOut(documentLike: IDocumentLike, overlay: ISplashElement, fadeDurationMilliseconds: number, onStarted: () => void, onRemoved: () => void): void {
+    const largestFrameMilliseconds = 100;
+    let lastFrameAt = 0;
+    let elapsed = 0;
+    let frames = 0;
 
     function step(): void {
-        const elapsed = Date.now() - fadeStartedAt;
+        const now = Date.now();
+        if (frames > 0) {
+            elapsed += Math.min(largestFrameMilliseconds, Math.max(0, now - lastFrameAt));
+        }
+        if (frames === 1) {
+            onStarted();
+        }
+        lastFrameAt = now;
+        frames += 1;
         const progress = Math.min(1, elapsed / Math.max(1, fadeDurationMilliseconds));
         overlay.style.opacity = String(1 - fadeEasing(progress));
         if (progress >= 1) {
+            if (frames === 1) {
+                onStarted();
+            }
             overlay.remove();
             onRemoved();
             return;

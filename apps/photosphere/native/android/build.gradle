@@ -3,6 +3,9 @@
 buildscript {
     repositories {
         google()
+        // Google's mirror of Maven Central comes before Maven Central itself, which rate-limits busy networks: CI's runners were
+        // refused every download with "429 Too Many Requests". Anything the mirror lacks still comes from Maven Central.
+        maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
         mavenCentral()
     }
     dependencies {
@@ -16,6 +19,9 @@ apply from: "variables.gradle"
 allprojects {
     repositories {
         google()
+        // Google's mirror of Maven Central comes before Maven Central itself, which rate-limits busy networks: CI's runners were
+        // refused every download with "429 Too Many Requests". Anything the mirror lacks still comes from Maven Central.
+        maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }
         mavenCentral()
     }
 }
