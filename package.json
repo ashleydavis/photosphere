@@ -104,7 +104,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "3.1016.0",
-    "ziggy-remote-control-server": "git+https://github.com/ashleydavis/ziggy.git#v0.0.30"
+    "ziggy-remote-control-server": "git+https://github.com/ashleydavis/ziggy.git#v0.0.31"
   },
   "workspaces": [
     "apps/*",
