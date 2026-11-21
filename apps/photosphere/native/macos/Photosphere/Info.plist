@@ -27,5 +27,9 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<!-- The colour of the window's own background, which shows only where the splash and the web view leave the window
+	     uncovered. Red, so a splash recording shows any such frame. -->
+	<key>ZiggyWindowBackground</key>
+	<string>#FF0000</string>
 </dict>
 </plist>
