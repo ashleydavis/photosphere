@@ -50,7 +50,13 @@ if [ ! -e "$app" ]; then
 fi
 mkdir -p "$(dirname "$output")"
 
-source "$(dirname "${BASH_SOURCE[0]}")/cut-to-splash.sh"
+# Fails naming the command when it is not installed.
+require() {
+    if ! command -v "$1" > /dev/null 2>&1; then
+        echo "ERROR: record-splash.sh needs $1, which is not on PATH." >&2
+        exit 1
+    fi
+}
 
 # Stops a process this script started, and does not complain when it has already ended.
 stop() {
@@ -161,8 +167,7 @@ case "$platform" in
         bundle_id="$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$app/Info.plist")"
         xcrun simctl terminate "$simulator" "$bundle_id" 2> /dev/null || true
         xcrun simctl install "$simulator" "$app"
-        # The whole recording, home screen included: macOS's ffmpeg crashed cutting it, so it is not cut here. cut-to-splash.sh cuts it on Linux,
-        # with the rows near the top a tenth of the way down, below the status bar and the camera cut-out.
+        # The whole recording, from a moment before the app opens: the system's launch and the splash are part of what is checked.
         xcrun simctl io "$simulator" recordVideo --codec h264 --force "$output" &
         record_pid=$!
         sleep 2
@@ -210,12 +215,9 @@ case "$platform" in
         wait "$record_pid"
         # screenrecord finishes writing the file a moment after it exits.
         sleep 1
-        whole="$(mktemp --suffix .mp4)"
-        adb pull "$on_device" "$whole" > /dev/null
+        adb pull "$on_device" "$output" > /dev/null
         adb shell rm -f "$on_device"
         adb shell am force-stop "$package"
-        trim_to_splash "$whole" "$output" "iw/2:2:iw/4:0"
-        rm -f "$whole"
         ;;
     *)
         usage
