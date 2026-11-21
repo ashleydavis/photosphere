@@ -8,5 +8,9 @@
         .background = "#140A24",
         .portrait = "apps/photosphere/icons/splash-portrait.png",
         .landscape = "apps/photosphere/icons/splash-landscape.png",
+        // Red where the splash and the web view leave the window uncovered, and a blue menu cover, so a splash recording shows any
+        // uncovered frame and where the menu cover is as it fades.
+        .window_background = "#FF0000",
+        .menu_cover = "#0000FF",
     },
 }
