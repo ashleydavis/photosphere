@@ -24,8 +24,8 @@ if (!window.ziggy) {
 //
 const splash = installSplashScreen(document, {
     background: "#140A24",
-    minimumDisplayMilliseconds: 2000,
-    fadeDurationMilliseconds: 2000,
+    minimumDisplayMilliseconds: 1000,
+    fadeDurationMilliseconds: 1000,
     // The native app fades the splash colour over its menu bar with the overlay.
     onFadeStart: durationMilliseconds => window.ziggy.splashFading(durationMilliseconds),
 });
