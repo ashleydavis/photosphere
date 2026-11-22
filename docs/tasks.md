@@ -71,7 +71,7 @@ pub fn myTaskHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, t
 ```
 
 - The allocator is the task's own, an arena freed when the task ends. The Io and timers are the worker's. None of them are stored: each function that uses one is given it.
-- An error the handler returns fails the task. Return a sentence the user can act on (`utils.errors.throwError`), never a bare error name, because `describe_error` passes that sentence to the page.
+- An error the handler returns fails the task. Return a sentence the user can act on (`utils.errors.throwError`), never a bare error name, because Ziggy passes the sentence a thrown error carries to the page.
 - `openStorage` opens a database's storage with its S3 credentials and encryption keys. `context.nativeCaller` lets it reach the mobile's keychain. It is null on a desktop and in the CLI.
 - A handler that runs ImageMagick or FFmpeg takes one more argument: the runner of the tools built into the program. It is listed in `tool_handlers` rather than `handlers`.
 

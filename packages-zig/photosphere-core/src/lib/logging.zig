@@ -23,7 +23,6 @@ const logExceptions = @import("log-exceptions.zig").logExceptions;
 // the file, read from it on demand. A log that writes no file (the console log) replies with a null path and a placeholder header.
 //
 fn getLogDetails(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
     _ = timers;
     _ = context;
     const given = try std.json.parseFromValueLeaky(ILogDetailsData, allocator, data, .{
@@ -32,7 +31,12 @@ fn getLogDetails(services: TaskServices, timers: Timers, io: std.Io, allocator: 
     const log_file = given.logFilePath orelse {
         return try std.json.Stringify.valueAlloc(allocator, utils.log.noLogDetails, .{});
     };
-    const details = try utils.file_log.readLogDetails(allocator, io, log_file);
+    const details = utils.file_log.readLogDetails(allocator, io, log_file) catch |err| {
+        if (err == error.FileNotFound) {
+            services.fail_with("A file or folder the request needs was not found.");
+        }
+        return err;
+    };
     return try std.json.Stringify.valueAlloc(allocator, details, .{});
 }
 

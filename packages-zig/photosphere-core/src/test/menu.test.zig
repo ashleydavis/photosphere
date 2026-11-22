@@ -61,11 +61,10 @@ test "the standard items are in the menu entries with their actions and the core
     }
 }
 
-test "the registered app carries the menu, a page query, an error describer, messages and task types" {
+test "the registered app carries the menu, a page query, messages and task types" {
     const app = photosphere_app.app;
     try std.testing.expectEqual((comptime ziggy.menu.menuEntries(menu.menu, actions.actions)).len, app.menu_entries.len);
     try std.testing.expect(app.ui_query != null);
-    try std.testing.expect(app.describe_error != null);
     try std.testing.expect(app.messages.len > 0);
     try std.testing.expect(app.tasks.len > 0);
 }

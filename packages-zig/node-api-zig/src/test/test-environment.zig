@@ -170,25 +170,12 @@ pub fn createPool(allocator: std.mem.Allocator, workers: u32, tasks: []const zig
     return try WorkerPool.create(allocator, .{
         .max_workers = workers,
         .tasks = tasks,
-        .describe_error = describeError,
         .worker_options = .{
             .workerId = 0,
             .sessionId = "test-session",
             .maxConcurrentChildTasks = 2,
         },
     });
-}
-
-//
-// Gives the text of a failed task's error: the message the handler recorded (throwError), or the error's name, so the tests see the
-// messages the task handlers throw.
-//
-fn describeError(err: anyerror) ?[]const u8 {
-    const message = ziggy.utils.errors.errorMessage(err);
-    if (message.len == 0) {
-        return null;
-    }
-    return message;
 }
 
 //

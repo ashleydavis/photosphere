@@ -87,6 +87,7 @@ const CountedServices = struct {
         .isMobile = isMobile,
         .nativeCallbacks = nativeCallbacks,
         .configureLog = configureLog,
+        .fail_with = fail_with,
     };
 
     fn interface(self: *CountedServices) HandlerServices {
@@ -159,6 +160,10 @@ const CountedServices = struct {
 
     fn nativeCallbacks(_: *anyopaque) ziggy.core.NativeCallbacks {
         unexpected("nativeCallbacks");
+    }
+
+    fn fail_with(_: *anyopaque, _: []const u8) void {
+        unexpected("fail_with");
     }
 };
 

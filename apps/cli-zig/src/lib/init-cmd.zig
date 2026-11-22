@@ -1000,14 +1000,6 @@ fn registerMediaSources(context: task_queue.types.ITaskContext) anyerror!void {
 }
 
 //
-// Gives the text of a failed task's error for the worker pool to report: the message the handler recorded (throwError), or the
-// error's name.
-//
-fn describeError(err: anyerror) ?[]const u8 {
-    return utils.errors.errorMessage(err);
-}
-
-//
 // Converts the --workers value, or the CPU count, to the most workers the pool may start. The value is a JavaScript number, and the
 // TypeScript pool started a worker while the number of workers was below it, so a fraction is rounded up. NaN, the infinities and
 // anything below 1 allow no worker, and a value past the largest u32 is that largest u32.
@@ -1134,7 +1126,6 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, log: ILog, mediaToo
     const workerPool = try WorkerPool.create(allocator, .{
         .max_workers = maxWorkers(workers),
         .tasks = &task_types,
-        .describe_error = describeError,
         .worker_options = .{
             .workerId = 0,
             .verbose = options.verbose orelse false,

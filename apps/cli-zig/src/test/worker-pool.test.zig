@@ -162,7 +162,6 @@ pub fn createPool(allocator: std.mem.Allocator, workers: u32, timeoutMs: u64, se
     return try WorkerPool.create(allocator, .{
         .max_workers = workers,
         .tasks = tasks,
-        .describe_error = describeError,
         .worker_options = .{
             .workerId = 0,
             .sessionId = sessionId,
@@ -170,13 +169,6 @@ pub fn createPool(allocator: std.mem.Allocator, workers: u32, timeoutMs: u64, se
         },
         .task_timeout_ms = timeoutMs,
     });
-}
-
-//
-// Gives the text of a failed task's error, as the CLI's pool does: the message the handler recorded (throwError), or the error's name.
-//
-fn describeError(err: anyerror) ?[]const u8 {
-    return utils.errors.errorMessage(err);
 }
 
 //
