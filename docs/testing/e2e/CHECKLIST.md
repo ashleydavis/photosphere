@@ -179,6 +179,13 @@ Run the story player and check every story cycles through without failures, then
 ### Bug
 - [x] [bug](cli/bug/bug.md)
 
+## Onboarding
+
+Run each of these on the mobile app (Android and iOS) and on the desktop app (Linux, macOS and Windows). Tick a test only when it has passed on all of them, and say which platform failed when one does.
+
+- [ ] [onboard-existing-remote](onboarding/onboard-existing-remote.md)
+- [ ] [onboard-new-remote](onboarding/onboard-new-remote.md)
+
 ## Desktop
 
 ### Import

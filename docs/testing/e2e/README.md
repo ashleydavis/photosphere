@@ -13,6 +13,7 @@ This directory is "the testing manual". When the human says "the testing manual"
 - [cli/](cli/) - Test scripts for the `psi` CLI
 - [desktop/](desktop/) - Test scripts for the Photosphere desktop app
 - [mobile/](mobile/) - Test scripts for the Photosphere mobile app on Android and iOS
+- [onboarding/](onboarding/) - Test scripts for a new user's first run, each run on the mobile app and the desktop app
 - [CHECKLIST.md](CHECKLIST.md) - Every test, with its result for the upcoming version
 - [CHECKLIST-NOTES.md](CHECKLIST-NOTES.md) - Notes from test runs: what failed and why, and anything else seen along the way
 - [agent-driving.md](agent-driving.md) - How an agent performs the UI steps itself on Android, iOS and the desktop app
