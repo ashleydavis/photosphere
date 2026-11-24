@@ -4,7 +4,7 @@ A test on a real Android mobile of automatic import and background syncing to S3
 
 Commands
 
-- /test:auto-import-sync:start (start.md): resets the last run and starts a new one. It shows what the reset deletes and asks twice before deleting anything.
+- /test:auto-import-sync:start (start.md): resets the last run and starts a new one. It first asks whether to run automatically or manually. Automatic does every step, including tapping through the app on the mobile. Manual does the reset and the setup on this machine, then walks you through the steps on the mobile one at a time. It shows what the reset deletes and asks twice before deleting anything.
 - /test:auto-import-sync:check (check.md): reports whether import and sync are still going or have finished, with the counts, anything missing and how long each took. It only reads.
 
 What it sets up
