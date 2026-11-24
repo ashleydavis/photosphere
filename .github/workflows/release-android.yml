@@ -16,41 +16,28 @@ env:
   RELEASE_PLATFORM_NAME: "Android"
 
 on:
-  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run manually.
+  # Pushing this platform's version tag releases it.
   push:
-    branches:
-      - "*"
-  #   tags:
-  #     - 'android-v*.*.*'
+    tags:
+      - 'android-v*.*.*'
 
-  # pull_request:
-  #   branches:
-  #     - main
-
-  workflow_dispatch:
-    inputs:
-      release:
-        description: "Release action. none = nightly build. update-latest = move the latest android-v*.*.* tag to this commit and re-release it. new-patch = create the next patch tag (e.g. android-v0.0.8 -> android-v0.0.9) and release it."
-        type: choice
-        options:
-          - none
-          - update-latest
-          - new-patch
-        default: none
+  # The nightly build, every day at 1pm AEST (03:00 UTC). prepare-tag skips it when nothing was committed in the last 24 hours.
+  schedule:
+    - cron: "0 3 * * *"
 
 # The Linux jobs run on ubuntu-24.04, a fixed image, not ubuntu-latest: ubuntu-latest moved to ubuntu-26.04, which changed CI under
 # unchanged code (on it, every start of a Ziggy Linux app waited 25 seconds for the desktop portal).
 jobs:
-  # Resolves the release tag once, before anything is built, because it can create and push a tag. Its outputs, the tag and
-  # whether this run is a release, are read by app-build, cli-build, package and create-release, so the two builds run side by side.
+  # Resolves the release tag once, before anything is built, and decides whether this run builds at all: a tag push always does,
+  # and the nightly does only when something was committed in the last 24 hours. Every job needs it, directly or through another
+  # job, so when it says not to build every other job is skipped.
   prepare-tag:
     timeout-minutes: 5
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       is-release: ${{ steps.resolve.outputs.is-release }}
+      should-build: ${{ steps.resolve.outputs.should-build }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -60,45 +47,31 @@ jobs:
       - name: Resolve release tag
         id: resolve
         run: |
-          RELEASE_INPUT="${{ inputs.release }}"
-          PREFIX="${RELEASE_PLATFORM}-v"
           if [ "${{ github.ref_type }}" = "tag" ]; then
             TAG="${{ github.ref_name }}"
             IS_RELEASE="true"
-          elif [ "$RELEASE_INPUT" = "update-latest" ]; then
-            TAG=$(git tag --list "${PREFIX}*.*.*" --sort=-version:refname | head -1)
-            if [ -z "$TAG" ]; then
-              echo "No existing ${PREFIX}*.*.* tag to update"
-              exit 1
-            fi
-            git tag -f "$TAG"
-            git push --force origin "$TAG"
-            IS_RELEASE="true"
-          elif [ "$RELEASE_INPUT" = "new-patch" ]; then
-            LATEST=$(git tag --list "${PREFIX}*.*.*" --sort=-version:refname | head -1)
-            if [ -z "$LATEST" ]; then
-              LATEST="${PREFIX}0.0.0"
-            fi
-            MAJOR=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f1)
-            MINOR=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f2)
-            PATCH=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f3)
-            TAG="${PREFIX}${MAJOR}.${MINOR}.$((PATCH + 1))"
-            git tag "$TAG"
-            git push origin "$TAG"
-            IS_RELEASE="true"
+            SHOULD_BUILD="true"
           else
             TAG=""
             IS_RELEASE="false"
+            if [ -n "$(git log --since="24 hours ago" --format=%H -1)" ]; then
+              SHOULD_BUILD="true"
+            else
+              SHOULD_BUILD="false"
+            fi
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
-          echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
+          echo "should-build=$SHOULD_BUILD" >> $GITHUB_OUTPUT
+          echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE, should-build: $SHOULD_BUILD)"
 
   # The third-party libraries, each built once by its own action and stored as an artifact, so a library an earlier run (or another workflow) has
   # already built is restored rather than compiled again. Each is built for both Android architectures the app ships, and for the
   # runner, which the CLI that makes the smoke tests' fixtures builds for. Every job that runs the Zig build restores them from those
   # artifacts with the third-party-libraries action.
   build-aws-sdk:
+    needs: [prepare-tag]
+    if: needs.prepare-tag.outputs.should-build == 'true'
     timeout-minutes: 60
     runs-on: ubuntu-24.04
     steps:
@@ -126,6 +99,8 @@ jobs:
           build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
   build-zlib-ng:
+    needs: [prepare-tag]
+    if: needs.prepare-tag.outputs.should-build == 'true'
     timeout-minutes: 30
     runs-on: ubuntu-24.04
     steps:
@@ -153,6 +128,8 @@ jobs:
           build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
   build-imagemagick:
+    needs: [prepare-tag]
+    if: needs.prepare-tag.outputs.should-build == 'true'
     timeout-minutes: 45
     runs-on: ubuntu-24.04
     steps:
@@ -180,6 +157,8 @@ jobs:
           build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
   build-ffmpeg:
+    needs: [prepare-tag]
+    if: needs.prepare-tag.outputs.should-build == 'true'
     timeout-minutes: 60
     runs-on: ubuntu-24.04
     steps:
@@ -489,6 +468,8 @@ jobs:
 
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
   typescript-compile:
+    needs: [prepare-tag]
+    if: needs.prepare-tag.outputs.should-build == 'true'
     timeout-minutes: 20
     runs-on: ubuntu-24.04
     steps:
@@ -523,6 +504,8 @@ jobs:
 
   # The TypeScript unit tests.
   typescript-unit-tests:
+    needs: [prepare-tag]
+    if: needs.prepare-tag.outputs.should-build == 'true'
     timeout-minutes: 20
     runs-on: ubuntu-24.04
     steps:

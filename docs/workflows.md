@@ -51,13 +51,13 @@ One workflow per platform: `linux`, `windows`, `macos-arm64`, `macos-x64`, `andr
 release-<platform>.yml
 ├── prepare-tag
 │   │ needs:  none
-│   │ Works out the release tag.
-│   │ output → job outputs (tag, is-release); with new-patch or
-│   │          update-latest it also pushes a git tag to GitHub
+│   │ Works out the release tag, and whether a nightly has commits
+│   │ from the last 24 hours to build.
+│   │ output → job outputs (tag, is-release, should-build)
 │   └── linux                     (ubuntu-latest)
 │
 │   Library jobs: one job per library, for this platform.
-│     needs:  none
+│     needs:  prepare-tag (skipped when should-build is false)
 │     output → GitHub cache
 ├── build-aws-sdk                      (<platform runner>)
 ├── build-zlib-ng                      (<platform runner>)
@@ -79,11 +79,11 @@ release-<platform>.yml
 │   │          build cache)
 │   └── <platform>                (<platform runner>)
 ├── typescript-compile
-│   │ needs:  none
+│   │ needs:  prepare-tag (skipped when should-build is false)
 │   │ output → none
 │   └── linux                     (ubuntu-latest)
 ├── typescript-unit-tests
-│   │ needs:  none
+│   │ needs:  prepare-tag (skipped when should-build is false)
 │   │ output → none
 │   └── linux                     (ubuntu-latest)
 ├── zig-unit-tests
@@ -132,6 +132,10 @@ The platform runner of each release workflow:
 
 The Android library jobs build each library for the runner, Android x86_64 and Android arm64. The iOS library jobs build for the iOS simulator and an iOS device; the iOS `app-build` also restores the macOS arm64 libraries for the runner, which no job in that workflow builds, so on a cache miss it builds them itself.
 
+## Test (`test-<platform>.yml`)
+
+One workflow per platform, run on every push to a branch and when started from the Actions tab. Each is the platform's release workflow without `prepare-tag`, `package` and `create-release`: the same library, build, smoke test and unit test jobs, with the same inputs and outputs, and the app and CLI stamped with the nightly version.
+
 ## Dependency graphs
 
 Each arrow points from a job to a job that needs it. A job with no arrow into it starts when the workflow starts.
@@ -166,6 +170,12 @@ This diagram is drawn for dark mode only: its lines are white and do not show on
 
 ```mermaid
 flowchart LR
+    prepare-tag --> lib-aws["build-aws-sdk"]
+    prepare-tag --> lib-zlib["build-zlib-ng"]
+    prepare-tag --> lib-im["build-imagemagick"]
+    prepare-tag --> lib-ff["build-ffmpeg"]
+    prepare-tag --> typescript-compile
+    prepare-tag --> typescript-unit-tests
     prepare-tag --> app-build
     lib-aws["build-aws-sdk"] --> app-build
     lib-zlib["build-zlib-ng"] --> app-build

@@ -17,9 +17,13 @@ The version the app reports is the tag with its platform prefix removed: `linux-
 
 Each platform's versions are independent. Releasing `linux-v1.2.3` releases nothing on the other platforms; push a tag for each platform you want released.
 
-For now the release workflows run only when started manually from the Actions tab: their push and pull request triggers, release tag pushes included, are commented out until every platform's workflow passes. Until then a pushed tag starts nothing, and pushes and pull requests build no nightly.
+A release workflow runs in two cases: when that platform's version tag is pushed, and for the nightly build.
 
-The TypeScript is compiled and unit tested on Linux in every release workflow's `typescript-compile` and `typescript-unit-tests` jobs. The Zig unit tests run in its `zig-unit-tests` job on the workflow's own runner (Linux for Android, macOS for iOS). The CI workflow (`.github/workflows/ci.yml`) runs the same TypeScript jobs and `zig-unit-tests-linux`, all on Linux, for every push to a branch, every pull request into `main` and every manual run.
+The TypeScript is compiled and unit tested on Linux in every release workflow's `typescript-compile` and `typescript-unit-tests` jobs. The Zig unit tests run in its `zig-unit-tests` job on the workflow's own runner (Linux for Android, macOS for iOS).
+
+## Test workflows
+
+Each platform has a test workflow, `.github/workflows/test-<platform>.yml`, that runs on every push to a branch and when started from the Actions tab. It is that platform's release workflow without the `prepare-tag`, `package` and `create-release` jobs, so it builds and tests what a release would and publishes no release.
 
 ## Making a release
 
@@ -30,15 +34,9 @@ git tag linux-v1.2.3
 git push origin linux-v1.2.3
 ```
 
-Or run the platform's workflow manually from the Actions tab and pick a release action:
-
-- `none` builds a nightly (see below).
-- `new-patch` creates the next patch tag for that platform (`linux-v1.2.3` becomes `linux-v1.2.4`), pushes it and releases it.
-- `update-latest` moves that platform's newest tag to the commit being built and releases it again.
-
 ## Nightly builds
 
-Every push to a branch, every pull request into `main` and every manual run with `none` builds a nightly. The platform's nightly release is replaced each time: it is a prerelease named `<platform>-nightly` (for example `linux-nightly`), and its app reports the version `dev-nightly.<UTC timestamp>`.
+Every release workflow runs on a schedule at 1pm AEST (03:00 UTC) each day, on `main`. Its `prepare-tag` job checks for commits in the last 24 hours and skips every other job when there are none. The platform's nightly release is replaced each time: it is a prerelease named `<platform>-nightly` (for example `linux-nightly`), and its app reports the version `dev-nightly.<UTC timestamp>`.
 
 ## Release notes
 
