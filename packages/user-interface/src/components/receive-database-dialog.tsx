@@ -491,7 +491,13 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                                         data-id="receive-database-code-input"
                                         value={enteredCode}
                                         onChange={event => setEnteredCode(event.target.value)}
-                                        slotProps={{ input: { maxLength: 4 } }}
+                                        slotProps={{
+                                            input: {
+                                                maxLength: 4,
+                                                inputMode: "numeric",
+                                                pattern: "[0-9]*",
+                                            },
+                                        }}
                                         placeholder="0000"
                                         sx={PAIRING_CODE_INPUT_SX}
                                     />
