@@ -7,10 +7,10 @@ description: >
 runs:
   using: composite
   steps:
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
+    - name: Setup Bun (version from mise.toml)
+      uses: jdx/mise-action@v2
       with:
-        bun-version: ${{ env.BUN_VERSION }}
+        install_args: bun
 
     # setup-android.sh checks that the pinned tools are on the PATH.
     - name: Setup Zig and jq (versions from mise.toml)

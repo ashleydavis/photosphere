@@ -4,11 +4,6 @@
 # and test the TypeScript. CI packages nothing and builds for no other platform: the release workflows do both.
 name: CI
 
-env:
-  BUN_VERSION: "1.3.14"
-  NODE_VERSION: "24.15.0"
-  WHAT_CHANGED_VERSION: "v0.0.6"
-
 on:
   push:
     branches:
@@ -89,15 +84,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Bun (version from mise.toml)
+        uses: jdx/mise-action@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          install_args: bun
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js (version from mise.toml)
+        uses: jdx/mise-action@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          install_args: node
 
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
@@ -221,10 +216,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Bun (version from mise.toml)
+        uses: jdx/mise-action@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          install_args: bun
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -255,10 +250,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Bun (version from mise.toml)
+        uses: jdx/mise-action@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          install_args: bun
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -288,10 +283,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Bun (version from mise.toml)
+        uses: jdx/mise-action@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          install_args: bun
 
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2

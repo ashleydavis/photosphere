@@ -27,9 +27,16 @@ runs:
             *) echo "::error::No what-changed release asset for $RUNNER_OS-$RUNNER_ARCH"; exit 1;;
         esac
 
+        # The version mise.toml locks, so the CI and a developer's machine run the same what-changed. Its releases are tagged v<version>.
+        version="$(sed -n 's/^"github:ashleydavis\/what-changed" = "\(.*\)"$/\1/p' mise.toml)"
+        if [ -z "$version" ]; then
+            echo "::error::mise.toml has no \"github:ashleydavis/what-changed\" version for this action to install."
+            exit 1
+        fi
+
         install_dir="$RUNNER_TEMP/what-changed-bin"
         mkdir -p "$install_dir"
-        gh release download "$WHAT_CHANGED_VERSION" --repo ashleydavis/what-changed \
+        gh release download "v$version" --repo ashleydavis/what-changed \
             --pattern "$asset" --dir "$RUNNER_TEMP"
         case "$asset" in
             *.zip) unzip -o -q "$RUNNER_TEMP/$asset" -d "$install_dir";;
