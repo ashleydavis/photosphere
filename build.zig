@@ -423,6 +423,11 @@ fn addPackageModules(
     windows_native_calls.addImport("ziggy", ziggy_core);
     windows_native_calls.addImport("api-zig", modules.get("api-zig").?);
     windows_native_calls.addImport("utils-zig", modules.get("utils-zig").?);
+    if (target.result.os.tag == .windows) {
+        // iphlpapi, whose GetBestInterface and GetAdaptersAddresses read the default route's adapter. This module declares
+        // those two functions itself rather than translating iphlpapi.h, so its library is linked here.
+        windows_native_calls.linkSystemLibrary("iphlpapi", .{});
+    }
     try modules.put("windows-native-calls", windows_native_calls);
 
     modules.get("photosphere-core").?.addImport("macos-native-calls", macos_native_calls);
