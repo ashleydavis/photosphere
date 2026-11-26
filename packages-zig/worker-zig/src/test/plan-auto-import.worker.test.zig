@@ -214,6 +214,9 @@ test "plan-auto-import watches the machine's photo folders when none have been c
     // Pictures folder is made there, which keeps the default deterministic rather than the developer's own.
     const home = try std.fs.path.join(sandbox.arenaAllocator(), &.{ sandbox.tempDir, "home" });
     try test_environment.setEnv("HOME", home);
+    // Windows reads the home directory from USERPROFILE, which osHomedir does there, so it is pointed at the sandbox too.
+    // Without it this test read the runner's own Pictures folder and failed on Windows.
+    try test_environment.setEnv("USERPROFILE", home);
     const pictures = try std.fs.path.join(sandbox.arenaAllocator(), &.{ home, "Pictures" });
     try sandbox.writeFile("home/Pictures/.keep", "");
 
