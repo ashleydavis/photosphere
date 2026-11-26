@@ -5,12 +5,8 @@
 // when Ziggy destroys it. Only the main thread uses it, with the handler services each function is given, so it needs no lock. A task
 // never reaches it: it gets what it needs in its data, and the main thread applies what it sends back (see main-process.zig).
 //
-// The timers (the debounce after an edit, the periodic sync for the life of the app, the check that automatic import is still running,
-// the look for a second copy of the app and the background passes) are the main thread's timers, whose callbacks run on the main
-// thread, as in the TypeScript app.
-//
-// ensureAutoImport waits for the task that creates the default database, so it runs as a task, the `ensure-auto-import` task, and the
-// main thread does what its result names.
+// The timers (the debounce after an edit, the periodic sync for the life of the app, the look for a second copy of the app and the
+// background passes) are the main thread's timers, whose callbacks run on the main thread, as in the TypeScript app.
 //
 
 const std = @import("std");
@@ -19,7 +15,7 @@ const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
-const mobile_worker = @import("mobile-worker-zig");
+const worker = @import("worker-zig");
 const media_tools = @import("media-tools-zig");
 const node_utils = @import("node-utils-zig");
 const storage = @import("storage-zig");
@@ -47,11 +43,6 @@ pub const SYNC_DEBOUNCE_MS = 10_000;
 pub const SYNC_PERIODIC_MS = 5 * 60 * 1_000;
 
 //
-// How often the app checks that automatic import is running when it should be, in milliseconds.
-//
-pub const AUTO_IMPORT_RESTART_CHECK_MS = 30_000;
-
-//
 // The source tag of the check for a newer release.
 //
 pub const CHECK_FOR_UPDATE_TASK_SOURCE = "check-for-update";
@@ -62,27 +53,9 @@ pub const CHECK_FOR_UPDATE_TASK_SOURCE = "check-for-update";
 pub const CHECK_FOR_NEWS_TASK_SOURCE = "check-for-news";
 
 //
-// The source tag of the task that makes automatic import match the config.
-//
-pub const ENSURE_AUTO_IMPORT_TASK_SOURCE = "ensure-auto-import";
-
-//
 // How often the signal of a second copy of the app is looked for, in milliseconds.
 //
 pub const SINGLE_INSTANCE_CHECK_MS = 500;
-
-//
-// What the main thread gives the `ensure-auto-import` task: whether it is a tick of the check (worded "restarting" when it fails) or
-// the call at startup, and what automatic import is running now, so the task does nothing when that already matches the config.
-//
-pub const IEnsureAutoImportData = struct {
-    // Whether this is a tick of the check rather than the call at startup.
-    restarting: bool = false,
-    // The database automatic import is writing to, or null when it is not running.
-    runningDatabasePath: ?[]const u8 = null,
-    // The settings it was started with, as JSON, or null when it is not running.
-    runningSettingsJson: ?[]const u8 = null,
-};
 
 //
 // Holds the app's state, the main thread's own: set by onCreate on the core's main thread, before any message or task can reach the
@@ -123,25 +96,12 @@ pub const MainState = struct {
     sync_debounce_timer: ?TimerId,
     // The periodic sync's timer, or null before it is started or after it is stopped (`syncPeriodicTimer`).
     sync_periodic_timer: ?TimerId,
-    // The timer of the check that automatic import is running, or null before the main window has been created.
-    auto_import_check_timer: ?TimerId,
-    // How often automatic import is checked. A field so that a test can shorten it.
-    auto_import_check_ms: u64,
     // How long the debounce waits. A field so that a test can shorten it.
     sync_debounce_ms: u64,
     // How often the periodic sync runs. A field so that a test can shorten it.
     sync_periodic_ms: u64,
-    // Whether automatic import is running (`autoImportRunning`).
-    auto_import_running: bool,
-    // The id of the running automatic import task, or null (`autoImportTaskId`). Owned by the state.
-    auto_import_task_id: ?[]u8,
     // The database automatic import is writing to, or null (`autoImportDatabasePath`). Owned by the state.
     auto_import_database_path: ?[]u8,
-    // The settings the running automatic import was started with, as JSON, or null (`autoImportSettingsJson`). Owned by the state.
-    auto_import_settings_json: ?[]u8,
-    // Set while an ensure-auto-import task is queued or running, so two config writes arriving together do not both create the default
-    // database (`autoImportStarting`).
-    auto_import_starting: bool,
     // Whether the main window has been created, which happens once.
     main_window_created: bool,
     // Whether the checks made once the page has loaded (for an update and for news) have been queued, which happens once.
@@ -204,15 +164,9 @@ pub const MainState = struct {
             .is_sync_running = false,
             .sync_debounce_timer = null,
             .sync_periodic_timer = null,
-            .auto_import_check_timer = null,
-            .auto_import_check_ms = AUTO_IMPORT_RESTART_CHECK_MS,
             .sync_debounce_ms = SYNC_DEBOUNCE_MS,
             .sync_periodic_ms = SYNC_PERIODIC_MS,
-            .auto_import_running = false,
-            .auto_import_task_id = null,
             .auto_import_database_path = null,
-            .auto_import_settings_json = null,
-            .auto_import_starting = false,
             .main_window_created = false,
             .startup_checks_queued = false,
             .asset_server = null,
@@ -260,13 +214,6 @@ pub const MainState = struct {
             self.asset_server = null;
         }
         self.stopPeriodicSync(timers);
-        // The automatic import task holds filesystem watchers and a temporary directory, so it is told to stop before the worker pool
-        // goes away under it.
-        if (self.auto_import_running) {
-            self.auto_import_running = false;
-            freeOwned(allocator, &self.auto_import_database_path);
-            services.cancelTasks(io, allocator, node_api.auto_import_desktop.AUTO_IMPORT_TASK_SOURCE);
-        }
         clearTimer(timers, &self.sync_debounce_timer);
         log.info("Photosphere Desktop shutting down...");
     }
@@ -280,10 +227,7 @@ pub const MainState = struct {
     pub fn startBackgroundWork(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) void {
         inline for (std.meta.fields(background_work.Pass)) |field| {
             const pass: background_work.Pass = @enumFromInt(field.value);
-            // A desktop imports by watching folders (ensureAutoImport), so a second import here would import everything twice.
-            if (pass != .import or builtin.os.tag == .ios or builtin.abi.isAndroid()) {
-                self.switchOnBackgroundPass(services, timers, io, allocator, pass);
-            }
+            self.switchOnBackgroundPass(services, timers, io, allocator, pass);
         }
     }
 
@@ -393,6 +337,7 @@ pub const MainState = struct {
             .gapMs = background_work.FALLBACK_PAUSE_MS,
             .finished = false,
             .replicaState = self.prefetch_replica_state,
+            .databasePath = "",
         };
         if (pass == .prefetch) {
             self.prefetch_replica_state = ended.replicaState;
@@ -419,9 +364,7 @@ pub const MainState = struct {
     //
     pub fn destroy(self: *MainState, io: std.Io, allocator: std.mem.Allocator) void {
         freeOwned(allocator, &self.current_database_path);
-        freeOwned(allocator, &self.auto_import_task_id);
         freeOwned(allocator, &self.auto_import_database_path);
-        freeOwned(allocator, &self.auto_import_settings_json);
         // A state that was never stopped still has its servers.
         self.stopMcpServer(io, allocator);
         if (self.asset_server) |server| {
@@ -623,48 +566,18 @@ pub const MainState = struct {
     }
 
     //
-    // Queues the task that makes automatic import match the config, unless one is queued or running already. The task's input gives
-    // whether it is the call at startup or a tick of the check, which are worded differently when it fails ('Error starting automatic
-    // import' and 'Error restarting automatic import'), and what automatic import is running now.
-    //
-    pub fn enqueueEnsureAutoImportTask(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator, restarting: bool) !void {
-        if (self.auto_import_starting) {
-            return;
-        }
-        var arena_state = std.heap.ArenaAllocator.init(allocator);
-        defer arena_state.deinit();
-        const arena = arena_state.allocator();
-        const running = self.auto_import_running;
-        const data_json = try json.stringify(arena, IEnsureAutoImportData{
-            .restarting = restarting,
-            .runningDatabasePath = if (running) self.auto_import_database_path else null,
-            .runningSettingsJson = if (running) self.auto_import_settings_json else null,
-        });
-        const task_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
-        try services.addTask(io, arena, task_id, "ensure-auto-import", ENSURE_AUTO_IMPORT_TASK_SOURCE, data_json, .background);
-        self.auto_import_starting = true;
-    }
-
-    //
-    // Does what is needed once the main window has been created: logs that the main window was created, makes
-    // automatic import match the config, and starts the check that keeps it running. The page's query starts the asset server,
-    // so it calls this when it has built the query. Only the
+    // Does what is needed once the main window has been created: logs that the main window was created and starts the MCP server
+    // on a desktop. The page's query starts the asset server, so it calls this when it has built the query. Only the
     // first call does anything, because these steps run once and a window made again later does not repeat them.
     //
     pub fn mainWindowCreated(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) !void {
+        _ = timers;
         const log = services.log;
         if (self.main_window_created) {
             return;
         }
         self.main_window_created = true;
-        self.auto_import_check_timer = try timers.setInterval(io, .{
-            .context = self,
-            .function = autoImportCheckDue,
-        }, self.auto_import_check_ms);
         log.event("Main window created");
-        // Automatic import picks up where it left off, so a machine that was backing photos up before it was shut down carries on
-        // without the user having to open anything.
-        try self.enqueueEnsureAutoImportTask(services, io, allocator, false);
         // A mobile has no MCP server. A server that cannot start is not worth stopping the app for, so the app carries on without it.
         if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
             self.startMcpServer(services, io, allocator) catch |err| {
@@ -801,17 +714,6 @@ fn syncTimerDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timer
 }
 
 //
-// The timer of the check that automatic import is running.
-//
-fn autoImportCheckDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
-    const state: *MainState = @ptrCast(@alignCast(context.?));
-    const log = ziggy.core.handlerServicesOf(services).log;
-    state.enqueueEnsureAutoImportTask(ziggy.core.handlerServicesOf(services), io, stateAllocator(), true) catch |err| {
-        log.exception("Error queuing the check that automatic import is running", err);
-    };
-}
-
-//
 // The timer that looks for a second copy of the app.
 //
 fn singleInstanceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
@@ -838,7 +740,7 @@ pub fn current() *MainState {
 pub fn registerMediaSources(context: ziggy.task_queue.types.ITaskContext) anyerror!void {
     try node_api.task_handlers.registerMediaSourceBuilders();
     if (context.nativeCaller != null) {
-        try mobile_worker.device_media_source.registerDeviceMediaSourceBuilder();
+        try worker.device_media_source.registerDeviceMediaSourceBuilder();
     }
 }
 

@@ -5,9 +5,9 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const api = @import("api-zig");
-const mobile_worker = @import("mobile-worker-zig");
+const worker = @import("worker-zig");
 
-const DeviceMediaSource = mobile_worker.device_media_source.DeviceMediaSource;
+const DeviceMediaSource = worker.device_media_source.DeviceMediaSource;
 const INativeCaller = utils.native_caller.INativeCaller;
 const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
 const MediaSourceDeleteError = api.media_source.MediaSourceDeleteError;
@@ -221,7 +221,7 @@ test "buildDeviceMediaSource: without a host requester it is an error naming the
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var generator: utils.test_uuid_generator.TestUuidGenerator = .{};
-    try std.testing.expectError(error.Thrown, mobile_worker.device_media_source.buildDeviceMediaSource(arena.allocator(), &.{albumSource("all")}, .{
+    try std.testing.expectError(error.Thrown, worker.device_media_source.buildDeviceMediaSource(arena.allocator(), &.{albumSource("all")}, .{
         .sessionTempDir = "/tmp/session",
         .uuidGenerator = generator.uuidGenerator(),
         .nativeCaller = null,
@@ -383,7 +383,7 @@ test "buildDeviceMediaSource: the source it builds lists, opens, closes and dele
     const allocator = arena.allocator();
     var native_caller = newNativeCaller(allocator);
     var generator: utils.test_uuid_generator.TestUuidGenerator = .{};
-    const source = try mobile_worker.device_media_source.buildDeviceMediaSource(allocator, &.{albumSource("cam")}, .{
+    const source = try worker.device_media_source.buildDeviceMediaSource(allocator, &.{albumSource("cam")}, .{
         .sessionTempDir = "/tmp/session",
         .uuidGenerator = generator.uuidGenerator(),
         .nativeCaller = native_caller.nativeCaller(),

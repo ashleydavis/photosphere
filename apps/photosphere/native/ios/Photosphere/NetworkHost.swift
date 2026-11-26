@@ -11,10 +11,13 @@ import Network
 
 // Reads the connection type from a path monitor that runs for as long as the object does.
 final class NetworkHost {
-    // The connection is Wi-Fi, or something else that is not metered by a mobile carrier.
+    // The connection is Wi-Fi.
     static let connectionWifi = "wifi"
 
-    // The connection is a mobile carrier's, which is the one the Wi-Fi-only setting refuses.
+    // The connection is wired (Ethernet).
+    static let connectionWired = "wired"
+
+    // The connection is a mobile carrier's, which is the one the Wi-Fi-or-wired setting refuses.
     static let connectionCellular = "cellular"
 
     // There is no connection at all.
@@ -78,11 +81,14 @@ final class NetworkHost {
             return NetworkHost.connectionCellular
         }
 
-        // Ethernet counts as Wi-Fi here rather than as its own name, because the only question anything asks of this is whether the
-        // connection is the carrier's. A simulator on a host's network reports ethernet, and calling that "unknown" would be true and
-        // useless.
-        if path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet) {
+        if path.usesInterfaceType(.wifi) {
             return NetworkHost.connectionWifi
+        }
+
+        // Ethernet reports its own name, "wired", which the Wi-Fi-or-wired setting allows. A simulator on a host's network reports
+        // ethernet, and calling that "unknown" would be true and useless.
+        if path.usesInterfaceType(.wiredEthernet) {
+            return NetworkHost.connectionWired
         }
 
         return NetworkHost.connectionUnknown

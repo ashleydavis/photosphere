@@ -3,9 +3,9 @@ import {
     DEFAULT_AUTO_IMPORT_PAUSE_MS,
     DEFAULT_DATABASE_FOLDER_NAME,
     WHOLE_LIBRARY_SOURCES,
-    planMobileAutoImport,
+    planAutoImport,
     resolveAutoImportPauseMs,
-} from "../../lib/auto-import-mobile";
+} from "../../lib/auto-import";
 
 //
 // Settings with automatic import switched on and whatever else the test needs.
@@ -14,28 +14,28 @@ function settingsWith(overrides: Partial<IAutoImportSettings>): IAutoImportSetti
     return { ...DEFAULT_AUTO_IMPORT_SETTINGS, enabled: true, ...overrides };
 }
 
-describe("planMobileAutoImport", () => {
+describe("planAutoImport", () => {
 
     test("does not run when nothing has been stored", () => {
-        expect(planMobileAutoImport(undefined, undefined).shouldRun).toBe(false);
+        expect(planAutoImport(undefined, undefined).shouldRun).toBe(false);
     });
 
     test("does not run when automatic import is switched off", () => {
-        expect(planMobileAutoImport(settingsWith({ enabled: false }), undefined).shouldRun).toBe(false);
+        expect(planAutoImport(settingsWith({ enabled: false }), undefined).shouldRun).toBe(false);
     });
 
     test("runs when automatic import is switched on", () => {
-        expect(planMobileAutoImport(settingsWith({}), undefined).shouldRun).toBe(true);
+        expect(planAutoImport(settingsWith({}), undefined).shouldRun).toBe(true);
     });
 
     test("watches the whole library when no albums are chosen", () => {
-        const plan = planMobileAutoImport(settingsWith({}), undefined);
+        const plan = planAutoImport(settingsWith({}), undefined);
 
         expect(plan.settings.sources).toEqual(WHOLE_LIBRARY_SOURCES);
     });
 
     test("watches the chosen albums when there are some", () => {
-        const plan = planMobileAutoImport(
+        const plan = planAutoImport(
             settingsWith({ sources: [{ type: "device-album", albumId: "camera" }] }),
             undefined);
 
@@ -49,26 +49,26 @@ describe("planMobileAutoImport", () => {
             sources: [{ type: "device-album" }, { type: "device-album", albumId: "camera" }],
         } as any;
 
-        expect(planMobileAutoImport(stored, undefined).settings.sources)
+        expect(planAutoImport(stored, undefined).settings.sources)
             .toEqual([{ type: "device-album", albumId: "camera" }]);
     });
 
     test("chooses the default database location when none has been chosen", () => {
-        const plan = planMobileAutoImport(settingsWith({}), undefined);
+        const plan = planAutoImport(settingsWith({}), undefined);
 
         expect(plan.isNewDefault).toBe(true);
         expect(plan.databasePath).toBe(DEFAULT_DATABASE_FOLDER_NAME);
     });
 
     test("uses the chosen default database when there is one", () => {
-        const plan = planMobileAutoImport(settingsWith({}), "my-photos");
+        const plan = planAutoImport(settingsWith({}), "my-photos");
 
         expect(plan.isNewDefault).toBe(false);
         expect(plan.databasePath).toBe("my-photos");
     });
 
     test("an empty stored default counts as none chosen", () => {
-        const plan = planMobileAutoImport(settingsWith({}), "");
+        const plan = planAutoImport(settingsWith({}), "");
 
         expect(plan.isNewDefault).toBe(true);
         expect(plan.databasePath).toBe(DEFAULT_DATABASE_FOLDER_NAME);

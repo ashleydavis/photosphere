@@ -4,8 +4,8 @@
 //
 
 const std = @import("std");
-const mobile_worker = @import("mobile-worker-zig");
-const INetworkStatusHost = mobile_worker.network_status.INetworkStatusHost;
+const worker = @import("worker-zig");
+const INetworkStatusHost = worker.network_status.INetworkStatusHost;
 
 //
 // A host that reports what the test says, or fails.

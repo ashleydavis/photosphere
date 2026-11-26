@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const windows_native_calls = @import("photosphere-core").windows_native_calls;
 
@@ -7,9 +8,15 @@ test "windows_native_calls.call grants the notification permission, as a desktop
     try std.testing.expectEqualStrings("{\"granted\":true}", result);
 }
 
-test "windows_native_calls.call gives the connection type as unknown" {
-    const result = (try windows_native_calls.call(std.testing.allocator, "networkConnectionType", "null")).?;
-    try std.testing.expectEqualStrings("\"unknown\"", result);
+test "windows_native_calls.call reads the connection type only on Windows" {
+    const result = try windows_native_calls.call(std.testing.allocator, "networkConnectionType", "null");
+    if (builtin.os.tag != .windows) {
+        // The reader is not compiled on any other platform, so the call answers null and the
+        // the classification runs only on its own platform, checked by CI.
+        try std.testing.expect(result == null);
+    } else {
+        try std.testing.expect(result != null);
+    }
 }
 
 test "windows_native_calls.call writes what the background work reports to standard error" {

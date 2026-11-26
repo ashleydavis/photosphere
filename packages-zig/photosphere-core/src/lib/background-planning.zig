@@ -1,5 +1,5 @@
 //
-// The planning tasks the mobile's background loop asks of the core: plan-auto-import, plan-sync and plan-prefetch. They work out, from the settings on disk, whether the loop should
+// The planning tasks the background loop asks of the core: plan-auto-import, plan-sync and plan-prefetch. They work out, from the settings on disk, whether the loop should
 // run, with what, and how long to pause.
 //
 // plan-sync and plan-prefetch ask the platform for the connection type. The native app is asked through the core's host request
@@ -9,19 +9,19 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const node_api = @import("node-api-zig");
-const mobile_worker = @import("mobile-worker-zig");
+const worker = @import("worker-zig");
 const background_work = @import("background-work.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
 const TaskServices = ziggy.task_runner.TaskServices;
-const HandlerServices = ziggy.core.HandlerServices;
 const Timers = ziggy.timers.Timers;
 const ITaskContext = task_queue_zig.types.ITaskContext;
-const INetworkStatusHost = mobile_worker.network_status.INetworkStatusHost;
+const INetworkStatusHost = worker.network_status.INetworkStatusHost;
 
 //
 // What the planning handlers' ITaskContext reaches: the services of the task they run in, the argument the task was given, which the
@@ -105,17 +105,21 @@ fn bridgedContext(services: *const TaskServices, context: TaskContext, native_ca
 //
 pub fn planAutoImportTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    // The mobile's working directory is not the app's data directory, so the default database is given a place in the dbs directory
-    // of it, where short names resolve.
+    // The working directory is not the app's data directory, so the default database is given a place in the dbs directory of it,
+    // where short names resolve. Whether this platform has a device photo library is told to the shared task here, the one place that
+    // knows the platform, rather than the task sniffing the operating system.
     var request: std.json.ObjectMap = .empty;
     try request.put(allocator, "appDataPath", .{
         .string = try node_api.database_base_dir.databaseBaseDir(allocator, context.data_dir),
+    });
+    try request.put(allocator, "hasDevicePhotoLibrary", .{
+        .bool = builtin.os.tag == .ios or builtin.abi.isAndroid(),
     });
     var native_caller_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
-    const result = try mobile_worker.plan_auto_import_worker.planAutoImportHandler(allocator, io, timers, services.log, .{
+    const result = try worker.plan_auto_import_worker.planAutoImportHandler(allocator, io, timers, services.log, .{
         .object = request,
     }, task_context);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
@@ -130,7 +134,7 @@ pub fn planSyncTask(services: TaskServices, timers: Timers, io: std.Io, allocato
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
     const host = networkStatusOf(&services);
-    const result = try mobile_worker.plan_sync_worker.planSyncHandler(allocator, io, timers, services.log, try node_api.database_base_dir.withTaskDataDir(allocator, data, context.data_dir), task_context, host);
+    const result = try worker.plan_sync_worker.planSyncHandler(allocator, io, timers, services.log, try node_api.database_base_dir.withTaskDataDir(allocator, data, context.data_dir), task_context, host);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
@@ -143,7 +147,7 @@ pub fn planPrefetchTask(services: TaskServices, timers: Timers, io: std.Io, allo
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
     const host = networkStatusOf(&services);
-    const result = try mobile_worker.plan_prefetch_worker.planPrefetchHandler(allocator, io, timers, services.log, try node_api.database_base_dir.withTaskDataDir(allocator, data, context.data_dir), task_context, host);
+    const result = try worker.plan_prefetch_worker.planPrefetchHandler(allocator, io, timers, services.log, try node_api.database_base_dir.withTaskDataDir(allocator, data, context.data_dir), task_context, host);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
@@ -186,3 +190,4 @@ pub fn writeConfigTask(services: TaskServices, timers: Timers, io: std.Io, alloc
     const result = try node_api.config_worker.writeConfigHandler(allocator, io, timers, services.log, try withConfigPath(allocator, context.config_path, data), task_context);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
+

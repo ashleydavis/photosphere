@@ -4,9 +4,10 @@ const Timers = @import("ziggy").timers.Timers;
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
+const node_utils = @import("node-utils-zig");
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const IJobTag = task_queue_zig.types.IJobTag;
-const planMobileAutoImport = api.auto_import_mobile.planMobileAutoImport;
+const planAutoImport = api.auto_import.planAutoImport;
 const autoImportSettingsToJson = api.auto_import_settings.autoImportSettingsToJson;
 const readConfig = node_api.config_worker.readConfig;
 
@@ -23,7 +24,7 @@ const readConfig = node_api.config_worker.readConfig;
 // of its own, so what a pass does is decided and tested here, and the two platforms cannot drift
 // apart by assembling it differently.
 //
-// The deciding is planMobileAutoImport, which the app itself uses, so the service and the interface
+// The deciding is planAutoImport, which the app itself uses, so the service and the interface
 // cannot disagree about whether automatic import is running.
 //
 // (Zig: the task data and output are JSON values holding the data and result described below, and the settings and the
@@ -123,6 +124,21 @@ fn toJsonValue(allocator: std.mem.Allocator, value: anytype) !std.json.Value {
 }
 
 //
+// A boolean capability the caller names in the task data, or true when it names none. Read here rather
+// than sniffing the operating system, so this shared task is told what the platform can do.
+//
+fn capabilityOf(data: std.json.Value, name: []const u8) bool {
+    if (data == .object) {
+        if (data.object.get(name)) |value| {
+            if (value == .bool) {
+                return value.bool;
+            }
+        }
+    }
+    return true;
+}
+
+//
 // Handler for the plan-auto-import task.
 // (Zig: the input data may name the directory the app's databases go in (the dbs directory of its data directory), in appDataPath. The config file and the databases file are named by
 // their absolute paths in the app's config directory, because the working directory of the program is not the app's data
@@ -138,14 +154,23 @@ pub fn planAutoImportHandler(
 ) anyerror!std.json.Value {
     const read = try readConfig(allocator, io, log, context.configPath);
     const contents = read.config.autoImport;
-    var plan = try planMobileAutoImport(allocator, try autoImportSettingsToJson(allocator, contents.settings), contents.defaultDatabasePath);
+    // Where a pass gets its photos when the user has chosen none: the whole photo library where the
+    // platform has a device one, and the machine's own photo folders elsewhere. The caller says which,
+    // and the folders are resolved only when the settings name no sources, because reading them costs a
+    // few filesystem calls a pass would otherwise pay for.
+    const has_device_photo_library = capabilityOf(data, "hasDevicePhotoLibrary");
+    var default_sources: []const api.auto_import.IAutoImportSource = &api.auto_import.WHOLE_LIBRARY_SOURCES;
+    if (!has_device_photo_library and contents.settings.sources.len == 0) {
+        default_sources = try api.auto_import.foldersAsSources(allocator, try node_utils.photo_folders.getDefaultPhotoFolders(allocator, io));
+    }
+    var plan = try planAutoImport(allocator, try autoImportSettingsToJson(allocator, contents.settings), contents.defaultDatabasePath, default_sources);
     // Where the default database is made is a folder of the app's databases directory when the caller names one. A caller whose working
     // directory is not the app's data directory has to, because a relative path would be made wherever that is.
     if (plan.isNewDefault) {
         if (data == .object) {
             if (data.object.get("appDataPath")) |appDataPath| {
                 if (appDataPath == .string) {
-                    plan.databasePath = try node_api.auto_import_desktop.getDefaultDatabasePath(allocator, appDataPath.string);
+                    plan.databasePath = try node_utils.path.join(allocator, &.{ appDataPath.string, api.auto_import.DEFAULT_DATABASE_FOLDER_NAME });
                 }
             }
         }

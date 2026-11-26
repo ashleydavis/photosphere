@@ -23,12 +23,22 @@ describe("computeSyncAllowed", () => {
         expect(computeSyncAllowed({ syncEnabled: true, syncOnlyOnWifi: true, connected: true, connectionType: "wifi" })).toBe(true);
     });
 
+    test("returns true when Wi-Fi-only is on and the connection is wired", () => {
+        expect(computeSyncAllowed({ syncEnabled: true, syncOnlyOnWifi: true, connected: true, connectionType: "wired" })).toBe(true);
+    });
+
     test("returns true when Wi-Fi-only is on and the connection type is unknown (desktop/web)", () => {
         expect(computeSyncAllowed({ syncEnabled: true, syncOnlyOnWifi: true, connected: true, connectionType: "unknown" })).toBe(true);
     });
 
     test("returns true when Wi-Fi-only is off and the connection is cellular", () => {
         expect(computeSyncAllowed({ syncEnabled: true, syncOnlyOnWifi: false, connected: true, connectionType: "cellular" })).toBe(true);
+    });
+
+    test("returns true when Wi-Fi-only is off and the connection is wifi, wired or unknown", () => {
+        expect(computeSyncAllowed({ syncEnabled: true, syncOnlyOnWifi: false, connected: true, connectionType: "wifi" })).toBe(true);
+        expect(computeSyncAllowed({ syncEnabled: true, syncOnlyOnWifi: false, connected: true, connectionType: "wired" })).toBe(true);
+        expect(computeSyncAllowed({ syncEnabled: true, syncOnlyOnWifi: false, connected: true, connectionType: "unknown" })).toBe(true);
     });
 
     test("returns true when fully enabled, connected, and on wifi", () => {

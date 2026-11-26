@@ -176,7 +176,7 @@ Check it: **⋮** then **View details** shows the bucket's path against **Origin
 Open the menu and choose **Configuration**. Under **Syncing**:
 
 - Turn **Enable syncing** on. A fresh install starts with it off.
-- **Only sync over Wi-Fi** should be on, and the mobile on Wi-Fi. Turn it off only if you want the mobile uploading photos over mobile data.
+- **Only sync over Wi-Fi or wired network** should be on, and the mobile on Wi-Fi. Turn it off only if you want the mobile uploading photos over mobile data.
 
 There is no interval to set. A pass runs every five minutes, and a pass with nothing to do costs two small reads, one of them over the network.
 
@@ -231,7 +231,7 @@ psi verify --db s3:<bucket>/<prefix>
 |---|---|
 | The **Automatic import** toggle turns itself back off | The photo permission was refused, or only some photos were shared. Grant full photo access in Android's Settings, under Apps, Photosphere, Permissions, then switch it on again. |
 | Photos import but nothing reaches the bucket | The database has no **Origin**. Check with **⋮** then **View details**. If it is blank, A5 or the replication did not complete. |
-| Nothing syncs and the origin is set | The mobile is on mobile data with **Only sync over Wi-Fi** on, or **Enable syncing** is off. |
+| Nothing syncs and the origin is set | The mobile is on mobile data with **Only sync over Wi-Fi or wired network** on, or **Enable syncing** is off. |
 | Two databases, one of them called **My Photos** | Automatic import was switched on before a default was set, so it made its own. Set the one you want as default, and remove the other once you are sure nothing of yours is only in it. |
 | Replicating fails complaining about credentials or access | The mobile has no database entry whose path matches the remote exactly, so it found no keys for the bucket. |
 | No **Backing up your photos** notification | The service only runs when automatic import is on, or when syncing is on and there is a database with an origin to push. |

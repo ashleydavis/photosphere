@@ -194,7 +194,7 @@ Expected:
 
 Expected:
 - **Enable syncing** is on.
-- **Only sync over Wi-Fi** is on. It refuses only a cellular connection, so a desktop on a wired connection still syncs.
+- **Only sync over Wi-Fi or wired network** is on. It refuses only a cellular connection, so a desktop on a wired connection still syncs.
 - **Mobile:** the mobile is on Wi-Fi.
 
 ### 12. The device's own photos are imported

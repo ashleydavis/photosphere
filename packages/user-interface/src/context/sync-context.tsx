@@ -1,9 +1,8 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
-import { usePlatform, type INetworkStatus } from "./platform-context";
+import { usePlatform } from "./platform-context";
 import { useConfigStore } from "./config-store-context";
 import { computeSyncAllowed } from "../lib/sync-gate";
 import { SYNC_ENABLED_CONFIG_KEY, SYNC_ONLY_ON_WIFI_CONFIG_KEY } from "../lib/sync-config";
-import { readBrowserNetworkStatus, subscribeBrowserNetworkStatus } from "../lib/network-info";
 import { log } from "utils";
 
 //
@@ -66,11 +65,6 @@ export function SyncContextProvider({ children }: ISyncContextProviderProps) {
     const [syncOnlyOnWifi, setSyncOnlyOnWifi] = useState<boolean>(true);
 
     //
-    // The current network status. Seeded on mount and updated on network changes.
-    //
-    const [networkStatus, setNetworkStatus] = useState<INetworkStatus>({ connected: true, connectionType: "unknown" });
-
-    //
     // Toggles the master sync switch and persists the change (fire and forget).
     //
     function toggleSyncEnabled(): void {
@@ -109,37 +103,22 @@ export function SyncContextProvider({ children }: ISyncContextProviderProps) {
     }, []);
 
     //
-    // Seed the network status on mount and subscribe to subsequent changes so
-    // the gate reflects online/offline (and, on mobile, connection-type) changes.
+    // Push the combined gate decision to the host scheduler whenever an input changes (and on mount), so
+    // automatic syncs only run when permitted. The interface does not read the connection type; the
+    // core's background passes read it themselves and refuse a sync over a connection it does not allow.
     //
     useEffect(() => {
-        setNetworkStatus(readBrowserNetworkStatus());
-        return subscribeBrowserNetworkStatus(setNetworkStatus);
-    }, []);
-
-    //
-    // Push the combined gate decision to the host scheduler whenever an input
-    // changes (and on mount), so automatic syncs only run when permitted.
-    //
-    useEffect(() => {
-        // What the decision was made from, said before it is made. computeSyncAllowed refuses on any
-        // of four inputs and the decision it hands on is one boolean, so a refusal on its own names
-        // nothing: Android smoke tests 34 and 42 both lost 120s waiting for a sync in Release run
-        // 34024406357, and all their logs say is that this went true and then false. Which input
-        // turned it is the whole question, and it was not recorded anywhere.
-        //
-        // The line below keeps "Sync gate set to <bool>" starting the message it is in, because
-        // desktop test 24-sync-settings waits on that exact text and wait_for_log matches by
-        // substring. This is a second line rather than more text on that one, so the two stay
-        // independent.
-        log.info(`Automatic sync decided from: syncEnabled=${syncEnabled}, wifiOnly=${syncOnlyOnWifi}, connected=${networkStatus.connected}, connection=${networkStatus.connectionType}`);
+        // What the decision was made from, said before it is made, so a refusal names its input. The
+        // line keeps "Sync gate set to <bool>" as its own message because desktop test 24-sync-settings
+        // waits on that exact text.
+        log.info(`Automatic sync decided from: syncEnabled=${syncEnabled}, wifiOnly=${syncOnlyOnWifi}`);
         platform.setSyncAllowed(computeSyncAllowed({
             syncEnabled,
             syncOnlyOnWifi,
-            connected: networkStatus.connected,
-            connectionType: networkStatus.connectionType,
+            connected: true,
+            connectionType: "unknown",
         }));
-    }, [platform, syncEnabled, syncOnlyOnWifi, networkStatus]);
+    }, [platform, syncEnabled, syncOnlyOnWifi]);
 
     const value: ISyncContext = {
         syncEnabled,

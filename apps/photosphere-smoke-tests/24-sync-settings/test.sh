@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Exercises the sync settings on the Configuration dialog: the master "Enable syncing" toggle and the "Only sync over Wi-Fi" toggle.
+# Exercises the sync settings on the Configuration dialog: the master "Enable syncing" toggle and the "Only sync over Wi-Fi or wired network" toggle.
 # Verifies each toggle recomputes the decision whether syncing is allowed and pushes it to the host (observed via the log line the host writes when it is told,
-# which names the new value) and that both values persist to the sync section of config.toml. On desktop the connection type is
-# "unknown" (treated as allowed), so the Wi-Fi-only toggle does not block syncing; this test asserts the decision and persistence
-# path, which is the coverage the SyncContext and dialog otherwise lack.
+# which names the new value) and that both values persist to the sync section of config.toml. On desktop the connection type is the
+# host's own, Wi-Fi or wired, both allowed by the switch, so it does not block syncing; this test asserts the decision and
+# persistence path, which is the coverage the SyncContext and dialog otherwise lack.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -74,7 +74,9 @@ wait_for_log "$TMP_DIR" "Sync gate set to false"
 click_sidebar_item "$APP_PORT" configuration || exit 1
 wait_for_value "$APP_PORT" "configuration-dialog" "Syncing"
 
-# Turning on "Enable syncing" allows syncing and persists syncEnabled=true.
+# Turning on "Enable syncing" allows syncing and persists syncEnabled=true. With the switch on, the gate reaching true proves the
+# connection the desktop classified (Wi-Fi or wired) is allowed rather than refused; which type this host has is not asserted, because
+# its connection is not under the test's control, and classifying it and refusing only a cellular connection are unit-tested.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
 wait_for_config "sync" "^enabled[[:space:]]*=[[:space:]]*true"
@@ -89,8 +91,8 @@ send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
 wait_for_config "sync" "^enabled[[:space:]]*=[[:space:]]*true"
 
-# Turning off "Only sync over Wi-Fi" persists the flag. On desktop the connection type is "unknown", so syncing stays allowed (the
-# toggle only restricts cellular on mobile).
+# Turning off "Only sync over Wi-Fi or wired network" persists the flag. The host's own connection type, Wi-Fi or wired, is allowed
+# under the switch, so syncing stays allowed either way (the toggle only refuses a cellular connection).
 send_command "$APP_PORT" click '{"dataId":"sync-wifi-only-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
 wait_for_config "sync" "^only_on_wifi[[:space:]]*=[[:space:]]*false"

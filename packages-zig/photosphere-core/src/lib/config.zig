@@ -23,18 +23,7 @@ const json = ziggy.json;
 const app_state = node_api.app_state;
 const app_config = node_api.app_config;
 const auto_import_settings = @import("api-zig").auto_import_settings;
-const main_state = @import("main-state.zig");
 const logExceptions = @import("log-exceptions.zig").logExceptions;
-
-//
-// The config keys that change what automatic import should be doing, so writing one restarts it.
-//
-pub const AUTO_IMPORT_CONFIG_KEYS = [_][]const u8{
-    "autoImportEnabled",
-    "autoImportSources",
-    "autoImportCleanupEnabled",
-    "defaultDatabasePath",
-};
 
 //
 // Turns a value from the page into the value a config key holds. A number, which no config key holds at present, is kept as the JSON number it is.
@@ -124,29 +113,19 @@ const SetConfigChange = struct {
 // to a setting that decides what automatic import does takes effect now rather than at the next start. The reply is null.
 //
 fn setConfig(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    // The setting is checked against a config with nothing in it, so a key that is no setting and a value of the wrong type fail
+    // before anything is written, and the one field the key names is what the update writes.
+    _ = services;
+    _ = timers;
     const arena = allocator;
     const key = json.getString(data, "key") orelse {
         return utils.errors.throwError("The config request needs the name of a key.", .{});
     };
     const json_value: ?std.json.Value = if (data.object.get("value")) |present| (if (present == .null) null else present) else null;
     const value: ?app_config.IAppConfigValue = if (json_value) |present| try configValueFromJson(arena, key, present) else null;
-    // The setting is checked against a config with nothing in it, so a key that is no setting and a value of the wrong type fail
-    // before anything is written, and the one field the key names is what the update writes.
     var checked: app_config.IAppConfig = .{};
     try app_config.setAppConfigValue(&checked, key, value);
     try ziggy.config_state.config.update(arena, io, context.config_path, SetConfigChange{ .key = key, .config = checked });
-    // Switching automatic import on or off, or changing what it watches, takes effect now rather than at the next restart: the check
-    // runs as a child of this task, and the main thread does what it found when it ends (see main-process.zig). A check that fails
-    // fails this request, as TypeScript's awaited ensureAutoImport rejects it.
-    if (data.object.get("ensure")) |ensure| {
-        if (ensure != .null) {
-            const child = try services.queueChild(io, arena, timers, "ensure-auto-import", ensure, null);
-            const completion = try services.awaitTask(io, arena, timers, child);
-            if (completion.status != .succeeded) {
-                return utils.errors.throwError("{s}", .{completion.error_message orelse "Unknown error"});
-            }
-        }
-    }
     return try arena.dupe(u8, "null");
 }
 
@@ -195,55 +174,23 @@ pub fn setConfigMessageHandler(services: HandlerServices, timers: Timers, io: st
     _ = services;
     _ = timers;
     _ = io;
-    // A setting of automatic import takes effect now rather than at the next restart: the task makes automatic import match the
-    // config before it replies, as TypeScript awaits ensureAutoImport, and is given what automatic import is running now. One check
-    // at a time: while one is under way the setting is only written, as TypeScript's ensureAutoImport returns while one is starting.
-    var ensure: ?main_state.IEnsureAutoImportData = null;
-    if (isAutoImportConfigKey(request.key)) {
-        const state = main_state.current();
-        if (!state.auto_import_starting) {
-            const running = state.auto_import_running;
-            ensure = .{
-                .restarting = false,
-                .runningDatabasePath = if (running) state.auto_import_database_path else null,
-                .runningSettingsJson = if (running) state.auto_import_settings_json else null,
-            };
-            state.auto_import_starting = true;
-        }
-    }
     return .{
         .task = .{
             .task_type = "set-config",
             .data = try json.stringify(allocator, ISetConfigData{
                 .key = request.key,
                 .value = request.value,
-                .ensure = ensure,
             }),
         },
     };
 }
 
 //
-// What the main thread gives the set-config task: the request, and for a setting of automatic import, what automatic import is running
-// now, which the check that the task runs takes.
+// What the main thread gives the set-config task: the request.
 //
 const ISetConfigData = struct {
     // The config key to write.
     key: []const u8,
     // The value to write, or null to remove the key.
     value: std.json.Value = .null,
-    // The input of the check of automatic import the task runs once it has written the config, or null when it runs none.
-    ensure: ?main_state.IEnsureAutoImportData = null,
 };
-
-//
-// Whether the key is a setting of automatic import.
-//
-fn isAutoImportConfigKey(key: []const u8) bool {
-    for (AUTO_IMPORT_CONFIG_KEYS) |auto_import_key| {
-        if (std.mem.eql(u8, key, auto_import_key)) {
-            return true;
-        }
-    }
-    return false;
-}

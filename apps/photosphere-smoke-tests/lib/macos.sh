@@ -252,18 +252,20 @@ macos_screen_off() {
 }
 
 #
-# Succeeds when the work that runs without the page is running. On a desktop that is automatic import, which the core starts and stops
-# as the setting changes and says so in the app's log each time, and syncing, which is allowed while the page's last word on it (the
-# "Sync gate set to" line) was true and a database is open. Read from the app's log rather than asked of the app, because the page may
-# be doing something else. Usage: macos_background_work_running
+# Succeeds when the core's background work (automatic import, sync and prefetch) is running. Automatic import and syncing run the same
+# passes on a desktop as on a mobile now, so the work is read from the core's own lines: the core logs one line when the page starts the
+# work and another when the page stops it, and it is running when the last start is later than the last stop. Syncing is also allowed on
+# a desktop while the page's last word on it (the "Sync gate set to" line) was true and a database is open, which is the desktop's own
+# debounced sync on top of the shared pass. Read from the app's log rather than asked of the app, because the page may be doing
+# something else. Usage: macos_background_work_running
 #
 macos_background_work_running() {
     local app_log="$TMP_DIR/app.log"
-    local imports_started
-    local imports_stopped
-    imports_started="$(grep -nE "Starting automatic import into|Automatic import enabled|Started the background automatic import\." "$app_log" | tail -1 | cut -d: -f1 || true)"
-    imports_stopped="$(grep -nE "Stopping automatic import\.|Automatic import disabled|Stopped the background automatic import\." "$app_log" | tail -1 | cut -d: -f1 || true)"
-    if [ -n "$imports_started" ] && [ "$imports_started" -gt "${imports_stopped:-0}" ]; then
+    local background_work_started
+    local background_work_stopped
+    background_work_started="$(grep -n "Started the background automatic import\." "$app_log" | tail -1 | cut -d: -f1 || true)"
+    background_work_stopped="$(grep -n "Stopped the background automatic import\." "$app_log" | tail -1 | cut -d: -f1 || true)"
+    if [ -n "$background_work_started" ] && [ "$background_work_started" -gt "${background_work_stopped:-0}" ]; then
         return 0
     fi
     local last_sync_gate
@@ -512,19 +514,19 @@ macos_pull_database() {
 }
 
 #
-# The log line that says automatic import was started, as this platform's app writes it. Usage: macos_auto_import_started_log
+# The log line that says automatic import was started, as this platform's app writes it: the page's own line, written once the photo
+# permission has had its say. Usage: macos_auto_import_started_log
 #
 macos_auto_import_started_log() {
-    echo "Starting automatic import into"
+    echo "Starting automatic import."
 }
 
 #
-# The log line that says automatic import was switched off, as this platform's app writes it. The core's own "Stopping automatic import."
-# is written only when an import is running at that moment, and a desktop's import ends between passes, so the page's line is the one
-# that is always written. Usage: macos_auto_import_stopped_log
+# The log line that says automatic import was switched off, as this platform's app writes it: the page's own line. Usage:
+# macos_auto_import_stopped_log
 #
 macos_auto_import_stopped_log() {
-    echo "Automatic import disabled"
+    echo "Stopping automatic import."
 }
 
 #

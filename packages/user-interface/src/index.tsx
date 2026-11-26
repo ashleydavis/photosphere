@@ -17,7 +17,6 @@ export * from './context/app-context';
 export * from './context/developer-context';
 export * from './context/sync-context';
 export * from './lib/sync-gate';
-export * from './lib/network-info';
 export { type IGalleryItem } from "./lib/gallery-item";
 export { Gallery } from "./components/gallery";
 export { AssetView } from "./components/asset-view";

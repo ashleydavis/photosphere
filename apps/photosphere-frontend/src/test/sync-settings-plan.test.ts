@@ -1,5 +1,5 @@
 import { DEFAULT_SYNC_PAUSE_MS, DEFAULT_SYNC_SETTINGS, INITIAL_SYNC_SETTINGS } from "api/src/lib/sync-settings";
-import { planSyncSeed, planSyncDatabase, type IMobileSyncSettings } from "../lib/background-work";
+import { planSyncSeed, planSyncDatabase, type IBackgroundSyncSettings } from "../lib/background-work";
 
 //
 // Tests for the two decisions the mobile makes about the syncing section of config.toml that no other
@@ -18,7 +18,7 @@ import { planSyncSeed, planSyncDatabase, type IMobileSyncSettings } from "../lib
 //
 // The syncing section as it reads before anybody has written it.
 //
-function neverWritten(): IMobileSyncSettings {
+function neverWritten(): IBackgroundSyncSettings {
     return {
         settings: { ...DEFAULT_SYNC_SETTINGS },
         databasePath: undefined,
@@ -30,7 +30,7 @@ function neverWritten(): IMobileSyncSettings {
 //
 // The syncing section as it reads once it holds the given settings.
 //
-function written(enabled: boolean, onlyOnWifi: boolean, databasePath: string | undefined, pauseBetweenRunsMs: number = DEFAULT_SYNC_PAUSE_MS): IMobileSyncSettings {
+function written(enabled: boolean, onlyOnWifi: boolean, databasePath: string | undefined, pauseBetweenRunsMs: number = DEFAULT_SYNC_PAUSE_MS): IBackgroundSyncSettings {
     return {
         settings: {
             enabled,

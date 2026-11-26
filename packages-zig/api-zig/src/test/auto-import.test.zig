@@ -1,11 +1,11 @@
 const std = @import("std");
 const api_zig = @import("api-zig");
-const auto_import_mobile = api_zig.auto_import_mobile;
-const DEFAULT_AUTO_IMPORT_PAUSE_MS = auto_import_mobile.DEFAULT_AUTO_IMPORT_PAUSE_MS;
-const DEFAULT_DATABASE_FOLDER_NAME = auto_import_mobile.DEFAULT_DATABASE_FOLDER_NAME;
-const WHOLE_LIBRARY_SOURCES = auto_import_mobile.WHOLE_LIBRARY_SOURCES;
-const planMobileAutoImport = auto_import_mobile.planMobileAutoImport;
-const resolveAutoImportPauseMs = auto_import_mobile.resolveAutoImportPauseMs;
+const auto_import = api_zig.auto_import;
+const DEFAULT_AUTO_IMPORT_PAUSE_MS = auto_import.DEFAULT_AUTO_IMPORT_PAUSE_MS;
+const DEFAULT_DATABASE_FOLDER_NAME = auto_import.DEFAULT_DATABASE_FOLDER_NAME;
+const WHOLE_LIBRARY_SOURCES = auto_import.WHOLE_LIBRARY_SOURCES;
+const planAutoImport = auto_import.planAutoImport;
+const resolveAutoImportPauseMs = auto_import.resolveAutoImportPauseMs;
 const json = @import("ziggy").json;
 
 //
@@ -34,89 +34,106 @@ fn settingsWith(allocator: std.mem.Allocator, enabled: bool, sourcesJson: []cons
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }
 
-test "planMobileAutoImport does not run when nothing has been stored" {
+test "planAutoImport does not run when nothing has been stored" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expectEqual(false, (try planMobileAutoImport(arena.allocator(), null, null)).shouldRun);
+    try std.testing.expectEqual(false, (try planAutoImport(arena.allocator(), null, null, &WHOLE_LIBRARY_SOURCES)).shouldRun);
 }
 
-test "planMobileAutoImport does not run when automatic import is switched off" {
+test "planAutoImport does not run when automatic import is switched off" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expectEqual(false, (try planMobileAutoImport(allocator, try settingsWith(allocator, false, "[]"), null)).shouldRun);
+    try std.testing.expectEqual(false, (try planAutoImport(allocator, try settingsWith(allocator, false, "[]"), null, &WHOLE_LIBRARY_SOURCES)).shouldRun);
 }
 
-test "planMobileAutoImport runs when automatic import is switched on" {
+test "planAutoImport runs when automatic import is switched on" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expectEqual(true, (try planMobileAutoImport(allocator, try settingsWith(allocator, true, "[]"), null)).shouldRun);
+    try std.testing.expectEqual(true, (try planAutoImport(allocator, try settingsWith(allocator, true, "[]"), null, &WHOLE_LIBRARY_SOURCES)).shouldRun);
 }
 
-test "planMobileAutoImport watches the whole library when no albums are chosen" {
+test "planAutoImport watches the whole library when no albums are chosen" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const plan = try planMobileAutoImport(allocator, try settingsWith(allocator, true, "[]"), null);
+    const plan = try planAutoImport(allocator, try settingsWith(allocator, true, "[]"), null, &WHOLE_LIBRARY_SOURCES);
 
-    try std.testing.expectEqualDeep(@as([]const auto_import_mobile.IAutoImportSource, &WHOLE_LIBRARY_SOURCES), plan.settings.sources);
+    try std.testing.expectEqualDeep(@as([]const auto_import.IAutoImportSource, &WHOLE_LIBRARY_SOURCES), plan.settings.sources);
 }
 
-test "planMobileAutoImport watches the chosen albums when there are some" {
+test "planAutoImport watches the given default sources when none are chosen" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const plan = try planMobileAutoImport(allocator, try settingsWith(allocator, true, "[{\"type\":\"device-album\",\"albumId\":\"camera\"}]"), null);
+    const folder_default = [_]auto_import.IAutoImportSource{
+        .{
+            .folder = .{
+                .path = "/photos",
+                .recurse = true,
+            },
+        },
+    };
+    const plan = try planAutoImport(allocator, try settingsWith(allocator, true, "[]"), null, &folder_default);
+
+    try std.testing.expectEqualDeep(@as([]const auto_import.IAutoImportSource, &folder_default), plan.settings.sources);
+}
+
+test "planAutoImport watches the chosen albums when there are some" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const plan = try planAutoImport(allocator, try settingsWith(allocator, true, "[{\"type\":\"device-album\",\"albumId\":\"camera\"}]"), null, &WHOLE_LIBRARY_SOURCES);
 
     try std.testing.expectEqual(@as(usize, 1), plan.settings.sources.len);
     try std.testing.expectEqualStrings("camera", plan.settings.sources[0].@"device-album".albumId);
 }
 
-test "planMobileAutoImport drops a malformed stored source rather than failing to start" {
+test "planAutoImport drops a malformed stored source rather than failing to start" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const stored = try settingsWith(allocator, true, "[{\"type\":\"device-album\"},{\"type\":\"device-album\",\"albumId\":\"camera\"}]");
 
-    const plan = try planMobileAutoImport(allocator, stored, null);
+    const plan = try planAutoImport(allocator, stored, null, &WHOLE_LIBRARY_SOURCES);
 
     try std.testing.expectEqual(@as(usize, 1), plan.settings.sources.len);
     try std.testing.expectEqualStrings("camera", plan.settings.sources[0].@"device-album".albumId);
 }
 
-test "planMobileAutoImport chooses the default database location when none has been chosen" {
+test "planAutoImport chooses the default database location when none has been chosen" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const plan = try planMobileAutoImport(allocator, try settingsWith(allocator, true, "[]"), null);
+    const plan = try planAutoImport(allocator, try settingsWith(allocator, true, "[]"), null, &WHOLE_LIBRARY_SOURCES);
 
     try std.testing.expectEqual(true, plan.isNewDefault);
     try std.testing.expectEqualStrings(DEFAULT_DATABASE_FOLDER_NAME, plan.databasePath);
 }
 
-test "planMobileAutoImport uses the chosen default database when there is one" {
+test "planAutoImport uses the chosen default database when there is one" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const plan = try planMobileAutoImport(allocator, try settingsWith(allocator, true, "[]"), "my-photos");
+    const plan = try planAutoImport(allocator, try settingsWith(allocator, true, "[]"), "my-photos", &WHOLE_LIBRARY_SOURCES);
 
     try std.testing.expectEqual(false, plan.isNewDefault);
     try std.testing.expectEqualStrings("my-photos", plan.databasePath);
 }
 
-test "planMobileAutoImport an empty stored default counts as none chosen" {
+test "planAutoImport an empty stored default counts as none chosen" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const plan = try planMobileAutoImport(allocator, try settingsWith(allocator, true, "[]"), "");
+    const plan = try planAutoImport(allocator, try settingsWith(allocator, true, "[]"), "", &WHOLE_LIBRARY_SOURCES);
 
     try std.testing.expectEqual(true, plan.isNewDefault);
     try std.testing.expectEqualStrings(DEFAULT_DATABASE_FOLDER_NAME, plan.databasePath);
 }
 
 // A user with both should see the same database name, and a support answer about one should apply to the other.
-test "planMobileAutoImport the default database has the same name as the desktop one" {
+test "planAutoImport the default database has the same name as the desktop one" {
     try std.testing.expectEqualStrings("photosphere-default", DEFAULT_DATABASE_FOLDER_NAME);
 }
 

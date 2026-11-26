@@ -20,7 +20,7 @@ export interface INetworkStatus {
     connected: boolean;
 
     //
-    // The connection type; "unknown" on platforms that cannot detect it.
+    // The connection type; "unknown" means the platform could not classify the connection.
     //
     connectionType: NetworkConnectionType;
 }
@@ -572,7 +572,7 @@ export interface IPlatformContext {
     //
     // Pushes the shared sync gate's decision to the host scheduler. When false
     // the host must not enqueue automatic syncs. Computed by the shared
-    // SyncContext from the user toggles and the current network status.
+    // SyncContext from the user toggles.
     //
     setSyncAllowed: (allowed: boolean) => void;
 

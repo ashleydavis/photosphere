@@ -19,7 +19,7 @@
 # scenario syncs is named for it rather than being the mobile's own default. That matters because a mobile this runs on may hold a real
 # imported photo library, and `pm clear` would destroy it.
 #
-# The `Only sync over Wi-Fi` restriction is NOT covered here. Driving it needs the device's connection type changed to cellular, and
+# The `Only sync over Wi-Fi or wired network` restriction is NOT covered here. Driving it needs the device's connection type changed to cellular, and
 # reconfiguring a pool emulator's radios is forbidden: it is shared with every other run on this machine. The rule itself is covered by
 # the unit tests of the sync plan, including the cellular case this cannot reach.
 

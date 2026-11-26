@@ -7,7 +7,7 @@ const api = @import("api-zig");
 const config_format = node_api.config_format;
 const IConfigFile = config_format.IConfigFile;
 const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
-const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import_mobile.DEFAULT_AUTO_IMPORT_PAUSE_MS;
+const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import.DEFAULT_AUTO_IMPORT_PAUSE_MS;
 const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
 
 //

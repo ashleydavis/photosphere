@@ -79,7 +79,6 @@ pub const app_config_format = @import("lib/app-config-format.zig");
 pub const app_config = @import("lib/app-config.zig");
 pub const app_state_format = @import("lib/app-state-format.zig");
 pub const app_state = @import("lib/app-state.zig");
-pub const auto_import_desktop = @import("lib/auto-import-desktop.zig");
 pub const lazy_origin_storage = @import("lib/lazy-origin-storage.zig");
 pub const load_assets_worker = @import("lib/load-assets.worker.zig");
 pub const sync_database_worker = @import("lib/sync-database.worker.zig");

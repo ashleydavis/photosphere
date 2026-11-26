@@ -109,8 +109,8 @@ const packages = [_]IPackage{
         .link_libc = false,
     },
     .{
-        .name = "mobile-worker-zig",
-        .dependencies = &.{ "utils-zig", "api-zig", "node-api-zig" },
+        .name = "worker-zig",
+        .dependencies = &.{ "utils-zig", "api-zig", "node-api-zig", "node-utils-zig" },
         .link_libc = false,
     },
     .{
@@ -120,7 +120,7 @@ const packages = [_]IPackage{
     },
     .{
         .name = "photosphere-core",
-        .dependencies = &.{ "utils-zig", "node-utils-zig", "config-zig", "mobile-worker-zig", "tools-zig", "media-tools-zig", "encryption-zig", "storage-zig", "vault-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "mcp-zig", "api-zig", "node-api-zig" },
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "config-zig", "worker-zig", "tools-zig", "media-tools-zig", "encryption-zig", "storage-zig", "vault-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "mcp-zig", "api-zig", "node-api-zig" },
         .link_libc = true,
     },
 };

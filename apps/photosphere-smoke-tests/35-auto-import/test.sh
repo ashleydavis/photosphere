@@ -328,11 +328,10 @@ TOMLEOF
 
         send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
 
-        # The main process reacts to the config write before the page logs its own event, and wait_for_log only ever looks forward from
-        # the last line it matched, so these are waited for in the order they are actually written.
-        wait_for_log "$TMP_DIR" "Creating the default photo database"
-        wait_for_log "$TMP_DIR" "Starting automatic import into"
-        wait_for_log "$TMP_DIR" "Automatic import enabled"
+        # Automatic import runs the same background pass on a desktop as on a mobile now, so the page's line is what says the setting took
+        # effect; the import pass that follows creates and records the default database, which the config wait below reads rather than a
+        # log line, because the create-default-database step writes no log of its own.
+        wait_for_log "$TMP_DIR" "Starting automatic import."
 
         wait_for_config "$CONFIG_TOML" "auto_import" "^enabled[[:space:]]*=[[:space:]]*true"
         wait_for_config "$CONFIG_TOML" "auto_import" "default_database_path"

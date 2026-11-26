@@ -6,16 +6,14 @@ const IRawAutoImportSettings = auto_import_settings.IRawAutoImportSettings;
 const normaliseAutoImportSettings = auto_import_settings.normaliseAutoImportSettings;
 
 //
-// What the mobile app should do about automatic import, worked out from its settings alone.
+// What the app should do about automatic import on every platform, worked out from its settings alone.
 //
-// This mirrors the desktop planner: the decisions
-// live here as plain functions so they can be unit tested, and the caller is left with the parts
-// that need the app (creating the database, starting the task, asking for the permission).
+// The decisions live here as plain functions so they can be unit tested, and the caller is left with the parts
+// that need the app (creating the database, starting the task, asking for a permission the platform has).
 //
-// It lives in this package rather than in the mobile frontend because the native background import
-// asks for the same plan, through a worker task, and the worker cannot reach the frontend's React
-// code. One planner answers both, so a mobile driving the import from its own service and a mobile
-// driving it from the WebView cannot decide different things.
+// It lives in this package rather than in the frontend because the native background import asks for the same
+// plan, through a worker task, and the worker cannot reach the frontend's React code. One planner answers both,
+// so a background loop and the page cannot decide different things.
 //
 // (Zig: a number the file holds (the pacing) is a std.json.Value that is a number, so an integer stays an integer when
 // it is written back.)
@@ -120,9 +118,27 @@ pub const WHOLE_LIBRARY_SOURCES = [_]IAutoImportSource{
 };
 
 //
+// Turns a list of folder paths into folder sources, the source kind a machine without a device photo
+// library watches. Folder is one source type the shared import reads, not a path of its own, so the
+// helper lives beside the other default sources.
+//
+pub fn foldersAsSources(allocator: std.mem.Allocator, folderPaths: []const []const u8) ![]const IAutoImportSource {
+    const sources = try allocator.alloc(IAutoImportSource, folderPaths.len);
+    for (folderPaths, 0..) |folderPath, index| {
+        sources[index] = .{
+            .folder = .{
+                .path = folderPath,
+                .recurse = true,
+            },
+        };
+    }
+    return sources;
+}
+
+//
 // What the app should do about automatic import right now.
 //
-pub const IMobileAutoImportPlan = struct {
+pub const IAutoImportPlan = struct {
     // Whether the automatic import task should be running at all.
     shouldRun: bool,
 
@@ -139,22 +155,24 @@ pub const IMobileAutoImportPlan = struct {
 //
 // Decides what the app should do about automatic import.
 //
-// When the user has switched automatic import on but named no albums, the whole photo library is
-// watched. Running with no sources at all would import nothing while looking like it was working,
+// When the user has switched automatic import on but named no sources, the default sources the caller
+// gives are watched instead: the whole photo library on a mobile, and the machine's own photo folders
+// on a desktop. Running with no sources at all would import nothing while looking like it was working,
 // which is the worst of both.
 //
 // (Zig has no untyped object, so the stored settings are the std.json.Value they were read as. A malformed source in them
 // is dropped by normaliseAutoImportSettings, and normalising allocates.)
 //
-pub fn planMobileAutoImport(
+pub fn planAutoImport(
     allocator: std.mem.Allocator,
     storedSettings: ?IRawAutoImportSettings,
     defaultDatabasePath: ?[]const u8,
-) !IMobileAutoImportPlan {
+    defaultSources: []const IAutoImportSource,
+) !IAutoImportPlan {
     var settings = try normaliseAutoImportSettings(allocator, storedSettings);
 
     if (settings.sources.len == 0) {
-        settings.sources = &WHOLE_LIBRARY_SOURCES;
+        settings.sources = defaultSources;
     }
 
     const isNewDefault = defaultDatabasePath == null or defaultDatabasePath.?.len == 0;

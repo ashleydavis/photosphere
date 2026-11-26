@@ -162,7 +162,7 @@ export function readPermissionState(result: IRawPermissionResult | null | undefi
 // a background loop that would otherwise push over a metered connection on a guess, and the wrong one to put in front of a new user
 // whose toggles say on.
 //
-export interface IMobileSyncSettings {
+export interface IBackgroundSyncSettings {
     // The settings, already filled from the defaults by the reader.
     settings: ISyncSettings;
 
@@ -183,7 +183,7 @@ export interface IMobileSyncSettings {
 // that has been written is left alone: overwriting it would put syncing back off for somebody who had switched it on, every time the
 // app started.
 //
-export function planSyncSeed(current: IMobileSyncSettings): ISyncFile | undefined {
+export function planSyncSeed(current: IBackgroundSyncSettings): ISyncFile | undefined {
     if (current.written) {
         return undefined;
     }
@@ -200,7 +200,7 @@ export function planSyncSeed(current: IMobileSyncSettings): ISyncFile | undefine
 // background syncing work for the database the user is actually using. The same path again is left alone rather than rewritten: a
 // database is opened on every launch and on every switch between databases.
 //
-export function planSyncDatabase(current: IMobileSyncSettings, databasePath: string): ISyncFile | undefined {
+export function planSyncDatabase(current: IBackgroundSyncSettings, databasePath: string): ISyncFile | undefined {
     if (current.databasePath === databasePath) {
         return undefined;
     }

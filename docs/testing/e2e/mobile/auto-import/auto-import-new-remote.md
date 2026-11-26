@@ -147,7 +147,7 @@ Expected:
 
 Expected:
 - **Enable syncing** is on.
-- **Only sync over Wi-Fi** is on, and the mobile is on Wi-Fi.
+- **Only sync over Wi-Fi or wired network** is on, and the mobile is on Wi-Fi.
 
 ### 12. The backup reaches the bucket on its own
 

@@ -28,6 +28,7 @@ fi
 FIRST_PHOTO_NAME="psphere-background-import-first-$$.jpeg"
 BACKGROUNDED_PHOTO_NAME="psphere-background-import-backgrounded-$$.png"
 SCREEN_OFF_PHOTO_NAME="psphere-background-import-screen-off-$$.jpg"
+REOPENED_PHOTO_NAME="psphere-background-import-reopened-$$.png"
 
 # The library this scenario's photos go in, which is a folder of its own. On a mobile that is an album of its own, because the device
 # files an item under the directory it sits in.
@@ -92,7 +93,7 @@ on_exit() {
     "${PLATFORM}_screen_on" >/dev/null 2>&1 || true
 
     # The library goes too, so a mobile is left as it was found.
-    "${PLATFORM}_library_remove" "$LIBRARY" "$FIRST_PHOTO_NAME" "$BACKGROUNDED_PHOTO_NAME" "$SCREEN_OFF_PHOTO_NAME" 2>/dev/null || true
+    "${PLATFORM}_library_remove" "$LIBRARY" "$FIRST_PHOTO_NAME" "$BACKGROUNDED_PHOTO_NAME" "$SCREEN_OFF_PHOTO_NAME" "$REOPENED_PHOTO_NAME" 2>/dev/null || true
 
     cleanup_apps "$TMP_DIR"
     return $exit_code
@@ -259,6 +260,22 @@ if [ "$STOPPED" -ne 1 ]; then
     exit 1
 fi
 log_info "The foreground service stopped once neither automatic import nor syncing was on"
+
+# --- A photo that arrived while the app was closed is taken in when it reopens. ---
+#
+# Everything above ran while the app was running, however hidden the page was. This last photo is added with the app closed
+# altogether, which is a desktop's "not running" and a mobile with its service stopped. Automatic import has to find the photo on its
+# own when the app next starts, from the settings on disk, not because a loop that never stopped was still watching.
+stop_app "$APP_PORT" "$TMP_DIR"
+"${PLATFORM}_seed_library_auto_import_config" "true" "" "$PASS_GAP_MS" "$LIBRARY" "$FIRST_PHOTO_NAME" || exit 1
+"${PLATFORM}_library_add" "$LIBRARY" "$REPO_DIR/test/red.png" "$REOPENED_PHOTO_NAME" || exit 1
+
+reset_log_cursor "$TMP_DIR"
+start_app "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+wait_for_asset_count 4 || exit 1
+log_success "A photo that arrived while the app was closed was imported when it reopened"
 
 # The fixture photo test.jpg carries GPS tags whose fractions are all 0/0, which the importer reports as out of range at error level
 # and then ignores, so that report is ignored along with the thumbnail fetches; any other error fails the scenario.

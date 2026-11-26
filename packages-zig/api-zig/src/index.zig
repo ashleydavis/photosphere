@@ -19,7 +19,7 @@ pub const lan_share_receive = @import("lib/lan-share/lan-share-receive.zig");
 pub const asset_query = @import("lib/asset-query.zig");
 pub const sync_settings = @import("lib/sync-settings.zig");
 pub const sync_gate = @import("lib/sync-gate.zig");
-pub const auto_import_mobile = @import("lib/auto-import-mobile.zig");
+pub const auto_import = @import("lib/auto-import.zig");
 pub const op = @import("lib/op.zig");
 pub const database_op = @import("lib/database-op.zig");
 

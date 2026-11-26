@@ -1,54 +1,8 @@
 const std = @import("std");
-const ziggy = @import("ziggy");
 const support = @import("test-support.zig");
-const main_state = @import("photosphere-core").main_state;
 const utils = @import("utils-zig");
 
 const TestApp = support.TestApp;
-
-//
-// What the state on the main thread holds of automatic import.
-//
-const AutoImportState = struct {
-    // Whether automatic import is running.
-    running: bool = false,
-    // Whether an ensure-auto-import task is queued or running.
-    starting: bool = false,
-    // A copy of the database automatic import is writing to, or null. Freed by deinit.
-    database_path: ?[]const u8 = null,
-
-    //
-    // Reads the state, which the test is sent as JSON. Runs on the main thread.
-    //
-    fn run(_: u8, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io, _: std.mem.Allocator) anyerror!AutoImportState {
-        const state = main_state.current();
-        return .{
-            .running = state.auto_import_running,
-            .starting = state.auto_import_starting,
-            .database_path = state.auto_import_database_path,
-        };
-    }
-
-    fn deinit(self: *AutoImportState) void {
-        if (self.database_path) |path| {
-            std.testing.allocator.free(path);
-        }
-    }
-};
-
-//
-// Reads what the state holds of automatic import. The caller frees it with deinit.
-//
-fn readAutoImport(app: *TestApp) !AutoImportState {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const read = try app.onMainThreadWith(arena_state.allocator(), @as(u8, 0), AutoImportState.run);
-    return .{
-        .running = read.running,
-        .starting = read.starting,
-        .database_path = if (read.database_path) |path| try std.testing.allocator.dupe(u8, path) else null,
-    };
-}
 
 fn expectReply(app: *TestApp, message_type: []const u8, data_json: []const u8, expected_json: []const u8) !void {
     const reply = try app.requestOk(message_type, data_json);
@@ -109,102 +63,6 @@ test "get-config and set-config without a key are error replies" {
     const set_reply = try app.requestError("set-config", "{\"value\":1}");
     defer std.testing.allocator.free(set_reply);
     try std.testing.expectEqualStrings("InvalidMessageData: the field \"key\" is missing", set_reply);
-}
-
-//
-// A fake of the create-default-database task, which another part of the app provides: it ends at once.
-//
-fn createDefaultDatabaseTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = timers;
-    _ = context;
-    try services.sendEvent(io, allocator, .{ .createdDefaultDatabaseFor = data });
-    return try allocator.dupe(u8, "null");
-}
-
-//
-// A fake of the import-assets task, which another part of the app provides: it reports what it was asked to do and then runs until
-// it is cancelled.
-//
-fn importAssetsTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = timers;
-    _ = context;
-    try services.sendEvent(io, allocator, .{ .importing = data });
-    while (true) {
-        try services.checkCancelled(io, allocator);
-        try io.sleep(.fromMilliseconds(2), .awake);
-    }
-}
-
-test "switching automatic import on creates the default database and starts the import, and switching it off stops it" {
-    var app: TestApp = undefined;
-    try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{
-        .{ .name = "create-default-database", .handler = createDefaultDatabaseTask },
-        .{ .name = "import-assets", .handler = importAssetsTask },
-    });
-    defer app.stop();
-    const allocator = std.testing.allocator;
-    const database_path = try std.fs.path.join(allocator, &.{ app.tmp_path, "default-db" });
-    defer allocator.free(database_path);
-    const path_request = try utils.json.stringify(allocator, .{
-        .key = "defaultDatabasePath",
-        .value = database_path,
-    });
-    defer allocator.free(path_request);
-    try expectReply(&app, "set-config", path_request, "null");
-    try expectReply(&app, "set-config", "{\"key\":\"autoImportSources\",\"value\":[{\"type\":\"folder\",\"path\":\"/watched\",\"recurse\":true}]}", "null");
-    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "createdDefaultDatabaseFor"));
-    try expectReply(&app, "set-config", "{\"key\":\"autoImportEnabled\",\"value\":true}", "null");
-
-    // The default database does not exist at that path, so it is created, and the page is told the databases changed.
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"createdDefaultDatabaseFor\":{\"databasePath\":");
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "{\"kind\":\"app\",\"data\":{\"type\":\"databases-changed\",\"data\":null}}");
-
-    // The import is started, with the job the page lists and can cancel.
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"importing\":{\"paths\":[],\"storageDescriptor\":{\"databasePath\":");
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"options\":{\"auto\":true,\"enabled\":true,\"sources\":[{\"type\":\"folder\",\"path\":\"/watched\",\"recurse\":true}]}");
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"cancelSource\":\"auto-import\"");
-    {
-        var auto_import = try readAutoImport(&app);
-        defer auto_import.deinit();
-        try std.testing.expect(auto_import.running);
-        try std.testing.expectEqualStrings(database_path, auto_import.database_path.?);
-    }
-
-    // Writing the same settings again changes nothing: no second import is started.
-    try expectReply(&app, "set-config", "{\"key\":\"autoImportEnabled\",\"value\":true}", "null");
-    try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"importing\""));
-
-    try expectReply(&app, "set-config", "{\"key\":\"autoImportEnabled\",\"value\":false}", "null");
-    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Stopping automatic import.") != null);
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"errorMessage\":\"Cancelled\"");
-    var stopped = try readAutoImport(&app);
-    defer stopped.deinit();
-    try std.testing.expect(!stopped.running);
-    try std.testing.expect(stopped.database_path == null);
-}
-
-test "switching automatic import on reports a default database that could not be created" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    // A file where the default database's folder would go, so creating the database there cannot work.
-    const databases_dir = try std.fs.path.join(std.testing.allocator, &.{ app.tmp_path, "dbs" });
-    defer std.testing.allocator.free(databases_dir);
-    try std.Io.Dir.cwd().createDirPath(std.testing.io, databases_dir);
-    const blocked_path = try std.fs.path.join(std.testing.allocator, &.{ databases_dir, "photosphere-default" });
-    defer std.testing.allocator.free(blocked_path);
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = blocked_path,
-        .data = "this is a file, not a folder",
-    });
-    try expectReply(&app, "set-config", "{\"key\":\"autoImportSources\",\"value\":[{\"type\":\"folder\",\"path\":\"/watched\",\"recurse\":true}]}", "null");
-    const reply = try app.requestError("set-config", "{\"key\":\"autoImportEnabled\",\"value\":true}");
-    defer std.testing.allocator.free(reply);
-    try std.testing.expect(std.mem.indexOf(u8, reply, "Failed to create the default photo database at") != null);
-    var auto_import = try readAutoImport(&app);
-    defer auto_import.deinit();
-    try std.testing.expect(!auto_import.running);
-    try std.testing.expect(!auto_import.starting);
 }
 
 test "a failing config request logs the error with the message of its handler" {

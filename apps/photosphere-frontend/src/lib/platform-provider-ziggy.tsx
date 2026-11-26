@@ -1,17 +1,17 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IConfigChangedEvent, type IPlatformContext, type IPlatformEvent, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IConfigChangedEvent, type IPlatformContext, type IPlatformEvent, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type NetworkConnectionType, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, type ITaskResult } from "task-queue";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type ILogDetails } from "utils";
-import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
+import { planAutoImport } from "api/src/lib/auto-import";
 import type { IImportProgressEvent } from "api/src/lib/import-assets.types";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
 import type { ISaveAssetItem } from "api";
 import type { IConflictResolution } from "user-interface/src/lib/lan-share";
 import type { IJsonValue, IMenuEvent, IPlatformInfo, ITaskCompletedEvent, IZiggyBridge } from "ziggy";
 import { planBackgroundWork, readPermissionState, resolveMediaPermission, type IRawPermissionResult } from "./background-work";
-import { readAutoImportSettings, readSyncSettings, recordSyncDatabase, seedSyncSettings } from "./mobile-settings";
+import { readAutoImportSettings, readSyncSettings, recordSyncDatabase, seedSyncSettings } from "./background-settings";
 import { resolveDroppedFilePath, type IDroppedFile } from "./dropped-file-path";
 import { interpretMenuAction, logDirectoryOf, type MenuEffect } from "./menu-actions";
 import { buildExportFileRequest, buildExportFilesRequest, saveDownloadsViaShareSheet, type ExportTestOutcome, type IExportFileReply, type IExportFilesReply, type IExportFolderReply, type ISaveAssetTaskData, type ISaveAssetsBatchTaskData } from "./mobile-export";
@@ -207,7 +207,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
         const ensureAutoImportOnce = async (): Promise<void> => {
             const contents = await readAutoImportSettings();
-            const importPlan = planMobileAutoImport(contents.settings, contents.defaultDatabasePath);
+            const importPlan = planAutoImport(contents.settings, contents.defaultDatabasePath);
             const syncSettings = await readSyncSettings();
 
             if (cancelled) {
@@ -220,13 +220,13 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             const syncEnabled = syncSettings.written && syncSettings.settings.enabled;
             const syncDatabasePath = syncSettings.databasePath ?? contents.defaultDatabasePath;
             const decision = planBackgroundWork({
-                autoImportEnabled: importPlan.shouldRun && platform.platformKind === "mobile",
+                autoImportEnabled: importPlan.shouldRun,
                 syncEnabled,
                 hasDatabaseToSync: syncDatabasePath !== undefined && syncDatabasePath.length > 0,
             });
 
             const syncWanted = decision.shouldRun && syncEnabled;
-            let importWanted = importPlan.shouldRun && platform.platformKind === "mobile";
+            let importWanted = importPlan.shouldRun;
 
             // The photo permission, for automatic import only, and before anything is said about it starting: without it the library
             // reads nothing, and the setting has to go back off rather than looking as though photos are being backed up when none

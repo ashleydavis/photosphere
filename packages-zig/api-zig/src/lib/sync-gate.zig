@@ -1,12 +1,15 @@
 //
 // The kind of network connection currently in use. "unknown" is reported by
-// platforms that cannot distinguish wired/wifi/cellular (desktop and web
-// browsers); it is treated as allowed so those platforms sync whenever online.
-// (Zig: an enum, whose tag names are the strings.)
+// platforms that cannot distinguish wired/wifi/cellular (a VPN-only, Bluetooth
+// or USB connection); it is treated as allowed so those platforms sync while
+// online. (Zig: an enum, whose tag names are the strings.)
 //
 pub const NetworkConnectionType = enum {
     // A Wi-Fi connection ("wifi").
     wifi,
+
+    // A wired (Ethernet) connection ("wired").
+    wired,
 
     // A cellular connection ("cellular").
     cellular,
@@ -29,7 +32,7 @@ pub const ISyncGateInputs = struct {
     syncEnabled: bool,
 
     //
-    // Whether the user has restricted automatic syncing to Wi-Fi connections.
+    // Whether the user has restricted automatic syncing to Wi-Fi or wired connections.
     //
     syncOnlyOnWifi: bool,
 
@@ -39,17 +42,17 @@ pub const ISyncGateInputs = struct {
     connected: bool,
 
     //
-    // The current connection type used to enforce the Wi-Fi-only restriction.
+    // The current connection type used to enforce the Wi-Fi-or-wired restriction.
     //
     connectionType: NetworkConnectionType,
 };
 
 //
 // Computes whether an automatic sync is currently allowed. Returns false when
-// syncing is disabled, when offline, or when the Wi-Fi-only restriction is on
-// and the connection is cellular. A connectionType of "wifi" or "unknown" is
-// permitted under the Wi-Fi-only restriction (desktop/web cannot detect
-// cellular, so they report "unknown" and remain allowed).
+// syncing is disabled, when offline, or when the Wi-Fi-or-wired restriction is
+// on and the connection is cellular. A connectionType of "wifi", "wired" or
+// "unknown" is permitted under the restriction (a platform that cannot detect
+// the type reports "unknown" and remains allowed).
 //
 pub fn computeSyncAllowed(inputs: ISyncGateInputs) bool {
     if (!inputs.syncEnabled) {

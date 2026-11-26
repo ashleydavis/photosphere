@@ -3,7 +3,7 @@
 //
 // Tests for the task the native background import asks what to do.
 //
-// The deciding itself (whether to run, which database, what to watch) is planMobileAutoImport and is
+// The deciding itself (whether to run, which database, what to watch) is planAutoImport and is
 // covered in packages/api. What is covered here is the task around it: that it reads the settings
 // from the file rather than from anywhere else, and that the steps it hands back are the tasks a pass
 // has to run. Native code runs those steps unchanged and builds no payload of its own, so
@@ -19,7 +19,8 @@ const test_timers = @import("test-timers.zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
 const node_utils = @import("node-utils-zig");
-const mobile_worker = @import("mobile-worker-zig");
+const worker = @import("worker-zig");
+const test_environment = @import("../../../node-api-zig/src/test/test-environment.zig");
 const expectBool = @import("sandbox.zig").expectBool;
 const expectEmptyArray = @import("sandbox.zig").expectEmptyArray;
 const expectInteger = @import("sandbox.zig").expectInteger;
@@ -27,9 +28,9 @@ const expectKeyStrings = @import("sandbox.zig").expectKeyStrings;
 const expectString = @import("sandbox.zig").expectString;
 const Sandbox = @import("sandbox.zig").Sandbox;
 const MuteLog = @import("utils-zig").mute_log.MuteLog;
-const planAutoImportHandler = mobile_worker.plan_auto_import_worker.planAutoImportHandler;
-const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import_mobile.DEFAULT_AUTO_IMPORT_PAUSE_MS;
-const DEFAULT_DATABASE_FOLDER_NAME = api.auto_import_mobile.DEFAULT_DATABASE_FOLDER_NAME;
+const planAutoImportHandler = worker.plan_auto_import_worker.planAutoImportHandler;
+const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import.DEFAULT_AUTO_IMPORT_PAUSE_MS;
+const DEFAULT_DATABASE_FOLDER_NAME = api.auto_import.DEFAULT_DATABASE_FOLDER_NAME;
 const readConfig = node_api.config_worker.readConfig;
 const buildConfigYaml = node_api.config_worker.buildConfigYaml;
 const at = @import("sandbox.zig").at;
@@ -73,11 +74,17 @@ fn writeSettingsFile(sandbox: *Sandbox, log: ILog, enabled: bool, defaultDatabas
 }
 
 //
-// Runs the handler.
+// Runs the handler, telling it this platform has no device photo library (the host a test runs on is a
+// desktop), so a pass with no sources chosen watches the machine's photo folders.
 //
 fn plan(sandbox: *Sandbox, log: ILog) !std.json.Value {
-    return planAutoImportHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, .{
-        .object = .empty,
+    const allocator = sandbox.arenaAllocator();
+    var data: std.json.ObjectMap = .empty;
+    try data.put(allocator, "hasDevicePhotoLibrary", .{
+        .bool = false,
+    });
+    return planAutoImportHandler(allocator, sandbox.io, test_timers.timers(), log, .{
+        .object = data,
     }, sandbox.context());
 }
 
@@ -194,20 +201,29 @@ test "plan-auto-import passes the configured places to watch through to the impo
 }
 
 // Running with no sources at all would import nothing while looking like it was working, which is the worst of both.
-test "plan-auto-import watches the whole photo library when no album has been chosen" {
+// On a mobile the default is the whole photo library (covered by the planner's own tests); on a desktop it is the
+// machine's own photo folders. This test runs on the host, so it asserts the desktop default.
+test "plan-auto-import watches the machine's photo folders when none have been chosen" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     const log = MuteLog.init();
     defer sandbox.deinit(log);
     try writeSettingsFile(&sandbox, log, true, "my-photos", "[]", 5000);
 
+    // The machine's photo folders are found under the home directory, so HOME is pointed at the sandbox and a
+    // Pictures folder is made there, which keeps the default deterministic rather than the developer's own.
+    const home = try std.fs.path.join(sandbox.arenaAllocator(), &.{ sandbox.tempDir, "home" });
+    try test_environment.setEnv("HOME", home);
+    const pictures = try std.fs.path.join(sandbox.arenaAllocator(), &.{ home, "Pictures" });
+    try sandbox.writeFile("home/Pictures/.keep", "");
+
     const result = try plan(&sandbox, log);
 
     try expectBool(true, result, "shouldRun");
     const importSources = at(stepData(at(result, "steps").?, "import-assets").?, "options.sources").?.array.items;
     try std.testing.expectEqual(@as(usize, 1), importSources.len);
-    try std.testing.expectEqualStrings("device-album", importSources[0].object.get("type").?.string);
-    try std.testing.expectEqualStrings("all", importSources[0].object.get("albumId").?.string);
+    try std.testing.expectEqualStrings("folder", importSources[0].object.get("type").?.string);
+    try std.testing.expectEqualStrings(pictures, importSources[0].object.get("path").?.string);
 }
 
 test "plan-auto-import's import step is a real automatic import into the planned database" {

@@ -1,14 +1,13 @@
 //
 // Typed access to the native connection-type host function.
 //
-// The background sync loop has to know whether the mobile is on Wi-Fi, on a cellular connection, or
-// on nothing at all, because the "Only sync over Wi-Fi" setting refuses a sync on cellular. The app's
-// own network status lives in the WebView, and there may be no WebView: the loop runs while the app
-// is off screen. So the worker asks the platform directly, through ConnectivityManager on Android and
-// NWPathMonitor on iOS.
+// The background sync loop has to know whether the platform is on Wi-Fi, on a cellular connection, or
+// on nothing at all, because the "Only sync over Wi-Fi or wired network" setting refuses a sync on cellular.
+// The loop runs with the app off screen, so the worker asks the platform directly: ConnectivityManager on
+// Android, NWPathMonitor on iOS, and the operating system's own routing and interface state on the desktop.
 //
 // (Zig has no process-wide global host, so the host is a value the caller passes in: whoever runs the handler knows how
-// the platform is asked (the mobile's native app, through the host request callback of Ziggy's core), and passes it. It cannot
+// the platform is asked (the platform's native app, through the host request callback of Ziggy's core), and passes it. It cannot
 // be missing, so there is no "host not installed" case to report. A host returns an error, and it reaches the caller as one.)
 //
 
@@ -48,12 +47,15 @@ pub const INetworkStatusHost = struct {
 //
 // Anything unrecognised, including an empty string, becomes "unknown" rather than throwing. A
 // platform reporting a connection nobody anticipated (a new transport, a VPN described some other
-// way) must not stop syncing altogether, and "unknown" is the value computeSyncAllowed already
-// permits for exactly this reason: the desktop cannot report a type either.
+// way) must not stop syncing altogether, and "unknown" is the value computeSyncAllowed permits for
+// exactly this reason.
 //
 pub fn toNetworkConnectionType(reported: []const u8) NetworkConnectionType {
     if (std.mem.eql(u8, reported, "wifi")) {
         return .wifi;
+    }
+    if (std.mem.eql(u8, reported, "wired")) {
+        return .wired;
     }
     if (std.mem.eql(u8, reported, "cellular")) {
         return .cellular;

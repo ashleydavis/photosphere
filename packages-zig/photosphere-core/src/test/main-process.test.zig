@@ -43,14 +43,11 @@ fn waitFor(app: *TestApp, text: []const u8) !void {
 }
 
 //
-// Creates the main window, which asks for the page's query, and waits until the check that automatic import is running, which the main
-// process makes as soon as the window is created, has ended, so that a test that sets what the state remembers about automatic
-// import by hand is not undone by it.
+// Creates the main window by asking for the page's query, which is what makes the main process run the steps that happen once the
+// main window exists.
 //
 fn waitForStartupCheck(app: *TestApp) !void {
     std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
-    // The check reports what it found automatic import should do, which the main thread then does.
-    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"status\":\"succeeded\",\"outputs\":{\"action\":\"");
 }
 
 const endTask = support.endTask;
@@ -375,7 +372,7 @@ test "resetSyncState cancels the tasks of the database that was open when anothe
     try waitFor(&app, "\"errorMessage\":\"Cancelled\"");
 }
 
-test "a failed import tells the user, and an automatic import that stops clears what is remembered about it" {
+test "a failed import tells the user" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -391,30 +388,6 @@ test "a failed import tells the user, and an automatic import that stops clears 
     });
     try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"show-notification\",\"data\":{\"message\":\"Import failed: disk on fire\",\"color\":\"danger\",\"duration\":8000}}}");
     try waitForStartupCheck(&app);
-    try app.onState(@as(u8, 0), struct {
-        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            state.auto_import_running = true;
-            try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_task_id, "auto-1");
-            try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_database_path, "/auto/db");
-        }
-    }.check);
-    try endTask(&app, .{
-        .task_id = "auto-1",
-        .task_type = "import-assets",
-        .source = "auto-import",
-        .input_json = "{}",
-        .status = .failed,
-        .error_message = "crashed",
-        .result_json = null,
-        .started = true,
-    });
-    try app.onState(@as(u8, 0), struct {
-        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            try std.testing.expect(!state.auto_import_running);
-            try std.testing.expect(state.auto_import_task_id == null);
-            try std.testing.expect(state.auto_import_database_path == null);
-        }
-    }.check);
     try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "Import failed"));
 }
 
@@ -539,70 +512,6 @@ test "the periodic sync queues a sync for the open database when syncing is allo
 }
 
 //
-// A fake of the create-default-database task, which another part of the app provides: it ends at once.
-//
-fn createDefaultDatabaseTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = timers;
-    _ = context;
-    _ = data;
-    try services.sendEvent(io, allocator, .{ .createdDefaultDatabase = true });
-    return try allocator.dupe(u8, "null");
-}
-
-//
-// A fake of the create-default-database task that fails, as it does when the database cannot be made.
-//
-fn createDefaultDatabaseFailsTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
-    _ = timers;
-    _ = io;
-    _ = allocator;
-    _ = context;
-    _ = data;
-    return utils.errors.throwError("the default database could not be made", .{});
-}
-
-//
-// A fake of the import-assets task, which another part of the app provides: it reports that it started and then runs until it is
-// cancelled.
-//
-fn importAssetsTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = timers;
-    _ = context;
-    _ = data;
-    try services.sendEvent(io, allocator, .{ .importing = true });
-    while (true) {
-        try services.checkCancelled(io, allocator);
-        try io.sleep(.fromMilliseconds(2), .awake);
-    }
-}
-
-//
-// A fake of the import-assets task that ends as soon as it starts, as one does when it cannot open its database.
-//
-fn importAssetsEndsAtOnceTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
-    _ = timers;
-    _ = io;
-    _ = allocator;
-    _ = context;
-    _ = data;
-    return utils.errors.throwError("the database could not be opened", .{});
-}
-
-const auto_import_tasks = [_]ziggy.task_runner.TaskHandlerEntry{
-    .{ .name = "create-default-database", .handler = createDefaultDatabaseTask },
-    .{ .name = "import-assets", .handler = importAssetsTask },
-};
-
-//
-// The config.toml of a user who has switched automatic import on, with a default database at the path.
-//
-fn autoImportConfigYaml(allocator: std.mem.Allocator, database_path: []const u8) ![]u8 {
-    return try std.fmt.allocPrint(allocator, "[auto_import]\nenabled = true\ndefault_database_path = \"{s}\"\n\n[[auto_import.sources]]\ntype = \"folder\"\npath = \"/watched\"\nrecurse = true\n", .{database_path});
-}
-
-//
 // Waits until the count of the messages that hold the text reaches the count wanted, for up to a few seconds.
 //
 fn waitForCount(app: *TestApp, text: []const u8, wanted: usize) !void {
@@ -614,120 +523,6 @@ fn waitForCount(app: *TestApp, text: []const u8, wanted: usize) !void {
         ziggy.fake_native_app.sleepMs(std.testing.io, 10);
         waited_ms += 10;
     }
-}
-
-test "automatic import that was switched on before the app started is started by the app itself" {
-    var app: TestApp = undefined;
-    const allocator = std.testing.allocator;
-    const database_path = try allocator.dupe(u8, "/nowhere/startup-default-db");
-    defer allocator.free(database_path);
-    const config_yaml = try autoImportConfigYaml(allocator, database_path);
-    defer allocator.free(config_yaml);
-    try app.startWithTasksAndConfigFile(&auto_import_tasks, config_yaml);
-    defer app.stop();
-    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
-    try waitFor(&app, "\"importing\":true");
-    try app.onState(@as([]const u8, database_path), struct {
-        fn check(path: []const u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            try std.testing.expect(state.auto_import_running);
-            try std.testing.expectEqualStrings(path, state.auto_import_database_path.?);
-        }
-    }.check);
-}
-
-//
-// Sets how often automatic import is checked, before the main window is created, which starts the check.
-//
-fn setAutoImportCheckMs(app: *TestApp, milliseconds: u64) !void {
-    try app.onState(milliseconds, struct {
-        fn check(given: u64, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            state.auto_import_check_ms = given;
-        }
-    }.check);
-}
-
-test "a new default database for automatic import is put in the dbs directory of the directory PHOTOSPHERE_DATA_DIR names, where short names resolve" {
-    var app: TestApp = undefined;
-    try app.prepareWithConfigFile("[auto_import]\nenabled = true\n\n[[auto_import.sources]]\ntype = \"folder\"\npath = \"/watched\"\nrecurse = true\n");
-    try app.environ_map.put("PHOTOSPHERE_DATA_DIR", "/scenario/files");
-    try app.launchWithTasks(&auto_import_tasks);
-    defer app.stop();
-    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
-    try waitFor(&app, "\"createdDefaultDatabase\":true");
-    try waitFor(&app, "\"importing\":true");
-    var path_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer path_arena.deinit();
-    const default_path = try node_api.auto_import_desktop.getDefaultDatabasePath(path_arena.allocator(), try std.fs.path.join(path_arena.allocator(), &.{ "/scenario/files", "dbs" }));
-    try app.onState(@as([]const u8, default_path), struct {
-        fn check(path: []const u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            try std.testing.expectEqualStrings(path, state.auto_import_database_path.?);
-        }
-    }.check);
-}
-
-test "automatic import is started again by the periodic check after its task died" {
-    var app: TestApp = undefined;
-    const allocator = std.testing.allocator;
-    const database_path = try allocator.dupe(u8, "/nowhere/restart-default-db");
-    defer allocator.free(database_path);
-    const config_yaml = try autoImportConfigYaml(allocator, database_path);
-    defer allocator.free(config_yaml);
-    try app.startWithTasksAndConfigFile(&auto_import_tasks, config_yaml);
-    defer app.stop();
-    try setAutoImportCheckMs(&app, 40);
-    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
-    try waitForCount(&app, "\"importing\":true", 1);
-    try app.onState(@as(u8, 0), struct {
-        fn check(_: u8, _: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
-            services.cancelTasks(main_io, main_state.stateAllocator(), "auto-import");
-        }
-    }.check);
-    try waitForCount(&app, "\"importing\":true", 2);
-}
-
-test "a failure to start automatic import at startup is logged, not lost" {
-    var app: TestApp = undefined;
-    const allocator = std.testing.allocator;
-    const database_path = try allocator.dupe(u8, "/nowhere/failing-default-db");
-    defer allocator.free(database_path);
-    const config_yaml = try autoImportConfigYaml(allocator, database_path);
-    defer allocator.free(config_yaml);
-    // Making the default database fails. The real create-default-database task would make it on disk wherever the path lets it.
-    try app.startWithTasksAndConfigFile(&[_]ziggy.task_runner.TaskHandlerEntry{
-        .{ .name = "create-default-database", .handler = createDefaultDatabaseFailsTask },
-    }, config_yaml);
-    defer app.stop();
-    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
-    var waited_ms: i64 = 0;
-    while (std.mem.indexOf(u8, (try app.consoleOut()), "Error starting automatic import") == null and
-        std.mem.indexOf(u8, (try app.consoleErr()), "Error starting automatic import") == null)
-    {
-        if (waited_ms >= 5000) {
-            return error.MessageNeverArrived;
-        }
-        ziggy.fake_native_app.sleepMs(std.testing.io, 10);
-        waited_ms += 10;
-    }
-}
-
-test "an automatic import that ends the moment it starts is not remembered as running" {
-    var app: TestApp = undefined;
-    const allocator = std.testing.allocator;
-    const database_path = try allocator.dupe(u8, "/nowhere/short-lived-db");
-    defer allocator.free(database_path);
-    const config_yaml = try autoImportConfigYaml(allocator, database_path);
-    defer allocator.free(config_yaml);
-    try app.startWithTasksAndConfigFile(&[_]ziggy.task_runner.TaskHandlerEntry{
-        .{ .name = "create-default-database", .handler = createDefaultDatabaseTask },
-        .{ .name = "import-assets", .handler = importAssetsEndsAtOnceTask },
-    }, config_yaml);
-    defer app.stop();
-    // The check runs every few milliseconds, so every start that loses the race to its own end would leave the state saying that the
-    // import is running while no task is, and the next check would then see nothing to do. Count the starts: every end must be followed
-    // by another start, because the state must say it is not running.
-    try setAutoImportCheckMs(&app, 20);
-    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
-    try waitForCount(&app, "the database could not be opened", 8);
 }
 
 test "a sync that succeeded with an input that is not JSON is reported, not ignored" {
@@ -784,7 +579,6 @@ test "a sync that succeeded queues the eviction of originals only for the databa
     try waitForStartupCheck(&app);
     try app.onState(@as(u8, 0), struct {
         fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            state.auto_import_running = true;
             try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_database_path, "/the/default/db");
         }
     }.check);
@@ -847,79 +641,12 @@ fn consoleHas(app: *TestApp, text: []const u8) !bool {
         std.mem.indexOf(u8, (try app.consoleErr()), text) != null;
 }
 
-test "automatic import is not checked until the main window is created, and creating the window again changes nothing" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    ziggy.fake_native_app.sleepMs(std.testing.io, 200);
-    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"type\":\"ensure-auto-import\""));
-    try std.testing.expect(!try consoleHas(&app, "Main window created"));
-    try waitForStartupCheck(&app);
-    try std.testing.expect(try consoleHas(&app, "Main window created"));
-    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
-    ziggy.fake_native_app.sleepMs(std.testing.io, 200);
-    try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"type\":\"ensure-auto-import\""));
-    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, (try app.consoleOut()), "Main window created"));
-}
-
-test "a failed check of automatic import says whether it was the start or a later check" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try endTask(&app, .{
-        .task_id = "ensure-1",
-        .task_type = "ensure-auto-import",
-        .source = "ensure-auto-import",
-        .input_json = "{\"restarting\":false}",
-        .status = .failed,
-        .error_message = "no folders",
-        .result_json = null,
-        .started = true,
-    });
-    try std.testing.expect(try consoleHas(&app, "Error starting automatic import: no folders"));
-    try endTask(&app, .{
-        .task_id = "ensure-2",
-        .task_type = "ensure-auto-import",
-        .source = "ensure-auto-import",
-        .input_json = "{\"restarting\":true}",
-        .status = .failed,
-        .error_message = "no folders",
-        .result_json = null,
-        .started = true,
-    });
-    try std.testing.expect(try consoleHas(&app, "Error restarting automatic import: no folders"));
-}
-
-test "an automatic import that stops with no error message says the error is unknown" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    try app.onState(@as(u8, 0), struct {
-        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            state.auto_import_running = true;
-            try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_task_id, "auto-2");
-        }
-    }.check);
-    try endTask(&app, .{
-        .task_id = "auto-2",
-        .task_type = "import-assets",
-        .source = "auto-import",
-        .input_json = "{}",
-        .status = .failed,
-        .error_message = null,
-        .result_json = null,
-        .started = true,
-    });
-    try std.testing.expect(try consoleHas(&app, "Automatic import stopped: Unknown error"));
-}
-
 test "a sync of a database with an empty path queues no eviction, and an empty open path queues no sync" {
     var app: TestApp = undefined;
     try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "evict-originals", .handler = evictOriginalsTask }});
     defer app.stop();
     try app.onState(@as(u8, 0), struct {
         fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            state.auto_import_running = true;
             try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_database_path, "");
             state.sync_allowed = true;
             try main_state.setOwned(main_state.stateAllocator(), &state.current_database_path, "");

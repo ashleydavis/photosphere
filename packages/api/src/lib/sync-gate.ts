@@ -1,9 +1,10 @@
 //
 // The kind of network connection currently in use. "unknown" is reported by
-// platforms that cannot distinguish wired/wifi/cellular (desktop and web
-// browsers); it is treated as allowed so those platforms sync whenever online.
+// platforms that cannot distinguish wired/wifi/cellular (a VPN-only, Bluetooth
+// or USB connection); it is treated as allowed so those platforms sync while
+// online.
 //
-export type NetworkConnectionType = "wifi" | "cellular" | "none" | "unknown";
+export type NetworkConnectionType = "wifi" | "wired" | "cellular" | "none" | "unknown";
 
 //
 // Inputs to the sync gate: the two persisted user toggles plus the current
@@ -16,7 +17,7 @@ export interface ISyncGateInputs {
     syncEnabled: boolean;
 
     //
-    // Whether the user has restricted automatic syncing to Wi-Fi connections.
+    // Whether the user has restricted automatic syncing to Wi-Fi or wired connections.
     //
     syncOnlyOnWifi: boolean;
 
@@ -26,17 +27,17 @@ export interface ISyncGateInputs {
     connected: boolean;
 
     //
-    // The current connection type used to enforce the Wi-Fi-only restriction.
+    // The current connection type used to enforce the Wi-Fi-or-wired restriction.
     //
     connectionType: NetworkConnectionType;
 }
 
 //
 // Computes whether an automatic sync is currently allowed. Returns false when
-// syncing is disabled, when offline, or when the Wi-Fi-only restriction is on
-// and the connection is cellular. A connectionType of "wifi" or "unknown" is
-// permitted under the Wi-Fi-only restriction (desktop/web cannot detect
-// cellular, so they report "unknown" and remain allowed).
+// syncing is disabled, when offline, or when the Wi-Fi-or-wired restriction is
+// on and the connection is cellular. A connectionType of "wifi", "wired" or
+// "unknown" is permitted under the restriction (a platform that cannot detect
+// the type reports "unknown" and remains allowed).
 //
 export function computeSyncAllowed(inputs: ISyncGateInputs): boolean {
     if (!inputs.syncEnabled) {

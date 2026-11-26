@@ -348,6 +348,7 @@ test "a background pass is queued only while it is switched on and not running, 
                 .gapMs = 60_000,
                 .finished = false,
                 .replicaState = .unknown,
+                .databasePath = "",
             });
             try std.testing.expect(!state.background_passes_running[import_index]);
             try std.testing.expect(state.background_passes_on[import_index]);
@@ -376,6 +377,7 @@ test "the app is held running while any background work is switched on, and let 
                 .gapMs = 50,
                 .finished = true,
                 .replicaState = .complete,
+                .databasePath = "",
             });
         }
     };
@@ -405,6 +407,7 @@ test "a background pass switched on is due at once, and the next is due after th
                 .gapMs = 60_000,
                 .finished = false,
                 .replicaState = .working,
+                .databasePath = "",
             });
             try std.testing.expect(msUntilDue(timers, main_io, state.background_pass_timers[prefetch_index].?).? > 59_000);
             try std.testing.expectEqual(background_work.ReplicaState.working, state.prefetch_replica_state);
@@ -426,6 +429,7 @@ test "a background pass that finishes the work switches it off until it is switc
                 .gapMs = 60_000,
                 .finished = true,
                 .replicaState = .complete,
+                .databasePath = "",
             });
             try std.testing.expect(!state.background_passes_on[prefetch_index]);
             try std.testing.expect(state.background_pass_timers[prefetch_index] == null);
@@ -453,6 +457,7 @@ test "switching the background work off leaves nothing due, even when a pass in 
                 .gapMs = 10,
                 .finished = false,
                 .replicaState = .unknown,
+                .databasePath = "",
             });
             try std.testing.expect(state.background_pass_timers[sync_index] == null);
             try std.testing.expect(!state.background_passes_on[sync_index]);

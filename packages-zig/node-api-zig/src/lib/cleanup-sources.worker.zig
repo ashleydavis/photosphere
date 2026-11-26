@@ -34,7 +34,7 @@ const HashCache = hash_cache.HashCache;
 const IMediaItem = media_source.IMediaItem;
 const buildMediaSource = media_source_registry.buildMediaSource;
 const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
-const foldersAsSources = @import("auto-import-desktop.zig").foldersAsSources;
+const foldersAsSources = api.auto_import.foldersAsSources;
 const getDefaultPhotoFolders = node_utils.photo_folders.getDefaultPhotoFolders;
 
 //
@@ -156,12 +156,12 @@ fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, localHas
 
 //
 // Where to look when the settings name no sources: the same places automatic import watches then, which is the whole photo
-// library on a mobile (planMobileAutoImport) and the operating system's photo folders on a desktop (planDesktopAutoImport). No
-// sources is the usual setup, so refusing it made the cleanup button fail for everyone who had not added a folder.
+// library on a mobile and the operating system's photo folders on a desktop. No sources is the usual setup, so refusing it made
+// the cleanup button fail for everyone who had not added a folder.
 //
 fn defaultSources(allocator: std.mem.Allocator, io: std.Io) ![]const IAutoImportSource {
     if (builtin.os.tag == .ios or builtin.abi.isAndroid()) {
-        return &api.auto_import_mobile.WHOLE_LIBRARY_SOURCES;
+        return &api.auto_import.WHOLE_LIBRARY_SOURCES;
     }
     return foldersAsSources(allocator, try getDefaultPhotoFolders(allocator, io));
 }

@@ -2,7 +2,7 @@
 // Check-database-exists worker handler.
 //
 // Runs on both platforms via the shared task queue: desktop registers it through task-handlers.zig and
-// mobile through mobile-worker-entry, so "the database exists" means the same thing everywhere. The
+// the mobile app through its own entry, so "the database exists" means the same thing everywhere. The
 // handler reuses checkDatabaseExists, which builds storage for the path (FileStorage over the native
 // host.fs* functions on device, real fs on desktop/worker threads) and asks whether the database's
 // merkle tree file exists, so a directory that exists but holds no database reads as absent identically

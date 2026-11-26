@@ -11,15 +11,16 @@
 //
 
 const std = @import("std");
-const mobile_worker = @import("mobile-worker-zig");
+const worker = @import("worker-zig");
 const test_hosts = @import("test-hosts.zig");
-const network_status = mobile_worker.network_status;
+const network_status = worker.network_status;
 const toNetworkConnectionType = network_status.toNetworkConnectionType;
 const readNetworkConnectionType = network_status.readNetworkConnectionType;
 const ReportingHost = test_hosts.ReportingHost;
 
 test "connection type: each value the platforms report maps to itself" {
     try std.testing.expectEqual(.wifi, toNetworkConnectionType("wifi"));
+    try std.testing.expectEqual(.wired, toNetworkConnectionType("wired"));
     try std.testing.expectEqual(.cellular, toNetworkConnectionType("cellular"));
     try std.testing.expectEqual(.none, toNetworkConnectionType("none"));
     try std.testing.expectEqual(.unknown, toNetworkConnectionType("unknown"));

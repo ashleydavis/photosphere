@@ -112,6 +112,9 @@ pub const IPassResult = struct {
     gap_ms: u64,
     // Whether the work is over until it is switched on again: automatic import is switched off, or the replica is complete.
     finished: bool,
+    // The database the pass works on, for the import pass, whose database the main thread records so it can drop the
+    // originals a sync of it has pushed. Empty for the other passes.
+    database_path: []const u8,
 };
 
 //
@@ -356,17 +359,20 @@ pub fn runImportPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers, p
         return .{
             .gap_ms = FALLBACK_PAUSE_MS,
             .finished = false,
+            .database_path = "",
         };
     };
     const ran: IPassResult = .{
         .gap_ms = plan.pause_ms,
         .finished = false,
+        .database_path = plan.database_path,
     };
     if (!plan.should_run) {
         pass_services.report(io, allocator, timers, "Automatic import is switched off.");
         return .{
             .gap_ms = plan.pause_ms,
             .finished = true,
+            .database_path = plan.database_path,
         };
     }
     pass_services.holdAwake(io, allocator, timers, true) catch |err| {
@@ -418,11 +424,13 @@ pub fn runSyncPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers, pas
         return .{
             .gap_ms = SYNC_FALLBACK_PAUSE_MS,
             .finished = false,
+            .database_path = "",
         };
     };
     const ran: IPassResult = .{
         .gap_ms = plan.pause_ms,
         .finished = false,
+        .database_path = "",
     };
     if (first) {
         return ran;
@@ -457,11 +465,13 @@ pub fn runPrefetchPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers,
         return .{
             .gap_ms = FALLBACK_PAUSE_MS,
             .finished = false,
+            .database_path = "",
         };
     };
     const ran: IPassResult = .{
         .gap_ms = plan.pause_ms,
         .finished = false,
+        .database_path = "",
     };
     if (!plan.should_run) {
         // Refused, not finished. The next pass asks again, because everything that refuses a pass can stop refusing without the app
@@ -510,6 +520,7 @@ pub fn runPrefetchPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers,
         return .{
             .gap_ms = plan.pause_ms,
             .finished = true,
+            .database_path = "",
         };
     }
     // Fetching anything at all counts as progress, including a pass that fetched files and found nothing left: the next pass confirms
@@ -726,6 +737,8 @@ pub const IPassTaskResult = struct {
     finished: bool,
     // What the replica is like after the pass. Only the prefetch pass changes it.
     replicaState: ReplicaState,
+    // The database the pass works on, for the import pass, whose database the main thread records. Empty otherwise.
+    databasePath: []const u8,
 };
 
 //
@@ -746,6 +759,7 @@ fn runPass(services: TaskServices, timers: Timers, io: std.Io, allocator: std.me
         .gapMs = result.gap_ms,
         .finished = result.finished,
         .replicaState = replica_state,
+        .databasePath = result.database_path,
     });
 }
 

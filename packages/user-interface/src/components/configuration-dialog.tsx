@@ -186,7 +186,7 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
                                 }}
                                 >
                                 <SectionRow
-                                    label="Only sync over Wi-Fi"
+                                    label="Only sync over Wi-Fi or wired network"
                                     hint={undefined}
                                     control={<Switch readOnly checked={syncOnlyOnWifi} sx={switchSx} />}
                                     />

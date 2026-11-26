@@ -13,10 +13,13 @@ import android.os.Build;
 // screen, so it asks the platform here. The names returned are the four the sync decision understands. What to do about each of them is
 // decided there, and not here: this class answers one question and takes no view on what the answer means.
 public final class NetworkHost {
-    // The connection is Wi-Fi, or something else that is not metered by a mobile carrier.
+    // The connection is Wi-Fi.
     public static final String CONNECTION_WIFI = "wifi";
 
-    // The connection is a mobile carrier's, which is the one the Wi-Fi-only setting refuses.
+    // The connection is wired (Ethernet).
+    public static final String CONNECTION_WIRED = "wired";
+
+    // The connection is a mobile carrier's, which is the Wi-Fi-or-wired setting refuses.
     public static final String CONNECTION_CELLULAR = "cellular";
 
     // There is no connection at all.
@@ -55,14 +58,17 @@ public final class NetworkHost {
 
     // Names the transport a set of capabilities describes. Cellular is checked first: a mobile sharing its mobile connection over a VPN
     // can report more than one transport, and the setting exists to keep a backup off the carrier's network, so answering "wifi" for a
-    // connection that is also cellular is the one mistake here that costs the user money. Ethernet counts as Wi-Fi, because the only
-    // question asked is whether the connection is the carrier's.
+    // connection that is also cellular is the one mistake here that costs the user money. Ethernet reports its own name, "wired", which
+    // the Wi-Fi-or-wired setting allows.
     private String classifyCapabilities(NetworkCapabilities capabilities) {
         if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
             return CONNECTION_CELLULAR;
         }
-        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
             return CONNECTION_WIFI;
+        }
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+            return CONNECTION_WIRED;
         }
         return CONNECTION_UNKNOWN;
     }
@@ -78,8 +84,11 @@ public final class NetworkHost {
         if (type == ConnectivityManager.TYPE_MOBILE || type == ConnectivityManager.TYPE_MOBILE_DUN) {
             return CONNECTION_CELLULAR;
         }
-        if (type == ConnectivityManager.TYPE_WIFI || type == ConnectivityManager.TYPE_ETHERNET) {
+        if (type == ConnectivityManager.TYPE_WIFI) {
             return CONNECTION_WIFI;
+        }
+        if (type == ConnectivityManager.TYPE_ETHERNET) {
+            return CONNECTION_WIRED;
         }
         return CONNECTION_UNKNOWN;
     }

@@ -222,6 +222,8 @@ The `import-assets` task holds a worker for as long as the run lasts, and the `h
 
 ## While the app is not on screen
 
+Automatic import runs on every platform through the same background pass. On a desktop the pass runs while the app is open and stops when it closes; on a mobile the native side keeps it alive and it carries on with the app off screen.
+
 The loop that starts one pass after another lives on the native side of the mobile apps, not in the WebView. The operating system throttles and then stops a WebView's timers once the app is backgrounded, so a loop kept there imports nothing until the app is next opened, and says so nowhere. Nothing in the WebView queues an import on any platform.
 
 Syncing works the same way and for the same reason, in a loop of its own beside this one, so a photo imported while the app is off screen reaches the remote without the app being opened. Filling a partial replica in is a third such loop, obeying the syncing settings. [Syncing](syncing.md) describes those two: what it costs to ask whether there is anything to push, the two settings and where they live, what the loops contend on when their passes overlap, and the one ordering between them.

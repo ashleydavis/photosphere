@@ -29,7 +29,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - lan-share-core-zig - Zig port of the core of lan-share
         - lan-share-network-zig - Zig port of the network side of lan-share
         - mcp-zig - The MCP server (JSON-RPC protocol, tool input schemas and the Streamable HTTP transport) that the `psi mcp` command and the desktop app both run
-        - mobile-worker-zig - The planning task handlers the mobile runs
+        - worker-zig - The planning task handlers the background loop runs on every platform
         - media-tools-zig - ImageMagick and FFmpeg (with their libjpeg, libpng, libwebp, lcms2 and zlib delegates), built from source and called in process by both the Photosphere App and the Zig CLI
         - merkle-tree-zig - Zig port of merkle-tree
         - node-api-zig - Zig port of node-api

@@ -49,7 +49,7 @@ test "plan-auto-import puts a new default database in the dbs directory of the d
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"plan-auto-data-dir\",\"status\":\"succeeded\"");
     var path_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer path_arena.deinit();
-    const default_path = try node_api.auto_import_desktop.getDefaultDatabasePath(path_arena.allocator(), try std.fs.path.join(path_arena.allocator(), &.{ "/scenario/files", "dbs" }));
+    const default_path = try std.fs.path.join(path_arena.allocator(), &.{ "/scenario/files", "dbs", "photosphere-default" });
     const quoted_path = try utils.json.stringify(std.testing.allocator, default_path);
     defer std.testing.allocator.free(quoted_path);
     const expected = try std.mem.concat(std.testing.allocator, u8, &.{ "\"databasePath\":", quoted_path });

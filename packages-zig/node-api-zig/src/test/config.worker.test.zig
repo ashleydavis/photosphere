@@ -33,7 +33,7 @@ const writeConfigHandler = config_worker.writeConfigHandler;
 const readConfig = config_worker.readConfig;
 const TestTaskContext = test_task_context.TestTaskContext;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
-const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import_mobile.DEFAULT_AUTO_IMPORT_PAUSE_MS;
+const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import.DEFAULT_AUTO_IMPORT_PAUSE_MS;
 const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
 
 //

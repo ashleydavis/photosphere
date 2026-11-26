@@ -8,6 +8,6 @@ export * from "./lib/database-op";
 export * from "./lib/replicate-database.types";
 export * from "./lib/sync-database.types";
 export * from "./lib/auto-import-settings";
-export * from "./lib/auto-import-mobile";
+export * from "./lib/auto-import";
 export * from "./lib/sync-settings";
 export * from "./lib/sync-gate";

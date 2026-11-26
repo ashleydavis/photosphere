@@ -82,8 +82,8 @@ Run it beside `psi add --watch` to get both halves. Each is separately useful an
 | | What starts one |
 |---|---|
 | CLI | Nothing, unless asked. `psi sync` runs one; `psi sync --watch` runs them on an interval. |
-| Desktop | The main process: a debounced sync ten seconds after the open database is edited, and one every five minutes regardless. |
-| Mobile | A native loop, one pass at a time with a gap in between, running whether or not the app is on screen. An edit made in the app also starts one, once, at the moment it happens. |
+| Desktop | The same background pass as a mobile, running while the app is open, and on top of it a debounced sync ten seconds after the open database is edited and one every five minutes regardless. |
+| Mobile | The background pass, one pass at a time with a gap in between, running whether or not the app is on screen. An edit made in the app also starts one, once, at the moment it happens. |
 
 The desktop's debounce is what makes an edit reach the remote promptly without a sync per keystroke: rapid edits coalesce into one.
 
@@ -96,7 +96,7 @@ Two toggles on the configuration dialog control automatic syncing, on every plat
 | Setting | What it does | Default |
 |---|---|---|
 | **Enable syncing** | The master switch. Off means no automatic sync runs at all. | On |
-| **Only sync over Wi-Fi** | Refuses an automatic sync while the connection is cellular. | On |
+| **Only sync over Wi-Fi or wired network** | Refuses an automatic sync while the connection is cellular. | On |
 
 Neither affects a sync the user asks for explicitly, and neither affects the CLI, which syncs when the command says to.
 
@@ -131,11 +131,11 @@ Every automatic sync, on every platform, is decided by one function: `computeSyn
 - the connection type is `none`;
 - the Wi-Fi-only restriction is on and the connection type is `cellular`.
 
-A connection type of `unknown` is permitted, including under the Wi-Fi-only restriction. The desktop and the browser cannot tell a cellular connection from any other, so they report `unknown`, and treating that as cellular would make the Wi-Fi-only setting mean "never sync" everywhere but a mobile.
+A connection type of `unknown` is permitted, including under the Wi-Fi-only restriction. A platform that cannot classify its connection reports `unknown`, and treating that as cellular would make the Wi-Fi-only setting mean "never sync" there. Every desktop now classifies its own connection the way a mobile does, by reading the operating system's network state, so a desktop reports `wifi` for a wireless route, `wired` for a physical one and `none` with no route, rather than always `unknown`.
 
-There is one implementation of that rule and both callers use it: the app's own interface, and the mobile background loop. A second copy would be a second thing to keep in step, and the failure when they drift is somebody's mobile data bill.
+There is one implementation of that rule and both callers use it: the app's own interface, and the background loop. A second copy would be a second thing to keep in step, and the failure when they drift is somebody's mobile data bill.
 
-The mobile background loop cannot ask the WebView what the connection is, because there may be no WebView. It asks the native side directly, through a host function that reports `wifi`, `cellular`, `none` or `unknown` from `ConnectivityManager` on Android and `NWPathMonitor` on iOS. Anything the platform reports that does not map onto those comes back as `unknown` rather than throwing, so a connection nobody anticipated does not stop syncing.
+The background loop cannot ask the WebView what the connection is, because there may be no WebView. It asks the native side directly, through a host call that reports `wifi`, `cellular`, `wired`, `none` or `unknown` from `ConnectivityManager` on Android, `NWPathMonitor` on iOS, and the operating system's own routing and interface state on the desktop. Anything the platform reports that does not map onto those comes back as `unknown` rather than throwing, so a connection nobody anticipated does not stop syncing.
 
 **A periodic sync also waits while a prefetch of the same database is making progress.** A sync that overlaps a working prefetch does the same work slowly and gets in its own way: reaching the origin's merkle tree took 81.5 seconds during such a pass against 97 milliseconds when the mobile was idle, and the record merge in that pass took 15 minutes, because it was pulling the metadata shards down one at a time through the lazy storage, which is the same set of files the prefetch was fetching. Letting the prefetch finish first means the merge reads a local database instead.
 
@@ -150,17 +150,19 @@ It waits only while the prefetch is making progress, never until it is finished,
 
 Only the periodic background sync waits. A sync the user asks for, and the one an edit in the app triggers, do not go through `plan-sync` and are never deferred: a user who presses sync means now. Automatic import is not deferred either; it writes locally, and whether it should also wait for a prefetch is a real question that has not been answered.
 
-## What gets synced in the background on mobile
+## What gets synced in the background
 
 The database the app last opened, recorded in `sync.database_path` as it is opened. Failing that, the one automatic import writes to, from `auto_import.default_database_path`. Both are in `config.toml`, so resolving this costs one file read rather than two.
 
-The opened one comes first because it is what the user is actually using, and because syncing must not need automatic import switched on to have anything to push. The import's database is the fallback for a mobile that has been importing in the background without anybody opening it.
+The opened one comes first because it is what the user is actually using, and because syncing must not need automatic import switched on to have anything to push. The import's database is the fallback for an app that has been importing in the background without anybody opening it.
 
-One consequence follows: a mobile that has never opened a database syncs nothing in the background, because there is nothing to push yet. Opening one is what records it.
+One consequence follows: an app that has never opened a database syncs nothing in the background, because there is nothing to push yet. Opening one is what records it.
 
 **Syncing does not need automatic import.** The two are switched on separately and either one is a reason for the background work to run: a mobile that imports by hand and syncs gets background syncing, and switching automatic import off leaves the sync loop running. They share one Android foreground service, because the platform requires a service to post an ongoing notification and a second service would mean a second notification for one feature, but sharing a service is not sharing a switch. The service stops when neither is on.
 
 ## While the app is not on screen
+
+Automatic importing and syncing run on every platform through the same background passes. On a desktop the passes run while the app is open and stop when it closes; on a mobile they are kept alive by the native side and carry on with the app off screen.
 
 The loop that runs one sync pass after another lives on the native side of the mobile apps, not in the WebView, for the same reason the import loop does: the operating system throttles and then stops a WebView's timers once the app is backgrounded, so a mobile that imported photos in the background pushed none of them until somebody opened the app. Nothing in the WebView starts a sync on any platform now.
 
@@ -209,7 +211,7 @@ Workers are not contended either. A sync pass queues one `sync-database` task an
 | Sync while the app is not on screen | Not applicable | Not applicable | Android continuously, iOS when the system allows |
 | Fill a partial replica in on a loop | No, `psi replicate` again | No | Android continuously, iOS when the system allows |
 | Enable syncing and Wi-Fi-only settings | No, the command decides | Yes | Yes |
-| Refuse over cellular | No connection type is reported | No connection type is reported | Yes |
+| Refuse over cellular | No connection type is reported | Yes | Yes |
 | Consolidate an unrelated remote | Yes | Yes | No |
 
 The sync engine itself is platform-neutral: `syncDatabases` in `packages-zig/node-api-zig/src/lib/sync.zig`, reached on every platform through the `sync-database` background task. What differs per platform is only what decides to run one.
@@ -251,7 +253,7 @@ End to end:
 
 A mobile showing its lock screen cannot run the test at all, and it says so rather than failing later: from Android 12 an app that is not in the foreground may not start a foreground service, and an app launched behind a lock screen is not in the foreground.
 
-The **Only sync over Wi-Fi** restriction is not covered end to end. Driving it means changing the device's connection type to cellular, and reconfiguring a pool emulator's radios is forbidden: the emulators are shared with every other test run on the machine. The rule itself is covered by unit tests on both sides of the bridge, including the cellular case, which is where the decision is actually made.
+The **Only sync over Wi-Fi or wired network** restriction is not covered end to end. Driving it means changing the device's connection type to cellular, and reconfiguring a pool emulator's radios is forbidden: the emulators are shared with every other test run on the machine. The rule itself is covered by unit tests on both sides of the bridge, including the cellular case, which is where the decision is actually made.
 
 The background tests are Android only. Each of `50-background-sync`, `57-prefetch-retries`, `58-sync-waits-for-prefetch` and `59-prefetch-encrypted-replica` has an `IOS-NOT-COVERED.md` beside it saying what iOS cannot cover and why: a `BGProcessingTask` is scheduled by the system, and the only way to force one is an lldb command against a running app, which this harness cannot issue on Xcode 14.2.
 

@@ -6,16 +6,14 @@ import {
 } from "./auto-import-settings";
 
 //
-// What the mobile app should do about automatic import, worked out from its settings alone.
+// What the app should do about automatic import on every platform, worked out from its settings alone.
 //
-// This mirrors the desktop planner (packages-zig/node-api-zig/src/lib/auto-import-desktop.zig): the decisions
-// live here as plain functions so they can be unit tested, and the caller is left with the parts
-// that need the app (creating the database, starting the task, asking for the permission).
+// The decisions live here as plain functions so they can be unit tested, and the caller is left with the parts
+// that need the app (creating the database, starting the task, asking for a permission the platform has).
 //
-// It lives in this package rather than in the mobile frontend because the native background import
-// asks for the same plan, through a worker task, and the worker cannot reach the frontend's React
-// code. One planner answers both, so a mobile driving the import from its own service and a mobile
-// driving it from the WebView cannot decide different things.
+// It lives in this package rather than in the frontend because the native background import asks for the same
+// plan, through a worker task, and the worker cannot reach the frontend's React code. One planner answers both,
+// so a background loop and the page cannot decide different things.
 //
 
 //
@@ -80,7 +78,7 @@ export const WHOLE_LIBRARY_SOURCES: IAutoImportSource[] = [
 //
 // What the app should do about automatic import right now.
 //
-export interface IMobileAutoImportPlan {
+export interface IAutoImportPlan {
     // Whether the automatic import task should be running at all.
     shouldRun: boolean;
 
@@ -101,10 +99,10 @@ export interface IMobileAutoImportPlan {
 // watched. Running with no sources at all would import nothing while looking like it was working,
 // which is the worst of both.
 //
-export function planMobileAutoImport(
+export function planAutoImport(
     storedSettings: IAutoImportSettings | undefined,
     defaultDatabasePath: string | undefined
-): IMobileAutoImportPlan {
+): IAutoImportPlan {
     const settings = normaliseAutoImportSettings(storedSettings);
 
     if (settings.sources.length === 0) {

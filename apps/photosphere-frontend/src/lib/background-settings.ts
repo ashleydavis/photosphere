@@ -1,12 +1,12 @@
 import { TaskQueue, TaskStatus, TaskPriority } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import { normaliseAutoImportSettings, type IAutoImportSettings } from "api/src/lib/auto-import-settings";
-import { resolveAutoImportPauseMs, type IAutoImportFile } from "api/src/lib/auto-import-mobile";
+import { resolveAutoImportPauseMs, type IAutoImportFile } from "api/src/lib/auto-import";
 import { normaliseSyncSettings, resolveSyncPauseMs, type ISyncFile, type ISyncSettings } from "api/src/lib/sync-settings";
-import { planSyncDatabase, planSyncSeed, type IMobileSyncSettings } from "./background-work";
+import { planSyncDatabase, planSyncSeed, type IBackgroundSyncSettings } from "./background-work";
 
 //
-// The settings a mobile's background work plans from, read and written through the core's read-config and write-config tasks.
+// The settings the background work plans from on every platform, read and written through the core's read-config and write-config tasks.
 //
 // The page reaches a single setting through the core's get-config and set-config channels. The background work needs whole sections at
 // once (the automatic import settings with the database they write to, the syncing settings with the database the loop pushes), and
@@ -95,7 +95,7 @@ export async function readAutoImportSettings(): Promise<IAutoImportFile> {
 //
 // Reads the syncing section, reporting whether it has ever been written.
 //
-export async function readSyncSettings(): Promise<IMobileSyncSettings> {
+export async function readSyncSettings(): Promise<IBackgroundSyncSettings> {
     const outputs = await readConfig();
     const sync = outputs.sync;
     return {

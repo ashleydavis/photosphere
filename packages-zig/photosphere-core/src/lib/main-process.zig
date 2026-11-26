@@ -9,7 +9,6 @@
 //
 
 const std = @import("std");
-const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -34,7 +33,7 @@ const MainState = main_state.MainState;
 // The source tag every automatic import task is queued under, so it can be cancelled as a group when the setting is switched off or
 // the app quits.
 //
-const AUTO_IMPORT_TASK_SOURCE = node_api.auto_import_desktop.AUTO_IMPORT_TASK_SOURCE;
+const AUTO_IMPORT_TASK_SOURCE = api_zig.auto_import.AUTO_IMPORT_TASK_SOURCE;
 
 //
 // notify-database-opened: the payload is the path of the database the page opened. Records the database in the databases list (adding
@@ -293,186 +292,6 @@ fn enqueueEvictOriginals(state: *MainState, services: HandlerServices, io: std.I
 }
 
 //
-// Creates the default private database and records it. The same create-default-database task a mobile's background import runs: it
-// makes the database, lists it, and remembers it as the default. The main process queues it rather than writing the config and the
-// database list itself, so the default database comes to exist one way rather than one way per platform.
-//
-// The task is a child of the one running ensureAutoImport, so it takes that task's source.
-//
-fn createDefaultDatabase(services: TaskServices, timers: Timers, io: std.Io, arena: std.mem.Allocator, config_path: []const u8, database_path: []const u8) !void {
-    const log = services.log;
-    log.info(try std.fmt.allocPrint(arena, "Creating the default photo database at \"{s}\".", .{database_path}));
-    const task_id = try services.queueChild(io, arena, timers, "create-default-database", .{
-        .databasePath = database_path,
-        .configPath = config_path,
-
-        // The user switched automatic import on and photos are about to start arriving in this database, so it is requested on screen
-        // as well as on disk. The same thing a mobile's pass requests, put the same way: in the request that makes the database.
-        .open = true,
-    }, null);
-    const completion = try services.awaitTask(io, arena, timers, task_id);
-    if (completion.status != .succeeded) {
-        return utils.errors.throwError("Failed to create the default photo database at \"{s}\": {s}", .{ database_path, completion.error_message orelse "" });
-    }
-    try events.sendDatabasesChanged(services, io, arena);
-}
-
-//
-// What the `ensure-auto-import` task found automatic import should do, which the main thread does when the task ends.
-//
-pub const IEnsureAutoImportResult = struct {
-    // "none" when automatic import is already doing what the config says (or this is a mobile), "stop" when it should not run, and
-    // "start" when it should be started into the database, with the settings, given here.
-    action: []const u8,
-    // The database to import into, for "start".
-    databasePath: ?[]const u8 = null,
-    // The settings, as JSON, for "start".
-    settingsJson: ?[]const u8 = null,
-    // Whether the settings switch automatic import on, for "start".
-    enabled: bool = false,
-    // The sources to watch, for "start".
-    sources: ?std.json.Value = null,
-};
-
-//
-// Finds out what automatic import should be doing to match the current config, and creates the default database when it is needed.
-// Run whenever one of the automatic import settings is written, so switching the toggle takes effect without restarting the app.
-//
-// It runs as a task, so that it can wait for the task that creates the default database. The main thread does what it found when the
-// task ends (see applyEnsureAutoImport).
-//
-pub fn ensureAutoImport(services: TaskServices, timers: Timers, io: std.Io, arena: std.mem.Allocator, context: TaskContext, given: main_state.IEnsureAutoImportData) !IEnsureAutoImportResult {
-    const log = services.log;
-    // A mobile does not watch folders. Its automatic import is the background work the page starts and stops (startBackgroundImport and
-    // stopBackgroundImport), which reads the device photo library.
-    if (builtin.os.tag == .ios or builtin.abi.isAndroid()) {
-        return .{
-            .action = "none",
-        };
-    }
-
-    const config = try node_api.app_config.loadAppConfig(arena, io, log, context.config_path);
-    const plan = try node_api.auto_import_desktop.planDesktopAutoImport(arena, config, try node_utils.photo_folders.getDefaultPhotoFolders(arena, io), try node_api.database_base_dir.databaseBaseDir(arena, context.data_dir));
-
-    const planned_settings_json = try json.stringify(arena, try api_zig.auto_import_settings.autoImportSettingsToJson(arena, plan.settings));
-
-    if (!plan.shouldRun) {
-        return .{
-            .action = "stop",
-        };
-    }
-
-    // Already running against the right database with the same settings.
-    if (given.runningDatabasePath != null and std.mem.eql(u8, given.runningDatabasePath.?, plan.databasePath) and given.runningSettingsJson != null and std.mem.eql(u8, given.runningSettingsJson.?, planned_settings_json)) {
-        return .{
-            .action = "none",
-        };
-    }
-
-    var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
-    if (plan.isNewDefault or !(try node_api.media_file_database.checkDatabaseExists(arena, io, log, try node_api.database_base_dir.databaseBaseDir(arena, context.data_dir), plan.databasePath, services.nativeCaller(&requester_storage)))) {
-        try createDefaultDatabase(services, timers, io, arena, context.config_path, plan.databasePath);
-    }
-    return .{
-        .action = "start",
-        .databasePath = plan.databasePath,
-        .settingsJson = planned_settings_json,
-        .enabled = plan.settings.enabled,
-        .sources = try api_zig.auto_import_settings.autoImportSourcesToJson(arena, plan.settings.sources),
-    };
-}
-
-//
-// ensure-auto-import: the payload is what the main thread knows (IEnsureAutoImportData). Finds out what automatic import should do,
-// as ensureAutoImport does, and gives it back as the result. Queued by the main thread at the start and then on every tick of the
-// automatic import check (AUTO_IMPORT_RESTART_CHECK_MS), and when a setting of automatic import is written, as a task because it waits
-// for the task that creates the default database and only a task can wait. A failure is logged when the task ends (see handleTaskEnd).
-//
-pub fn ensureAutoImportTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const given = try std.json.parseFromValueLeaky(main_state.IEnsureAutoImportData, allocator, data, .{
-        .ignore_unknown_fields = true,
-    });
-    return try json.stringify(allocator, try ensureAutoImport(services, timers, io, allocator, context, given));
-}
-
-//
-// Forgets that automatic import is running, and which database and settings it was started with, and returns whether it was running.
-//
-fn clearAutoImportState(state: *MainState, allocator: std.mem.Allocator) bool {
-    const was_running = state.auto_import_running;
-    if (was_running) {
-        state.auto_import_running = false;
-        main_state.freeOwned(allocator, &state.auto_import_database_path);
-        main_state.freeOwned(allocator, &state.auto_import_settings_json);
-    }
-    return was_running;
-}
-
-//
-// Does what an ensure-auto-import task found automatic import should do: stops it, or starts it into the database it named.
-//
-fn applyEnsureAutoImport(state: *MainState, services: HandlerServices, io: std.Io, arena: std.mem.Allocator, result_json: []const u8) !void {
-    const log = services.log;
-    const allocator = main_state.stateAllocator();
-    const found = try std.json.parseFromSliceLeaky(IEnsureAutoImportResult, arena, result_json, .{
-        .ignore_unknown_fields = true,
-    });
-    if (std.mem.eql(u8, found.action, "stop")) {
-        if (clearAutoImportState(state, allocator)) {
-            log.info("Stopping automatic import.");
-            services.cancelTasks(io, arena, AUTO_IMPORT_TASK_SOURCE);
-        }
-        return;
-    }
-    if (!std.mem.eql(u8, found.action, "start") or state.stopping) {
-        return;
-    }
-    const database_path = found.databasePath orelse {
-        return utils.errors.throwError("The check of automatic import gave no database to import into.", .{});
-    };
-    if (clearAutoImportState(state, allocator)) {
-        services.cancelTasks(io, arena, AUTO_IMPORT_TASK_SOURCE);
-    }
-
-    log.info(try std.fmt.allocPrint(arena, "Starting automatic import into \"{s}\".", .{database_path}));
-    // The import task itself, fed by a scanner that watches the configured folders. There used to be a separate `auto-import` task that
-    // ran a loop and started one of these for every handful of photos it released; one task doing both is what removed that cost.
-    const session_id = try state.uuid_generator.uuidGenerator().generate(arena, io);
-    const job_id = try std.mem.concat(arena, u8, &.{ "auto-import:", database_path });
-    const import_data = try json.stringify(arena, .{
-        .paths = [_][]const u8{},
-        .storageDescriptor = .{
-            .databasePath = database_path,
-        },
-        .sessionId = session_id,
-        .dryRun = false,
-        .options = .{
-            .auto = true,
-            .enabled = found.enabled,
-            .sources = found.sources orelse std.json.Value{ .array = std.json.Array.init(arena) },
-        },
-        .job = .{
-            .id = job_id,
-            .name = "Automatic import",
-            .cancelSource = AUTO_IMPORT_TASK_SOURCE,
-        },
-    });
-    const task_id = try state.uuid_generator.uuidGenerator().generate(arena, io);
-
-    // What is remembered about the task is recorded before the task is queued, because its end is told apart from a manual import's
-    // by the remembered id.
-    try main_state.setOwned(allocator, &state.auto_import_task_id, task_id);
-    state.auto_import_running = true;
-    try main_state.setOwned(allocator, &state.auto_import_database_path, database_path);
-    try main_state.setOwned(allocator, &state.auto_import_settings_json, found.settingsJson);
-    errdefer {
-        _ = clearAutoImportState(state, allocator);
-        main_state.freeOwned(allocator, &state.auto_import_task_id);
-    }
-    try services.addTask(io, arena, task_id, "import-assets", AUTO_IMPORT_TASK_SOURCE, import_data, .background);
-}
-
-//
 // Told when any task ends, on the main thread. Records what the database notifications, the background passes and the check of
 // automatic import found, resets syncing when a sync ends, starts the eviction of originals after a sync that succeeded, tells the user
 // when an import or a replication fails, registers the destination of a replication that worked, and notices when automatic import
@@ -518,6 +337,21 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
             log.err(try std.fmt.allocPrint(arena, "The background {s} pass failed: {s}", .{ pass.label(), errorMessageOrUnknown(end.error_message) }));
         }
         state.backgroundPassEnded(services, timers, io, allocator, pass, result);
+
+        // Records the database the import pass writes to, and forgets it when the pass finished because automatic import was
+        // switched off, so a sync of that database can drop the originals it pushed (see enqueueEvictOriginals).
+        if (pass == .import) {
+            if (result) |import_result| {
+                if (import_result.finished) {
+                    if (state.auto_import_database_path != null) {
+                        main_state.freeOwned(allocator, &state.auto_import_database_path);
+                    }
+                }
+                else if (import_result.databasePath.len > 0) {
+                    try main_state.setOwned(allocator, &state.auto_import_database_path, import_result.databasePath);
+                }
+            }
+        }
     }
     if (std.mem.eql(u8, end.task_type, "notify-database-opened") and end.status == .succeeded) {
         const database_path = try std.json.parseFromSliceLeaky([]const u8, arena, end.input_json, .{});
@@ -533,23 +367,6 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
     if (std.mem.eql(u8, end.task_type, "startBackgroundImport") and end.status == .succeeded) {
         state.startBackgroundWork(services, timers, io, allocator);
         log.info("Started the background automatic import.");
-    }
-    if (std.mem.eql(u8, end.task_type, "ensure-auto-import")) {
-        state.auto_import_starting = false;
-        if (end.status == .failed) {
-            // The error is logged as 'Error starting automatic import' at startup and 'Error restarting automatic import' on the timer.
-            // A task's end carries the text of the error and not the error, so the text follows the message.
-            const given = std.json.parseFromSliceLeaky(main_state.IEnsureAutoImportData, arena, end.input_json, .{
-                .ignore_unknown_fields = true,
-            }) catch main_state.IEnsureAutoImportData{};
-            const what = if (given.restarting) "restarting" else "starting";
-            log.err(try std.fmt.allocPrint(arena, "Error {s} automatic import: {s}", .{ what, errorMessageOrUnknown(end.error_message) }));
-        }
-        else if (end.status == .succeeded) {
-            if (end.result_json) |text| {
-                try applyEnsureAutoImport(state, services, io, arena, text);
-            }
-        }
     }
     if (std.mem.eql(u8, end.task_type, "sync-database")) {
         state.syncStopped();
@@ -571,23 +388,6 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
         }
     }
     if (std.mem.eql(u8, end.task_type, "import-assets")) {
-        var is_auto_import_task = false;
-        if (state.auto_import_task_id) |auto_import_task_id| {
-            is_auto_import_task = std.mem.eql(u8, auto_import_task_id, end.task_id);
-        }
-        if (is_auto_import_task) {
-            // Automatic import is not meant to end while the setting is on, so this is either a crash or a cancellation. Either
-            // way the app owns restarting it: a task that died silently looks exactly like automatic import finding nothing to
-            // do, and used to stay dead until the app was restarted.
-            state.auto_import_running = false;
-            main_state.freeOwned(allocator, &state.auto_import_task_id);
-            main_state.freeOwned(allocator, &state.auto_import_database_path);
-            main_state.freeOwned(allocator, &state.auto_import_settings_json);
-            if (end.status != .succeeded) {
-                log.err(try std.fmt.allocPrint(arena, "Automatic import stopped: {s}", .{errorMessageOrUnknown(end.error_message)}));
-            }
-            return;
-        }
         if (end.status == .succeeded) {
             log.event("Import task completed");
         }

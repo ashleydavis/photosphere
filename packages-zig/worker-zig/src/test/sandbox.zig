@@ -97,7 +97,7 @@ pub const Sandbox = struct {
         self.environment = try test_environment.setupEnvironment(self.io);
         const allocator = self.arena.allocator();
         self.previousCwd = try std.process.currentPathAlloc(self.io, allocator);
-        self.tempDir = try temp_dirs.makeTempDir(allocator, self.io, "mobile-worker");
+        self.tempDir = try temp_dirs.makeTempDir(allocator, self.io, "worker");
         try std.process.setCurrentPath(self.io, self.tempDir);
         // The config file the handlers read is in the config directory, which is the sandbox for the length of the test.
         try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", self.tempDir);

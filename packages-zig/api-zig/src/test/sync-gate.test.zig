@@ -53,6 +53,15 @@ test "computeSyncAllowed returns true when Wi-Fi-only is on and the connection i
     }));
 }
 
+test "computeSyncAllowed returns true when Wi-Fi-only is on and the connection is wired" {
+    try std.testing.expectEqual(true, computeSyncAllowed(.{
+        .syncEnabled = true,
+        .syncOnlyOnWifi = true,
+        .connected = true,
+        .connectionType = .wired,
+    }));
+}
+
 test "computeSyncAllowed returns true when Wi-Fi-only is on and the connection type is unknown (desktop/web)" {
     try std.testing.expectEqual(true, computeSyncAllowed(.{
         .syncEnabled = true,
@@ -68,6 +77,27 @@ test "computeSyncAllowed returns true when Wi-Fi-only is off and the connection 
         .syncOnlyOnWifi = false,
         .connected = true,
         .connectionType = .cellular,
+    }));
+}
+
+test "computeSyncAllowed returns true when Wi-Fi-only is off and the connection is wifi, wired or unknown" {
+    try std.testing.expectEqual(true, computeSyncAllowed(.{
+        .syncEnabled = true,
+        .syncOnlyOnWifi = false,
+        .connected = true,
+        .connectionType = .wifi,
+    }));
+    try std.testing.expectEqual(true, computeSyncAllowed(.{
+        .syncEnabled = true,
+        .syncOnlyOnWifi = false,
+        .connected = true,
+        .connectionType = .wired,
+    }));
+    try std.testing.expectEqual(true, computeSyncAllowed(.{
+        .syncEnabled = true,
+        .syncOnlyOnWifi = false,
+        .connected = true,
+        .connectionType = .unknown,
     }));
 }
 
