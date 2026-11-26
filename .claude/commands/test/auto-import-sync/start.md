@@ -4,7 +4,7 @@ description: Reset the Android auto import and sync test and start a new run. As
 
 # Start the auto import and sync test
 
-Tests automatic import and syncing on a real Android mobile: a database in an S3 bucket, a partial replica of it on the mobile as the default database, automatic import into the replica and background syncing to the bucket. Check on a run with `/test:auto-import-sync:check`.
+Tests automatic import and syncing on a real Android mobile: a database in an S3 bucket, a partial replica of it on the mobile as the default database, automatic import into the replica and background syncing to the bucket. Check on a run with `/test:auto-import-sync:check`, and verify it with `/test:auto-import-sync:verify` once it has finished.
 
 - The bucket is `photosphere-test-bucket-1`.
 - Each run's database is a folder in it named `psi-test-<number>`. The current run's folder is the only `psi-test-` folder in the bucket: list the bucket's top level to find it. The new run's folder is the next number, or `psi-test-1` when there is none.
@@ -62,7 +62,7 @@ The reset deletes data from a real device, so it needs two separate confirmation
     - **Set the default.** Press **⋮** on `my-photos` and **Set as default**. Check the mobile's `files/config.toml` has `default_database_path = "my-photos"` under `[auto_import]`.
     - **Start automatic import and syncing.** Open the menu, **Configuration**. Turn on **Automatic import**, press **Allow all** for photos and **Allow** for notifications. Turn on **Enable syncing**. Check `files/config.toml` has the `[auto_import]` and `[sync]` tables, each with `enabled = true`.
     - **Open the database.** Open the menu, **Open database**, **my-photos**, so the gallery shows the photos as automatic import adds them. Import and syncing run whether it is open or not.
-4. Tell the human the run is underway: what was set up, the new folder's name, that sync passes run every five minutes and that the mobile must stay on Wi-Fi.
+4. Tell the human the run is underway: what was set up, the new folder's name, that sync passes run every five minutes and that the mobile must stay on Wi-Fi. Tell them to run `/test:auto-import-sync:check` to see how far it has got, and `/test:auto-import-sync:verify` once the check says it has finished.
 
 ## Walking the human through the mobile steps
 

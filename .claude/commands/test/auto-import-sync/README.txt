@@ -6,6 +6,7 @@ Commands
 
 - /test:auto-import-sync:start (start.md): resets the last run and starts a new one. It first asks whether to run automatically or manually. Automatic does every step, including tapping through the app on the mobile. Manual does the reset and the setup on this machine, then walks you through the steps on the mobile one at a time. It shows what the reset deletes and asks twice before deleting anything.
 - /test:auto-import-sync:check (check.md): reports whether import and sync are still going or have finished, with the counts, anything missing and how long each took. It only reads.
+- /test:auto-import-sync:verify (verify.md): checks the result once import and sync have finished. It ends at once when either is still going. It copies the replica off the mobile into tmp/, writes a CSV of every asset imported on the mobile to docs/testing/auto-import-sync/, checks each row against the remote database and marks it with a tick and the remote's hash, runs a full verify of the local and the remote database, and compares the two. It ends with a short summary of the CSV's path, how many assets the remote confirms, the verify results and whether the databases match.
 
 What it sets up
 
@@ -31,6 +32,6 @@ What the check compares
 Things it never does
 
 - It touches only photosphere-test-bucket-1.
-- It never copies files off the mobile. It reads names, settings and logs with adb shell run-as.
+- It never copies files off the mobile, except that /test:auto-import-sync:verify copies the my-photos replica into tmp/ so the local database can be verified. Everything else reads names, settings and logs with adb shell run-as.
 - It never writes S3 credentials to a file or prints them. A command that needs them takes them from the vault for that one command.
 - It does not use Consolidate into remote. That uploads the whole library from the mobile in one go, where this test lets syncing do it in the background.
