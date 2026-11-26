@@ -337,7 +337,7 @@ test "background passes are limited to leave a worker for their child tasks" {
     try std.testing.expectEqual(@as(usize, 3), MainState.backgroundPassesAllowed(4, false));
 }
 
-test "a background pass is queued only while it is switched on and not running, and the passes are queued separately" {
+test "a background pass is queued only while it is switched on, not running, and allowed its workers" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -357,7 +357,11 @@ test "a background pass is queued only while it is switched on and not running, 
             state.queueDueBackgroundPass(counted.interface(), timers, main_io, main_state.stateAllocator(), .import);
             try std.testing.expectEqual(@as(usize, 0), counted.added);
             state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
-            try std.testing.expect(state.background_passes_running[sync_index]);
+            // The import holds the worker its step runs on and one for the tasks that step queues, so the sync is only allowed
+            // beside it when the machine has the workers for both. On a smaller machine it waits, and runs once the import ends.
+            const cpu_count = std.Thread.getCpuCount() catch 1;
+            const sync_allowed_beside_import = MainState.backgroundPassesAllowed(cpu_count, true) >= 2;
+            try std.testing.expectEqual(sync_allowed_beside_import, state.background_passes_running[sync_index]);
             state.backgroundPassEnded(services, timers, main_io, main_state.stateAllocator(), .import, .{
                 .gapMs = 60_000,
                 .finished = false,
@@ -367,6 +371,9 @@ test "a background pass is queued only while it is switched on and not running, 
             try std.testing.expect(!state.background_passes_running[import_index]);
             try std.testing.expect(state.background_passes_on[import_index]);
             try std.testing.expectEqual(background_work.ReplicaState.unknown, state.prefetch_replica_state);
+            // The sync that waited beside the import is queued now that the import has ended.
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            try std.testing.expect(state.background_passes_running[sync_index]);
         }
     };
     try app.onMainThread(@as(u8, 0), Check.run);
