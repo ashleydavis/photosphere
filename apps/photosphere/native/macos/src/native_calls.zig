@@ -126,12 +126,15 @@ fn macosConnectionType(allocator: std.mem.Allocator) ![]const u8 {
     };
     var size: usize = 0;
     if (mac.sysctl(&mib, mib.len, null, &size, null, 0) < 0) {
-        return toJsonText(classifyMacosConnection(null, false, false));
+        // The routing table could not be read at all, so the connection is unknown. Answering none would say the machine is
+        // offline and stop every sync and prefetch, which failed the macOS smoke tests.
+        return toJsonText(.unknown);
     }
     const buffer = try allocator.alloc(u8, size);
     defer allocator.free(buffer);
     if (mac.sysctl(&mib, mib.len, buffer.ptr, &size, null, 0) < 0) {
-        return toJsonText(classifyMacosConnection(null, false, false));
+        // The routing table could not be read at all, so the connection is unknown rather than offline.
+        return toJsonText(.unknown);
     }
 
     var offset: usize = 0;
@@ -146,6 +149,7 @@ fn macosConnectionType(allocator: std.mem.Allocator) ![]const u8 {
         }
         offset += message_length;
     }
+    // The routing table was read and names no default route, so the machine really is offline.
     return toJsonText(classifyMacosConnection(null, false, false));
 }
 
@@ -178,25 +182,29 @@ fn isDefaultRouteDestination(message: []const u8, address_bits: c_int) bool {
 // Classifies the MacOS interface of the given name by reading its media type with SIOCGIFMEDIA, which
 // reports IFM_IEEE80211 for a wireless interface and IFM_ETHER for an Ethernet one.
 //
+// Every failure here means a default route exists but its interface or media type cannot be read. The connection is then
+// unknown, not none: none says the machine is offline, which stops every sync and prefetch. The macOS smoke tests run on a
+// machine with a default route and need syncing to proceed.
+//
 fn classifyMacosInterface(index: c_ushort) ![]const u8 {
     var name_buffer: [mac.IF_NAMESIZE]u8 = @splat(0);
     const name = mac.if_indextoname(index, &name_buffer);
     if (name == null) {
-        return toJsonText(classifyMacosConnection(null, false, false));
+        return toJsonText(.unknown);
     }
 
     const socket = mac.socket(mac.AF_INET, mac.SOCK_DGRAM, 0);
     if (socket < 0) {
-        return toJsonText(classifyMacosConnection(null, false, false));
+        return toJsonText(.unknown);
     }
     defer _ = mac.close(socket);
 
     var request: mac.struct_ifmediareq = std.mem.zeroes(mac.struct_ifmediareq);
     _ = std.fmt.bufPrint(request.ifm_name[0..], "{s}", .{std.mem.span(name)}) catch {
-        return toJsonText(classifyMacosConnection(null, false, false));
+        return toJsonText(.unknown);
     };
     if (mac.ioctl(socket, mac.SIOCGIFMEDIA, &request) < 0) {
-        return toJsonText(classifyMacosConnection(null, false, false));
+        return toJsonText(.unknown);
     }
 
     const media_type = request.ifm_current & mac.IFM_NMASK;
