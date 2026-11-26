@@ -337,10 +337,6 @@ fn addPackageModules(
             }
             module.addImport("openssl", try translateHeader(b, target, aws.include_directory, encryption_openssl_header));
         }
-        if (std.mem.eql(u8, package.name, "photosphere-core") and target.result.os.tag == .macos) {
-            // IOKit, whose power assertion macos-native-calls.zig takes to hold the computer awake, which a static library does not record.
-            module.linkFramework("IOKit", .{});
-        }
         if (std.mem.eql(u8, package.name, "tools-zig")) {
             // The sRGB ICC profile ImageMagick ships (the same bytes it builds in as its own sRGB profile), which Image.resize converts
             // a picture into before it strips the picture's profiles. Embedded so the program reads it from no path on the machine.
@@ -399,6 +395,39 @@ fn addPackageModules(
             module.addImport("openssl", try translateHeader(b, target, aws.include_directory, lan_share_openssl_header));
         }
     }
+
+    // Each desktop platform's native-call code lives in that platform's native app project, wired here as a module the core imports
+    // on that platform alone. Windows and macOS have no native-call callback into their native apps, so the core makes these calls
+    // itself; Linux and the mobiles answer through the callback and keep their code in their native apps directly.
+    const macos_native_calls = b.addModule("macos-native-calls", .{
+        .root_source_file = b.path("apps/photosphere/native/macos/src/native_calls.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    macos_native_calls.addImport("ziggy", ziggy_core);
+    macos_native_calls.addImport("api-zig", modules.get("api-zig").?);
+    macos_native_calls.addImport("utils-zig", modules.get("utils-zig").?);
+    if (target.result.os.tag == .macos) {
+        // IOKit, whose power assertion this code takes to hold the computer awake, which a static library does not record.
+        macos_native_calls.linkFramework("IOKit", .{});
+    }
+    try modules.put("macos-native-calls", macos_native_calls);
+
+    const windows_native_calls = b.addModule("windows-native-calls", .{
+        .root_source_file = b.path("apps/photosphere/native/windows/src/native_calls.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    windows_native_calls.addImport("ziggy", ziggy_core);
+    windows_native_calls.addImport("api-zig", modules.get("api-zig").?);
+    windows_native_calls.addImport("utils-zig", modules.get("utils-zig").?);
+    try modules.put("windows-native-calls", windows_native_calls);
+
+    modules.get("photosphere-core").?.addImport("macos-native-calls", macos_native_calls);
+    modules.get("photosphere-core").?.addImport("windows-native-calls", windows_native_calls);
+
     return modules;
 }
 
@@ -641,6 +670,23 @@ fn addUnitTests(
             const import_path = try b.allocator.dupe(u8, entry.path);
             std.mem.replaceScalar(u8, import_path, std.fs.path.sep, '/');
             try test_root_source.appendSlice(b.allocator, b.fmt("    _ = @import(\"{s}/src/test/{s}\");\n", .{ package.name, import_path }));
+        }
+    }
+    // The native-call tests live with each desktop platform's native app project, under a module name rather than a package.
+    for ([_][]const u8{ "macos", "windows" }) |platform| {
+        const module_name = b.fmt("{s}-native-calls", .{platform});
+        _ = test_files.addCopyDirectory(b.path(b.fmt("apps/photosphere/native/{s}/src", .{platform})), b.fmt("{s}/src", .{module_name}), .{});
+        var test_dir = try b.build_root.handle.openDir(b.graph.io, b.fmt("apps/photosphere/native/{s}/src/test", .{platform}), .{ .iterate = true });
+        defer test_dir.close(b.graph.io);
+        var walker = try test_dir.walk(b.allocator);
+        defer walker.deinit();
+        while (try walker.next(b.graph.io)) |entry| {
+            if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".test.zig")) {
+                continue;
+            }
+            const import_path = try b.allocator.dupe(u8, entry.path);
+            std.mem.replaceScalar(u8, import_path, std.fs.path.sep, '/');
+            try test_root_source.appendSlice(b.allocator, b.fmt("    _ = @import(\"{s}/src/test/{s}\");\n", .{ module_name, import_path }));
         }
     }
     try test_root_source.appendSlice(b.allocator, "}\n");

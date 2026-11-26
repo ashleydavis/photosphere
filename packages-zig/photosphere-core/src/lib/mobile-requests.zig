@@ -6,7 +6,7 @@
 // user, and the thread that handles the page's messages must not wait for that. Each calls the native app through the core's one native
 // call callback, by the method's name, and passes the native app's result to the page unchanged. A platform that has no such
 // callback answers with an error that says so, except that on Windows, whose native app has none, the core answers
-// startBackgroundImport's notification permission itself (windows-native-calls.zig).
+// startBackgroundImport's notification permission itself (windows-native-calls).
 //
 // A test can stage the outcome of the share sheet: exportFile and exportFiles pass a "testOutcome" ("shared" or "cancelled") on to the
 // native app, which then skips its sheet and completes the export as that outcome. The request is passed on unchanged apart from that.

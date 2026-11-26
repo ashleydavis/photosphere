@@ -19,8 +19,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
-const windows_native_calls = @import("windows-native-calls.zig");
-const macos_native_calls = @import("macos-native-calls.zig");
+const windows_native_calls = @import("windows-native-calls");
+const macos_native_calls = @import("macos-native-calls");
 
 const TaskContext = ziggy.task_runner.TaskContext;
 const TaskServices = ziggy.task_runner.TaskServices;
@@ -700,7 +700,7 @@ pub fn callNativeApp(services: TaskServices, io: std.Io, allocator: std.mem.Allo
 
 //
 // Makes a native call when the native app has no native call callback. Ziggy's Windows native app and MacOS bridge have none, so on
-// Windows and MacOS the task makes the calls a desktop can do itself (windows-native-calls.zig, macos-native-calls.zig), on the task's
+// Windows and MacOS the task makes the calls a desktop can do itself (windows-native-calls, macos-native-calls), on the task's
 // thread. Anywhere else, and for a call only a mobile can make, it is an error that names the method.
 //
 pub fn callOnDesktop(allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) ![]const u8 {

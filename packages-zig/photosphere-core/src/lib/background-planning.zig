@@ -53,7 +53,7 @@ fn isCancelledOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) 
 //
 // Calls the native app for the connection type through the native call callback, by the method `networkConnectionType`, and gives
 // its result, which is a JSON string such as "wifi". On Windows, whose native app has no such callback, the core makes the call itself
-// (windows-native-calls.zig). Another platform with no such callback, and a native app that cannot make the call, are errors with a
+// (windows-native-calls). Another platform with no such callback, and a native app that cannot make the call, are errors with a
 // sentence the user can act on. The network status host's pointer is the task's services. The call is made with no timers, as the
 // network status shim has none to give.
 //
