@@ -25,6 +25,7 @@ const IFileInfo = storage_zig.storage.IFileInfo;
 const LARGE_FILE_TIMEOUT = api.constants.LARGE_FILE_TIMEOUT;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const openStorage = open_storage.openStorage;
+const closeStorage = open_storage.closeStorage;
 const computeAssetHash = hash.computeAssetHash;
 
 //
@@ -289,6 +290,8 @@ pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, lo
     const fileName = node.name orelse "";
 
     const opened = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
+    defer closeStorage(opened);
+
     const storage = opened.storage;
 
     var infoOperation: retry_operations.InfoOperation("() => storage.info(fileName)") = .{ .allocator = allocator, .storage = storage, .fileName = fileName };

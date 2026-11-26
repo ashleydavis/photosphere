@@ -208,6 +208,16 @@ pub const CloudStorage = struct {
     }
 
     //
+    // Shuts down the S3 client's threads, connections and file descriptors, which belong to the
+    // client and not to the allocator this storage was allocated with, so freeing that allocator's
+    // memory never releases them. The owner of the storage calls it once, when it is finished with
+    // the storage, and the storage is not used afterwards.
+    //
+    pub fn deinit(self: *CloudStorage) void {
+        self.s3.deinit();
+    }
+
+    //
     // Builds the S3 client, and tells the signer not to hash request bodies.
     //
     // Signature version 4 normally covers the body: the signer reads the whole request payload and

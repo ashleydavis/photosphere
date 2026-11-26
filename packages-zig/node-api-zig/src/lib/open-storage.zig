@@ -5,6 +5,7 @@ const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
 const resolve_storage_credentials = @import("resolve-storage-credentials.zig");
 const IStorage = storage_zig.storage.IStorage;
+const CloudStorage = storage_zig.cloud_storage.CloudStorage;
 const INativeCaller = utils.native_caller.INativeCaller;
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
 const IEncryptionKeyPem = encryption.key_utils.IEncryptionKeyPem;
@@ -50,6 +51,13 @@ pub const IOpenStorageResult = struct {
     // The Google geocoding API key, when configured for this path.
     //
     googleApiKey: ?[]const u8,
+
+    //
+    // The S3 storage underneath the wrappers, or null for a file system path. It owns an S3 client
+    // whose threads and file descriptors outlive the allocator's memory, so deinit must be called
+    // to release them.
+    //
+    cloudStorage: ?*CloudStorage,
 };
 
 //
@@ -86,5 +94,17 @@ pub fn openStorage(
         .s3Config = credentials.s3Config,
         .storageOptions = storageOptions,
         .googleApiKey = credentials.googleApiKey,
+        .cloudStorage = created.cloudStorage,
     };
+}
+
+//
+// Releases what a storage opened by openStorage holds outside the allocator's memory: the S3
+// client of an S3 path, and nothing for a file system path. A handler calls it once, when it is
+// finished with the storage, and uses neither storage nor rawStorage afterwards.
+//
+pub fn closeStorage(opened: IOpenStorageResult) void {
+    if (opened.cloudStorage) |cloudStorage| {
+        cloudStorage.deinit();
+    }
 }

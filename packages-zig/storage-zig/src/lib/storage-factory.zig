@@ -74,6 +74,13 @@ pub const ICreateStorageResult = struct {
     // The storage type identifier (e.g. "fs", "s3", "encrypted-fs").
     //
     @"type": []const u8,
+
+    //
+    // The S3 storage underneath the wrappers, or null for a file system path. It owns an S3 client
+    // whose threads and file descriptors outlive the allocator's memory, so the owner of the
+    // storage must call its deinit to release them.
+    //
+    cloudStorage: ?*CloudStorage,
 };
 
 //
@@ -124,6 +131,7 @@ pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, baseDir: []const 
     var storage: IStorage = undefined;
     var normalizedPath: []const u8 = undefined;
     var storageType: []const u8 = undefined;
+    var cloudStorageCreated: ?*CloudStorage = null;
 
     // Check for storage prefix
     if (std.mem.startsWith(u8, rootPath, "fs:")) {
@@ -139,6 +147,7 @@ pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, baseDir: []const 
         const cloudStorage = try allocator.create(CloudStorage);
         cloudStorage.* = CloudStorage.init("s3:", s3Config);
         storage = cloudStorage.storage();
+        cloudStorageCreated = cloudStorage;
         normalizedPath = s3Path;
         storageType = "s3";
     }
@@ -177,5 +186,6 @@ pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, baseDir: []const 
         .rawStorage = rawStorage.storage(),
         .normalizedPath = normalizedPath,
         .@"type" = storageType,
+        .cloudStorage = cloudStorageCreated,
     };
 }
