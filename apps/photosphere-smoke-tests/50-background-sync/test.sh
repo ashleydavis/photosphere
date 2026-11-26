@@ -165,6 +165,9 @@ wait_for_asset_count() {
     done
 
     log_error "The app's database never reached $expected original(s); it holds $(asset_count)"
+    # The import stopped without an error, so the app's stacks say where it is waiting. The macOS arm64 run left it there until
+    # this timeout and the app's verbose log ended at "Valid image", with no line after it.
+    dump_app_stacks "$TMP_DIR"
     "${PLATFORM}_dump_background_diagnostics"
     return 1
 }
