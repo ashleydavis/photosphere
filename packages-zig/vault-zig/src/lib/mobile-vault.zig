@@ -58,13 +58,30 @@ pub const MobileVault = struct {
     };
 
     //
+    // Asks the shell for the keychain, turning the "ShuttingDown" answer a native call gets while the app stops into a cancellation.
+    // Ziggy answers every native call still waiting with that reason when the core stops, and the app logged it as an error:
+    // "Error listing vault secrets: secureStoreKeys failed: ShuttingDown". The Android smoke test 17-news-notifications stops the
+    // app with that list in flight and fails a scenario on any error line.
+    //
+    fn callHost(self: *MobileVault, allocator: std.mem.Allocator, io: std.Io, method: []const u8, request_json: []const u8) ![]const u8 {
+        return self.host.call(io, allocator, method, request_json) catch |err| {
+            // Only a thrown error has the message read below; a stale message from an earlier call must not turn another error,
+            // such as running out of memory, into a cancellation.
+            if (err == error.Thrown and std.mem.endsWith(u8, errors.lastErrorMessage(), ": ShuttingDown")) {
+                return error.Cancelled;
+            }
+            return err;
+        };
+    }
+
+    //
     // Reads one keychain item, or null when there is none.
     //
     fn readItem(self: *MobileVault, allocator: std.mem.Allocator, io: std.Io, key: []const u8) !?[]const u8 {
         const request = try std.json.Stringify.valueAlloc(allocator, .{
             .key = key,
         }, .{});
-        const answer = try self.host.call(io, allocator, "secureStoreGet", request);
+        const answer = try self.callHost(allocator, io, "secureStoreGet", request);
         const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, answer, .{}) catch {
             return errors.throwError("The mobile's answer to secureStoreGet could not be read.", .{});
         };
@@ -87,7 +104,7 @@ pub const MobileVault = struct {
             .key = key,
             .value = value,
         }, .{});
-        _ = try self.host.call(io, allocator, "secureStoreSet", request);
+        _ = try self.callHost(allocator, io, "secureStoreSet", request);
     }
 
     //
@@ -97,14 +114,14 @@ pub const MobileVault = struct {
         const request = try std.json.Stringify.valueAlloc(allocator, .{
             .key = key,
         }, .{});
-        _ = try self.host.call(io, allocator, "secureStoreDelete", request);
+        _ = try self.callHost(allocator, io, "secureStoreDelete", request);
     }
 
     //
     // The name of every keychain item.
     //
     fn readKeys(self: *MobileVault, allocator: std.mem.Allocator, io: std.Io) ![]const []const u8 {
-        const answer = try self.host.call(io, allocator, "secureStoreKeys", "null");
+        const answer = try self.callHost(allocator, io, "secureStoreKeys", "null");
         const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, answer, .{}) catch {
             return errors.throwError("The mobile's answer to secureStoreKeys could not be read.", .{});
         };

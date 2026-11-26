@@ -100,6 +100,17 @@ test "MobileVault: get returns null for a secret that is not there" {
     try std.testing.expect(try vault.get(arena.allocator(), std.testing.io, "missing") == null);
 }
 
+test "MobileVault: a native call the shutdown failed is a cancellation, not an error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var host = MemoryHost.init(arena.allocator());
+    // Ziggy answers a native call still waiting as the core stops with this reason, after the method's name. It reached the app as
+    // "Error listing vault secrets: secureStoreKeys failed: ShuttingDown" and failed the Android smoke scenario 17-news-notifications.
+    host.failure = "secureStoreKeys failed: ShuttingDown";
+    var mobile = MobileVault.init(host.requester());
+    try std.testing.expectError(error.Cancelled, mobile.vault().list(arena.allocator(), std.testing.io));
+}
+
 test "MobileVault: set then get returns the name, type and value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

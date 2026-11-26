@@ -23,7 +23,12 @@ pub fn logExceptions(comptime handler: TaskHandler, comptime message: []const u8
         fn run(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, payload: std.json.Value) anyerror!?[]const u8 {
             const log = services.log;
             return handler(services, timers, io, allocator, context, payload) catch |err| {
-                log.exception(message, err);
+                // A task cancelled because the app is stopping is not an exception. The Android smoke suite fails a scenario on any
+                // error line, and it logged one for a secrets list the shutdown cancelled: "Error listing vault secrets:
+                // secureStoreKeys failed: ShuttingDown" in scenario 17-news-notifications.
+                if (err != error.Cancelled) {
+                    log.exception(message, err);
+                }
                 return err;
             };
         }
