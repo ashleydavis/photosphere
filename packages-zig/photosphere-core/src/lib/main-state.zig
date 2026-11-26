@@ -289,13 +289,25 @@ pub const MainState = struct {
     //
     // How many background passes may run at once. A pass runs as a task and waits for the child tasks that plan it and run its
     // steps, keeping its worker through the wait. Ziggy runs a child on the same pool as its parent, so when every worker holds
-    // a waiting pass there is none left to run the children and the queue stops. The macOS app gives the pool one worker per
-    // processor, and the arm64 CI runner has three, which is exactly the number of passes: all three ran and every pass hung,
-    // failing the macOS smoke tests. A pass is queued only while one worker is left for the children.
+    // a waiting pass there is none left to run the children and the queue stops.
     //
     pub fn backgroundPassConcurrencyLimit() usize {
-        const cpu_count = std.Thread.getCpuCount() catch return 1;
-        return @min(@as(usize, background_work.PASS_COUNT), @max(cpu_count - 1, 1));
+        return backgroundPassesAllowed(std.Thread.getCpuCount() catch 1, false);
+    }
+
+    //
+    // How many background passes may run at once on a machine with this many processors, when an import pass is one of them. The
+    // import's step queues hash-file and upload-asset tasks, so an import holds three workers: its own task, its step and one of the
+    // step's tasks. Another pass beside it left the import's task with no worker on the arm64 CI runner's three threads, and the
+    // import hung until the app stopped: the stacks showed the import step waiting in importAssetsHandler while the import pass and
+    // the sync pass waited for their own children. With an import among the passes, two fewer workers are therefore available than
+    // the processors; without one, one fewer.
+    //
+    pub fn backgroundPassesAllowed(cpu_count: usize, import_takes_part: bool) usize {
+        if (import_takes_part) {
+            return @min(@as(usize, background_work.PASS_COUNT), @max(cpu_count -| 2, 1));
+        }
+        return @min(@as(usize, background_work.PASS_COUNT), @max(cpu_count -| 1, 1));
     }
 
     //
@@ -322,8 +334,9 @@ pub const MainState = struct {
         if (!self.background_passes_on[index] or self.background_passes_running[index]) {
             return;
         }
-        if (self.runningBackgroundPasses() >= backgroundPassConcurrencyLimit()) {
-            // Every worker but one is held by a pass already, so this pass tries again shortly rather than stopping the queue.
+        const import_takes_part = pass == .import or self.background_passes_running[@intFromEnum(background_work.Pass.import)];
+        if (self.runningBackgroundPasses() >= backgroundPassesAllowed(std.Thread.getCpuCount() catch 1, import_takes_part)) {
+            // The running passes hold the workers their children need, so this pass tries again shortly rather than stopping the queue.
             self.scheduleBackgroundPass(timers, io, log, pass, 1_000);
             return;
         }

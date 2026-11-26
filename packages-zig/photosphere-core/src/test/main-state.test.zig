@@ -329,6 +329,12 @@ test "background passes are limited to leave a worker for their child tasks" {
     const limit = MainState.backgroundPassConcurrencyLimit();
     try std.testing.expect(limit >= 1);
     try std.testing.expect(limit <= @as(usize, background_work.PASS_COUNT));
+    // An import pass also holds the worker its step runs on and one for the tasks that step queues.
+    try std.testing.expectEqual(@as(usize, 1), MainState.backgroundPassesAllowed(3, true));
+    try std.testing.expectEqual(@as(usize, 2), MainState.backgroundPassesAllowed(4, true));
+    try std.testing.expectEqual(@as(usize, 3), MainState.backgroundPassesAllowed(8, true));
+    try std.testing.expectEqual(@as(usize, 2), MainState.backgroundPassesAllowed(3, false));
+    try std.testing.expectEqual(@as(usize, 3), MainState.backgroundPassesAllowed(4, false));
 }
 
 test "a background pass is queued only while it is switched on and not running, and the passes are queued separately" {
