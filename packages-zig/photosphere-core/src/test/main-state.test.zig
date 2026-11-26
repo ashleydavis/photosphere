@@ -323,6 +323,14 @@ test "resetSyncState to the database that is already open cancels nothing, and t
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"errorMessage\":\"Cancelled\"");
 }
 
+test "background passes are limited to leave a worker for their child tasks" {
+    // A pass keeps its worker while it waits for its children, so the limit is the machine's processors less the one the
+    // children need, and never more than the passes themselves. Never zero: one pass must always be able to run.
+    const limit = MainState.backgroundPassConcurrencyLimit();
+    try std.testing.expect(limit >= 1);
+    try std.testing.expect(limit <= @as(usize, background_work.PASS_COUNT));
+}
+
 test "a background pass is queued only while it is switched on and not running, and the passes are queued separately" {
     var app: TestApp = undefined;
     try app.start();

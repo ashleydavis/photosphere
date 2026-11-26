@@ -287,6 +287,31 @@ pub const MainState = struct {
     }
 
     //
+    // How many background passes may run at once. A pass runs as a task and waits for the child tasks that plan it and run its
+    // steps, keeping its worker through the wait. Ziggy runs a child on the same pool as its parent, so when every worker holds
+    // a waiting pass there is none left to run the children and the queue stops. The macOS app gives the pool one worker per
+    // processor, and the arm64 CI runner has three, which is exactly the number of passes: all three ran and every pass hung,
+    // failing the macOS smoke tests. A pass is queued only while one worker is left for the children.
+    //
+    pub fn backgroundPassConcurrencyLimit() usize {
+        const cpu_count = std.Thread.getCpuCount() catch return 1;
+        return @min(@as(usize, background_work.PASS_COUNT), @max(cpu_count - 1, 1));
+    }
+
+    //
+    // The number of passes queued and not yet ended.
+    //
+    fn runningBackgroundPasses(self: *const MainState) usize {
+        var count: usize = 0;
+        for (self.background_passes_running) |running| {
+            if (running) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    //
     // Queues a pass whose time has come, when it is switched on and not queued or running already. One that cannot be queued is logged
     // and tried again after the fallback gap.
     //
@@ -295,6 +320,11 @@ pub const MainState = struct {
         const index = @intFromEnum(pass);
         self.background_pass_timers[index] = null;
         if (!self.background_passes_on[index] or self.background_passes_running[index]) {
+            return;
+        }
+        if (self.runningBackgroundPasses() >= backgroundPassConcurrencyLimit()) {
+            // Every worker but one is held by a pass already, so this pass tries again shortly rather than stopping the queue.
+            self.scheduleBackgroundPass(timers, io, log, pass, 1_000);
             return;
         }
         self.queueBackgroundPass(services, io, allocator, pass) catch |err| {
