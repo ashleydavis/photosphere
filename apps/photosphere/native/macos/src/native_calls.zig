@@ -55,6 +55,9 @@ fn toJsonText(connection_type: NetworkConnectionType) []const u8 {
 //
 const mac = if (builtin.os.tag == .macos) @cImport({
     @cInclude("sys/socket.h");
+    // close, which classifyMacosInterface calls. The other headers do not declare it, and without this the macOS unit-test
+    // job failed with "root source file struct 'cimport' has no member named 'close'".
+    @cInclude("unistd.h");
     @cInclude("sys/sysctl.h");
     @cInclude("sys/ioctl.h");
     @cInclude("net/route.h");
@@ -86,7 +89,10 @@ pub fn call(allocator: std.mem.Allocator, method: []const u8, request_json: []co
     }
     if (std.mem.eql(u8, method, "networkConnectionType")) {
         if (comptime builtin.os.tag == .macos) {
-            return macosConnectionType(allocator);
+            // call returns !?[]const u8, and Zig will not coerce this ![]const u8 into it, which failed the macOS
+            // unit-test job at this line with "error union payload '[]const u8' cannot cast into error union payload
+            // '?[]const u8'". The result is unwrapped here instead.
+            return try macosConnectionType(allocator);
         }
         else {
             return null;
