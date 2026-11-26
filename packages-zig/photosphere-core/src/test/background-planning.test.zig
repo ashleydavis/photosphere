@@ -1,6 +1,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
+const node_utils = @import("node-utils-zig");
 const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
@@ -49,7 +50,11 @@ test "plan-auto-import puts a new default database in the dbs directory of the d
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"plan-auto-data-dir\",\"status\":\"succeeded\"");
     var path_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer path_arena.deinit();
-    const default_path = try std.fs.path.join(path_arena.allocator(), &.{ "/scenario/files", "dbs", "photosphere-default" });
+    // The app joins the data directory with "dbs" using std.fs.path.join, then joins the database name with Ziggy's path
+    // helper, which follows Node's path.join and normalises the separators for the platform. The expectation is built the
+    // same way so it matches on Windows; joining all three parts with std.fs.path.join expected a mixed path and failed there.
+    const dbs_directory = try std.fs.path.join(path_arena.allocator(), &.{ "/scenario/files", "dbs" });
+    const default_path = try node_utils.path.join(path_arena.allocator(), &.{ dbs_directory, "photosphere-default" });
     const quoted_path = try utils.json.stringify(std.testing.allocator, default_path);
     defer std.testing.allocator.free(quoted_path);
     const expected = try std.mem.concat(std.testing.allocator, u8, &.{ "\"databasePath\":", quoted_path });
