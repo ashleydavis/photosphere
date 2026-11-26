@@ -73,4 +73,4 @@ In manual mode, give one step per message: what to tap or type on the mobile and
 - After each step, check it took effect before giving the next one: read `files/config.toml` or `files/databases.toml` with `adb shell run-as`, or take a screenshot into the project's `tmp/` and look at it. When the check fails, say what you see and give the step again.
 - **Receive the database** needs both sides at once. Pick the four-digit code yourself and give it to the human. Ask them to type it in and press **Start**, then say done. When they do, run `psi dbs send --name do-test --code <code> --yes` straight away. Then give them the next step: check the review screen and press **Save** and **Close**.
 - Use the control names exactly as the app shows them, in bold.
-- End every step with the short replies the human can give: `n` (next: done, give the next step), `d` (done: the same as `n`) and `s` (show: give the current step again, unchanged).
+- End every step with the short replies the human can give: `d` (done: give the next step) and `s` (show: give the current step again, unchanged).
